@@ -1,0 +1,7 @@
+piper-tts>=1.8.0
+edge-tts>=7.3.1
+ebooklib>=0.21
+beautifulsoup4>=4.15.0
+pypdf>=6.21.4
+imageio-ffmpeg>=0.8.1
+faster-whisper>=1.2.1

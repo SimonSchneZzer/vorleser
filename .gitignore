@@ -1,0 +1,20 @@
+# Umgebungen & Build
+.venv/
+.venv-clone/
+__pycache__/
+*.pyc
+build/
+dist/
+Vorleser.app/
+*.dmg
+
+# Persönliche Daten & Cache
+data/
+cache/
+
+# Piper-Modelle (werden beim Build geladen)
+voices/*.onnx
+voices/*.onnx.json
+
+.DS_Store
+.venv-build/

@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "online: braucht Internet (Edge-Stimmen) – nur mit VORLESER_TEST_ONLINE=1",
+    "browser: startet Headless-Chrome – übersprungen, wenn Chrome fehlt",
+]
+

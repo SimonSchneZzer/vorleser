@@ -1,0 +1,64 @@
+"""Einstellungen (data/settings.json): Darstellung, Markierung, Standardstimmen, Cache-Grenze."""
+from __future__ import annotations
+
+import json
+import os
+import re
+import threading
+from paths import DATA_DIR
+
+PATH = DATA_DIR / "settings.json"
+_lock = threading.Lock()
+
+DEFAULTS = {
+    "theme": "system",         # light | dark | system
+    "accent": "#0F6A80",       # Preset (Hell-Variante) oder eigene Farbe
+    "mark": "word",            # section | sentence | word
+    "uiLang": "de",            # Sprache der Oberfläche: de | en
+    "onboarded": False,        # Einrichtung + Tutorial beim ersten Öffnen erledigt?
+    "defaultVoices": {},       # {"de": "edge:…", "en": "…"}
+    "favorites": None,         # Voice-IDs fürs Player-Menü (None = noch nie gesetzt → Vorschlag)
+    "cacheMB": int(os.environ.get("VORLESER_CACHE_MB", "500")),
+}
+CHOICES = {"theme": ("light", "dark", "system"), "mark": ("section", "sentence", "word"), "uiLang": ("de", "en")}
+DEFAULT_FAVORITES = ["edge:de-DE-SeraphinaMultilingualNeural", "edge:de-DE-ConradNeural", "edge:de-DE-KatjaNeural",
+                     "edge:en-US-AvaMultilingualNeural", "edge:en-US-AndrewMultilingualNeural", "edge:en-GB-SoniaNeural"]
+
+
+def load() -> dict:
+    with _lock:
+        try:
+            data = json.loads(PATH.read_text("utf-8"))
+        except (OSError, ValueError):
+            data = {}
+    out = {**DEFAULTS, **{k: v for k, v in data.items() if k in DEFAULTS}}
+    if out["favorites"] is None:
+        out["favorites"] = list(DEFAULT_FAVORITES)
+    return out
+
+
+def get(key: str):
+    return load()[key]
+
+
+def update(patch: dict) -> dict:
+    cur = load()
+    for k, v in patch.items():
+        if k in CHOICES and v in CHOICES[k]:
+            cur[k] = v
+        elif k == "accent" and isinstance(v, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            cur[k] = v.upper()
+        elif k == "cacheMB" and isinstance(v, (int, float)) and 50 <= v <= 100_000:
+            cur[k] = int(v)
+        elif k == "onboarded" and isinstance(v, bool):
+            cur[k] = v
+        elif k == "favorites" and isinstance(v, list):
+            cur[k] = list(dict.fromkeys(str(x) for x in v))[:200]
+        elif k == "defaultVoices" and isinstance(v, dict):
+            cur[k] = {**cur["defaultVoices"], **{str(a): str(b) for a, b in v.items()}}
+    with _lock:
+        PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cur, ensure_ascii=False, indent=2), "utf-8")
+        tmp.replace(PATH)
+    return cur

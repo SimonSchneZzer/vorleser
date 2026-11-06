@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vorleser</title>
+<meta name="color-scheme" content="light dark">
+<style>
+  /* Vor jedem CSS/Schriften-Laden die richtige Grundfarbe – kein weißes Aufblitzen im Dunkelmodus */
+  html { background: #FAFAF9; }
+  @media (prefers-color-scheme: dark) { html:not([data-theme="light"]) { background: #1E2124; } }
+  html[data-theme="dark"] { background: #1E2124; }
+</style>
+<script>
+  // Theme sofort setzen (kein helles Aufblitzen im Dunkelmodus)
+  try { const t = JSON.parse(localStorage.getItem("vorleser.theme") || "null");
+        if (t) { document.documentElement.dataset.theme = t.theme; for (const k in t.vars) document.documentElement.style.setProperty(k, t.vars[k]); } } catch {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 6 9 12l9 6zM6 6v12"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m6 6 9 6-9 6zM18 6v12"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/><text x="12" y="15.5" font-size="7.5" font-family="Inter,sans-serif" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">10</text></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/><text x="12" y="15.5" font-size="7.5" font-family="Inter,sans-serif" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">10</text></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6.5 5h3.5v14H6.5zM14 5h3.5v14H14z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 24 24"><path d="M9 7.5V6a3 3 0 0 1 6 0v1.5"/><rect x="7" y="7.5" width="10" height="12" rx="5"/><path d="M12 11v8.5M7 12H3.5M20.5 12H17M7.5 16.5 4.5 19M16.5 16.5l3 2.5M7.5 9 5 6.5M16.5 9 19 6.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6v18h12V7zM14 3v4h4"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ============ Seitenleiste ============ -->
+  <aside class="side" id="side">
+    <div class="brand">
+      <span class="logo"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5v6M6 2.5v11M9 5v6M12 6.5v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+      Vorleser
+    </div>
+    <button class="btn-new" id="newBtn"><svg class="i"><use href="#i-plus"/></svg>Neuer Text</button>
+    <label class="search hidden" id="libSearchBox"><svg class="i" style="width:15px;height:15px"><use href="#i-search"/></svg>
+      <input type="search" id="libSearch" placeholder="Bibliothek durchsuchen" aria-label="Bibliothek durchsuchen"></label>
+    <div class="label">Bibliothek</div>
+    <ul class="lib" id="library"></ul>
+    <div class="side-foot" id="sideFoot">
+      <button class="navlink" id="settingsBtn"><svg class="i"><use href="#i-gear"/></svg>Einstellungen</button>
+      <button class="navlink hidden" id="bugSideBtn"><svg class="i"><use href="#i-bug"/></svg>Fehler melden</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ============ Lesen & Hören ============ -->
+    <section class="view hidden" id="viewRead">
+      <header class="topbar">
+        <button class="ib menu-btn" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button>
+        <button class="pill hidden" id="chapterBtn" aria-label="Kapitel wählen" data-tip="Kapitel wählen"><svg class="i" style="width:16px;height:16px"><use href="#i-list"/></svg><span class="lbl" id="chapterLbl" data-noi18n></span><svg class="i caret"><use href="#i-down"/></svg></button>
+        <span class="spacer"></span>
+        <button class="pill hidden" id="prepBtn" data-tip="Erzeugt alle Abschnitte schon jetzt im Hintergrund. Danach spielt alles ohne Wartezeit – ideal für deine eigene Stimme, die pro Abschnitt etwas länger braucht."><svg class="i" style="width:16px;height:16px"><use href="#i-bolt" id="prepIc"/></svg><span class="lbl" id="prepLbl">Vorab erzeugen</span></button>
+        <button class="ib hidden" id="prepX" aria-label="Vorab erzeugen abbrechen" data-tip="Vorab erzeugen abbrechen"><svg class="i" style="width:16px;height:16px"><use href="#i-x"/></svg></button>
+        <button class="pill" id="exportBtn" data-tip="Als Hörbuch speichern (M4B / MP3 / WAV)"><svg class="i" style="width:16px;height:16px"><use href="#i-dl"/></svg><span class="hide-sm">Exportieren</span></button>
+        <button class="ib" id="moreBtn" aria-label="Weitere Aktionen" data-tip="Weitere Aktionen"><svg class="i"><use href="#i-dots"/></svg></button>
+      </header>
+      <div class="scroll" id="readScroll">
+        <article class="reader" id="reader">
+          <div class="over" id="docOver"></div>
+          <h1 id="docTitle" data-noi18n></h1>
+          <div id="docText" data-noi18n></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ Neuer Text ============ -->
+    <section class="view hidden" id="viewNew">
+      <header class="topbar menu-btn" style="border:0;height:52px"><button class="ib" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button></header>
+      <div class="scroll">
+        <div class="newwrap" id="newWrap">
+          <div>
+            <h1>Neuer Text</h1>
+            <p class="lead">Einfügen, Datei laden oder einfach sprechen. Kapitel und Sprache werden automatisch erkannt.</p>
+          </div>
+          <div class="seg" role="tablist" aria-label="Quelle">
+            <button role="tab" data-src="paste" class="on"><svg class="i" style="width:16px;height:16px"><use href="#i-doc"/></svg>Einfügen</button>
+            <button role="tab" data-src="file"><svg class="i" style="width:16px;height:16px"><use href="#i-file"/></svg>Datei</button>
+            <button role="tab" data-src="dict" id="dictTab"><svg class="i" style="width:16px;height:16px"><use href="#i-mic"/></svg>Diktieren</button>
+          </div>
+
+          <div class="card" id="srcPaste">
+            <label class="sr" for="title">Titel</label>
+            <input class="title-in" id="title" placeholder="Titel (optional)">
+            <label class="sr" for="text">Text</label>
+            <textarea id="text" placeholder="Text hier einfügen …  Kapitel kannst du mit „# Überschrift“ markieren."></textarea>
+            <div class="dropline"><svg class="i"><use href="#i-upload"/></svg>EPUB, PDF, TXT, Markdown oder HTML hierher ziehen oder <button id="pickFile2">Datei wählen</button></div>
+          </div>
+
+          <div class="dropzone hidden" id="srcFile">
+            <svg class="i" style="width:34px;height:34px"><use href="#i-upload"/></svg>
+            <b>Datei hierher ziehen</b>
+            <span>EPUB, PDF, TXT, Markdown oder HTML – Kapitel werden automatisch erkannt</span>
+            <button class="btn" id="pickFile">Datei wählen</button>
+            <span id="fileStatus"></span>
+          </div>
+          <input type="file" id="file" accept=".epub,.pdf,.txt,.md,.markdown,.html,.htm" hidden>
+
+          <div class="dict hidden" id="srcDict">
+            <button class="mic" id="dictBtn" aria-label="Diktat starten"><svg class="i"><use href="#i-mic"/></svg></button>
+            <span class="time" id="dictTime">0:00</span>
+            <span id="dictHint">Tippen und losreden. Längere Pausen werden zu Absätzen. Läuft lokal mit Whisper.</span>
+          </div>
+
+          <div class="formrow">
+            <select class="pill" id="newLang" aria-label="Sprache"></select>
+            <span class="hint-chip hidden" id="langHint">erkannt</span>
+            <button class="pill" id="newVoiceBtn" aria-label="Stimme wählen"><span class="av" id="newVoiceAv"></span><span class="lbl" id="newVoiceLbl" data-noi18n></span><svg class="i caret"><use href="#i-down"/></svg></button>
+            <span class="count" id="charCount"></span>
+            <button class="btn primary" id="createBtn" disabled>Vorbereiten</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Text bearbeiten ============ -->
+    <section class="view hidden" id="viewEdit">
+      <header class="topbar">
+        <button class="ib menu-btn" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button>
+        <button class="ib" id="edBack" aria-label="Zurück" data-tip="Zurück zum Text · Esc"><svg class="i" style="transform:rotate(90deg)"><use href="#i-down"/></svg></button>
+        <span class="ed-crumb">Text bearbeiten</span>
+        <span class="spacer"></span>
+        <span class="ed-state" id="edState"></span>
+        <button class="btn" id="edCancel">Abbrechen</button>
+        <button class="btn primary" id="edSave" data-tip="Speichern · ⌘S">Speichern</button>
+      </header>
+      <div class="scroll">
+        <div class="newwrap" style="padding-top:36px">
+          <div class="card">
+            <label class="sr" for="edTitle">Titel</label>
+            <input class="title-in" id="edTitle" placeholder="Titel">
+            <label class="sr" for="edText">Text</label>
+            <textarea id="edText" class="ed-text" spellcheck="true"></textarea>
+          </div>
+          <p class="note ed-note">Kapitel markierst du mit „# Überschrift“, Absätze mit einer Leerzeile. Dein Lesezeichen bleibt an der gleichen Stelle, und schon erzeugtes Audio von unveränderten Abschnitten wird weiterverwendet.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Einstellungen ============ -->
+    <section class="view hidden" id="viewSettings">
+      <div class="set-head">
+        <div style="display:flex;align-items:center;gap:8px"><button class="ib menu-btn" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button><h1>Einstellungen</h1></div>
+        <div class="tabs" role="tablist" id="setTabs"><span class="tab-ink" id="tabInk"></span>
+          <button role="tab" data-tab="look" class="on">Darstellung</button>
+          <button role="tab" data-tab="voices">Stimmen</button>
+          <button role="tab" data-tab="storage">Speicher</button>
+          <button role="tab" data-tab="app">App</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="set-body" id="tabLook">
+          <div class="set-sec">
+            <h2>Modus</h2>
+            <div class="seg" id="modeSeg">
+              <button data-mode="light"><svg class="i" style="width:16px;height:16px"><use href="#i-sun"/></svg>Hell</button>
+              <button data-mode="dark"><svg class="i" style="width:16px;height:16px"><use href="#i-moon"/></svg>Dunkel</button>
+              <button data-mode="system"><svg class="i" style="width:16px;height:16px"><use href="#i-monitor"/></svg>System</button>
+            </div>
+          </div>
+<div class="set-sec">
+            <h2>Sprache der Oberfläche</h2>
+            <div class="seg" id="uiSeg" data-noi18n>
+              <button data-ui="de">Deutsch</button><button data-ui="en">English</button>
+            </div>
+          </div>
+          <div class="set-sec">
+            <h2>Akzentfarbe</h2>
+            <p class="note">Jede Farbe hat eine helle und eine dunkle Variante, die je nach Modus automatisch greift – immer gut lesbar. Eine eigene Farbe wird bei Bedarf genauso angepasst.</p>
+            <div class="swatches" id="swatches"></div>
+          </div>
+          <div class="set-sec">
+            <h2>Markierung beim Vorlesen</h2>
+            <div class="seg" id="markSeg">
+              <button data-mark="section">Abschnitt</button><button data-mark="sentence">Satz</button><button data-mark="word">Wort</button>
+            </div>
+            <p class="note" id="markHint"></p>
+          </div>
+          <div class="set-sec">
+            <h2>Vorschau</h2>
+            <div class="preview">
+              <p>Der alte Wärter stieg die Treppe hinauf. <span class="pv-sec" id="pvSec"><span class="w" id="pvS"><span class="wt">Es war kalt, so </span><span class="wt" id="pvW">kalt</span><span class="wt"> wie nie zuvor.</span></span> <span>Unten schlugen die Wellen an den Fels.</span></span></p>
+              <div class="pp"><span class="play"><svg class="i fill"><use href="#i-pause"/></svg></span><span class="prog" style="cursor:default"><span class="buf" style="width:46%"></span><span class="fill" style="width:38%"></span></span><b style="color:var(--acc-text);font-size:13px">Kapitel 1</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-body hidden" id="tabVoices">
+          <div class="set-sec">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <div style="flex:1;min-width:240px"><h2 class="big">Stimmen-Bibliothek</h2><p class="note">Markiere Stimmen mit ★ – deine Favoriten erscheinen beim Vorlesen im Stimmen-Menü.</p></div>
+              <button class="btn primary hidden" id="newCloneBtn"><svg class="i" style="width:16px;height:16px"><use href="#i-mic"/></svg>Eigene Stimme verwenden</button>
+            </div>
+          </div>
+          <div class="cs hidden" id="cloneSetupBox">
+            <div class="cs-art" id="csArt" data-phase="python" aria-hidden="true">
+              <div class="art art-python"><div class="term"><span class="dots"><i></i><i></i><i></i></span><span class="tl" style="--k:0"></span><span class="tl" style="--k:1"></span><span class="tl short" style="--k:2"></span><span class="cur"></span></div></div>
+              <div class="art art-packages"><span class="pkg" style="--k:0"></span><span class="pkg" style="--k:1"></span><span class="pkg" style="--k:2"></span><span class="crate"></span></div>
+              <div class="art art-model"><span class="ripple"></span><span class="wave"><i style="--k:0"></i><i style="--k:1"></i><i style="--k:2"></i><i style="--k:3"></i><i style="--k:4"></i><i style="--k:5"></i><i style="--k:6"></i></span></div>
+              <div class="art art-model2"><svg class="net" viewBox="0 0 100 80">
+                <g class="links"><path d="M18 18 50 12M18 18 50 40M18 40 50 12M18 40 50 40M18 40 50 68M18 62 50 40M18 62 50 68M50 12 82 26M50 40 82 26M50 40 82 54M50 68 82 54"/></g>
+                <g class="nodes"><circle cx="18" cy="18" r="5" style="--k:0"/><circle cx="18" cy="40" r="5" style="--k:1"/><circle cx="18" cy="62" r="5" style="--k:2"/>
+                  <circle cx="50" cy="12" r="5" style="--k:3"/><circle cx="50" cy="40" r="5" style="--k:4"/><circle cx="50" cy="68" r="5" style="--k:5"/>
+                  <circle cx="82" cy="26" r="5" style="--k:6"/><circle cx="82" cy="54" r="5" style="--k:7"/></g></svg></div>
+              <div class="art art-model3"><div class="bubble"><span class="hl"></span>
+                <span class="row"><i style="width:22px"></i><i style="width:30px"></i><i style="width:14px"></i></span>
+                <span class="row"><i style="width:18px"></i><i style="width:26px"></i><i style="width:20px"></i></span></div></div>
+              <div class="art art-done"><span class="done-ic"><svg class="i"><use href="#i-check"/></svg></span></div>
+            </div>
+            <div class="cs-main">
+              <div class="cs-head"><b id="csPhase">Eigene Stimme wird installiert</b><span class="cs-clock" id="csClock" title="Läuft seit"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path class="hand" d="M12 12V7.5"/><path d="M12 12l3 2"/></svg><span id="csElapsed">0:00</span></span></div>
+              <p class="cs-step" id="csStep">Wird vorbereitet</p>
+              <div class="cs-bar" id="csBarWrap"><i id="csBar"></i></div>
+              <div class="cs-nums"><span id="csSize"></span><span id="csEta"></span></div>
+              <ol class="cs-steps" id="csSteps">
+                <li data-p="python"><span class="dot"><svg class="i"><use href="#i-check"/></svg></span>Python</li>
+                <li data-p="packages"><span class="dot"><svg class="i"><use href="#i-check"/></svg></span>Programmteile</li>
+                <li data-p="model"><span class="dot"><svg class="i"><use href="#i-check"/></svg></span>Stimmmodell</li>
+              </ol>
+              <div class="cs-foot"><p class="cs-tip" id="csTip"></p><button class="btn sm" id="csCancel">Abbrechen</button></div>
+            </div>
+          </div>
+          <div class="filters">
+            <div class="seg" id="libLang"></div>
+            <div class="seg" id="libFilter">
+              <button data-f="all" class="on">Alle</button><button data-f="fav">★ Favoriten</button><button data-f="Female">Weiblich</button><button data-f="Male">Männlich</button><button data-f="own">Eigene</button>
+            </div>
+            <label class="search"><svg class="i" style="width:15px;height:15px"><use href="#i-search"/></svg><input type="search" id="vlSearch" placeholder="Stimme suchen" aria-label="Stimme suchen"></label>
+          </div>
+          <div id="voiceLib" style="display:flex;flex-direction:column;gap:20px"></div>
+        </div>
+
+<div class="set-body hidden" id="tabStorage">
+          <div class="set-sec"><h2 class="big">Speicher</h2></div>
+          <div class="box store">
+            <div class="r"><b>Belegt</b><span id="stoTotal"></span></div>
+            <div class="stack" id="stoStack"></div>
+            <div class="legend" id="stoLegend"></div>
+          </div>
+          <div class="box store">
+            <div class="r"><b>Erzeugtes Audio</b><span id="cacheTxt"></span></div>
+            <div class="bar8"><i id="cacheBar"></i></div>
+            <p class="note">Älteste Dateien werden automatisch gelöscht, sobald die Grenze erreicht ist. Gelöschtes Audio wird beim nächsten Abspielen neu erzeugt.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <label style="font-size:13px;color:var(--muted)" for="cacheLimit">Grenze</label>
+              <select class="pill" id="cacheLimit"><option value="250">250 MB</option><option value="500">500 MB</option><option value="1000">1 GB</option><option value="2000">2 GB</option><option value="5000">5 GB</option><option value="10000">10 GB</option></select>
+              <button class="btn sm" id="cacheClear">Alles leeren</button>
+            </div>
+            <div class="sto-list" id="stoDocs"></div>
+            <div class="sto-list" id="stoMisc"></div>
+          </div>
+          <div class="box store">
+            <b>Lokale Modelle</b>
+            <div class="sto-row"><span class="nm">Diktat (Whisper)<small id="whisperNote">wird beim ersten Diktat geladen</small></span><span class="sz" id="whisperSize"></span><button class="btn sm danger hidden" id="whisperRemove">Entfernen</button></div>
+            <div class="sto-row"><span class="nm">Eigene Stimme (Chatterbox)<small id="cloneState"></small></span><span class="sz" id="cloneSize"></span><button class="btn sm danger hidden" id="cloneRemove">Entfernen</button></div>
+            <div class="sto-row"><span class="nm">Offline-Ersatz (Piper)<small id="piperCount"></small></span><span class="sz" id="piperSize"></span></div>
+          </div>
+        </div>
+
+        <div class="set-body hidden" id="tabApp">
+          <div class="set-sec"><h2 class="big">App</h2></div>
+          <div class="box store">
+            <div class="r"><b>Vorleser</b><span id="verTxt"></span></div>
+            <div class="sto-list app-list">
+              <div class="sto-row"><span class="nm">Rundgang<small>Alle Funktionen in einer Minute</small></span><button class="btn sm" id="tourBtn">Starten</button></div>
+              <div class="sto-row hidden" id="updRow"><span class="nm">Updates<small id="updNote">Prüft bei jedem Start automatisch</small></span><button class="btn sm" id="updCheck">Jetzt suchen</button></div>
+              <div class="sto-row hidden" id="bugRow"><span class="nm">Fehler melden<small>Kurz beschreiben, was nicht klappt</small></span><button class="btn sm" id="bugBtn">Melden</button></div>
+              <div class="sto-row"><span class="nm">Open Source<small>Freie Software unter GPL-3.0 · Quellcode und Lizenzen auf GitHub</small></span><button class="btn sm" id="srcBtn">Ansehen</button></div>
+              <div class="sto-row"><span class="nm">Beenden<small id="appNote">Gestartet wird der Vorleser per Doppelklick auf Vorleser.app.</small></span><button class="btn sm" id="quitBtn">Beenden</button></div>
+              <div class="sto-row danger-row hidden" id="uninRow"><span class="nm">Deinstallieren<small>App und Daten von diesem Computer entfernen</small></span><button class="btn sm danger" id="uninBtn">Deinstallieren</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- Player: in allen Ansichten sichtbar, solange ein Text geladen ist (Wiedergabe läuft weiter) -->
+    <footer class="player hidden" id="player">
+      <div class="prog-row">
+        <span id="posL"></span>
+        <div class="prog" id="prog" role="slider" tabindex="0" aria-label="Position im Text">
+          <div class="buf" id="buf"></div><div class="fill" id="fill"></div><div id="ticks"></div><div class="knob" id="knob"></div>
+        </div>
+        <span id="posR"></span>
+      </div>
+      <div class="ctl-row">
+        <div class="now"><button class="t linkish" id="nowTitle" data-noi18n data-tip="Zum Text"></button><span class="s" id="status"></span></div>
+        <div class="transport">
+          <button class="ib" id="prevBtn" aria-label="Vorheriger Abschnitt" data-tip="Vorheriger Abschnitt · ←"><svg class="i"><use href="#i-prev"/></svg></button>
+          <button class="ib" id="backBtn" aria-label="10 Sekunden zurück" data-tip="10 s zurück · ⇧←"><svg class="i" style="width:22px;height:22px"><use href="#i-back"/></svg></button>
+          <button class="play" id="playBtn" aria-label="Abspielen" data-tip="Abspielen · Leertaste"><svg class="i fill pi-play"><use href="#i-play"/></svg><svg class="i fill pi-pause"><use href="#i-pause"/></svg><span class="ring" aria-hidden="true"></span></button>
+          <button class="ib" id="fwdBtn" aria-label="10 Sekunden vor" data-tip="10 s vor · ⇧→"><svg class="i" style="width:22px;height:22px"><use href="#i-fwd"/></svg></button>
+          <button class="ib" id="nextBtn" aria-label="Nächster Abschnitt" data-tip="Nächster Abschnitt · →"><svg class="i"><use href="#i-next"/></svg></button>
+        </div>
+        <div class="right">
+          <select class="pill" id="rate" aria-label="Tempo" data-tip="Tempo">
+            <option value="0.8">0,8×</option><option value="0.9">0,9×</option><option value="1.0" selected>1,0×</option>
+            <option value="1.1">1,1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option>
+            <option value="1.75">1,75×</option><option value="2.0">2,0×</option>
+          </select>
+          <button class="pill" id="voiceBtn" aria-label="Stimme wählen" data-tip="Stimme wechseln"><span class="av" id="voiceAv"></span><span class="lbl" id="voiceLbl" data-noi18n></span><svg class="i caret"><use href="#i-up"/></svg></button>
+        </div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<!-- ============ Popups ============ -->
+<div class="pop vp hidden" id="voicePanel" role="dialog" aria-label="Stimme wählen">
+  <div class="vp-head">
+    <div class="row"><span>Stimme</span><button class="ib" id="vpClose" aria-label="Schließen" style="width:32px;height:32px"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="seg full" id="vpLang"></div>
+  </div>
+  <div class="vp-body" id="vpBody"></div>
+  <div class="vp-foot" id="vpFoot"><button class="btn" style="width:100%" id="vpLib"><svg class="i" style="width:16px;height:16px"><use href="#i-star"/></svg>Stimmen-Bibliothek öffnen</button></div>
+</div>
+<div class="pop menu hidden" id="chapterMenu" role="menu" data-noi18n></div>
+<div class="pop menu hidden" id="libMenu" role="menu">
+  <button data-act="edit"><svg class="i"><use href="#i-pen"/></svg>Text bearbeiten</button>
+  <button data-act="export"><svg class="i"><use href="#i-dl"/></svg>Als Hörbuch exportieren</button>
+  <hr>
+  <button data-act="delete" style="color:var(--danger)"><svg class="i"><use href="#i-trash"/></svg>Löschen …</button>
+</div>
+<div class="pop menu hidden" id="moreMenu" role="menu">
+  <button id="mPrep"><svg class="i"><use href="#i-bolt"/></svg>Vorab erzeugen</button>
+  <button id="mEdit"><svg class="i"><use href="#i-pen"/></svg>Text bearbeiten<kbd style="margin-left:auto">E</kbd></button>
+  <hr>
+  <button id="mDelete" style="color:var(--danger)"><svg class="i"><use href="#i-trash"/></svg>Text löschen</button>
+</div>
+
+<dialog id="confirmDlg" class="confirm">
+  <div class="cf-icon" id="cfIcon"><svg class="i"><use href="#i-trash"/></svg></div>
+  <h3 id="cfTitle"></h3>
+  <p class="d" id="cfText"></p>
+  <div class="dlg-actions">
+    <button class="btn" id="cfCancel">Abbrechen</button>
+    <button class="btn primary" id="cfOk"></button>
+  </div>
+</dialog>
+
+<dialog id="exportDlg">
+  <h3>Als Hörbuch exportieren</h3>
+  <p class="d" id="xInfo"></p>
+  <div class="fmts" id="xFmts">
+    <label><input type="radio" name="fmt" value="m4b" checked><b>M4B</b><small>Hörbuch-Apps &amp; Apple Books, mit Kapiteln</small></label>
+    <label><input type="radio" name="fmt" value="mp3"><b>MP3</b><small>Läuft überall, Kapitel je nach Player</small></label>
+    <label><input type="radio" name="fmt" value="wav"><b>WAV</b><small>Unkomprimiert, beste Qualität – sehr große Datei, ohne Kapitel</small></label>
+  </div>
+  <div class="xprog hidden" id="xProgress"><div class="r"><b id="xPhase"></b><span id="xCount"></span></div><div class="bar8"><i id="xFill"></i></div></div>
+  <div class="dlg-actions">
+    <span class="msg" id="xMsg"></span>
+    <button class="btn" id="xClose">Schließen</button>
+    <button class="btn hidden" id="xCancel">Abbrechen</button>
+    <a class="btn primary hidden" id="xDownload" href="#"><svg class="i" style="width:16px;height:16px"><use href="#i-dl"/></svg>Herunterladen</a>
+    <button class="btn primary" id="xStart">Export starten</button>
+  </div>
+</dialog>
+
+<dialog id="cloneDlg">
+  <h3>Eigene Stimme anlegen</h3>
+  <p class="d">Lies den Text 15–30 Sekunden ruhig und deutlich vor (leiser Raum, normaler Abstand). Danach kann jeder Text mit deiner Stimme vorgelesen werden – lokal und kostenlos, aber deutlich langsamer als die Online-Stimmen.</p>
+  <label class="sr" for="cName">Name</label>
+  <input class="field" id="cName" placeholder="Meine Stimme" autocomplete="off">
+  <div class="seg cseg" id="cLang" role="group" aria-label="Sprache des Aufnahmetexts"><button data-cl="de" data-noi18n>Deutsch</button><button data-cl="en" data-noi18n>English</button></div>
+  <div class="readme" id="cText" data-noi18n></div>
+  <div class="dlg-actions">
+    <span class="msg" id="cMsg"></span>
+    <label class="btn sm" style="cursor:pointer">Datei …<input type="file" id="cFile" accept="audio/*" hidden></label>
+    <button class="btn" id="cClose">Abbrechen</button>
+    <button class="btn recbtn" id="cRec"><svg class="i" style="width:16px;height:16px"><use href="#i-mic"/></svg>Aufnehmen</button>
+  </div>
+</dialog>
+
+<dialog id="uninDlg" class="unin">
+  <div id="uninAsk">
+    <div class="cf-icon"><svg class="i"><use href="#i-trash"/></svg></div>
+    <h3>Vorleser deinstallieren?</h3>
+    <p class="d">Die App wird geschlossen und von diesem Computer entfernt. Dabei wird gelöscht:</p>
+    <ul class="unin-list" id="uninList"></ul>
+    <label class="chk"><input type="checkbox" id="uninKeep"><span>Meine Texte und eigenen Stimmen behalten</span></label>
+    <p class="unin-warn" id="uninWarn">Das lässt sich nicht rückgängig machen.</p>
+    <div class="dlg-actions"><button class="btn" id="uninCancel">Abbrechen</button><button class="btn danger-fill" id="uninGo">Deinstallieren</button></div>
+  </div>
+  <div id="uninBye" class="hidden">
+    <div class="cf-icon"><svg class="i"><use href="#i-check"/></svg></div>
+    <h3>Vorleser wird entfernt</h3>
+    <p class="d">Danke fürs Ausprobieren! Das Fenster schließt sich gleich.</p>
+  </div>
+</dialog>
+
+<dialog id="bugDlg" class="bug">
+  <div class="bug-ok hidden" id="bugOk">
+    <div class="cf-icon"><svg class="i"><use href="#i-check"/></svg></div>
+    <h3>Danke für deine Meldung!</h3>
+    <p class="d" id="bugOkText">Sie ist angekommen.</p>
+    <div class="dlg-actions"><button class="btn primary" id="bugDone">Schließen</button></div>
+  </div>
+  <form id="bugForm" novalidate>
+    <h3>Fehler melden</h3>
+    <p class="d">Was ist passiert, und was hast du davor gemacht? Je genauer, desto schneller lässt es sich beheben.</p>
+    <label class="sr" for="bugMsg">Beschreibung</label>
+    <textarea class="field area" id="bugMsg" rows="5" maxlength="5000" placeholder="z. B. Beim Export als M4B bleibt der Balken bei 80 % stehen …" required></textarea>
+    <label class="sr" for="bugMail">E-Mail für Rückfragen (optional)</label>
+    <input class="field" id="bugMail" type="email" maxlength="200" placeholder="E-Mail für Rückfragen (optional)" autocomplete="email">
+    <label class="chk"><input type="checkbox" id="bugTech" checked><span>Technische Infos anhängen</span></label>
+    <details class="tech"><summary>Was wird mitgeschickt?</summary><pre id="bugTechText" data-noi18n></pre></details>
+    <p class="privacy">Gesendet über den Formulardienst Web3Forms; dabei wird deine IP-Adresse übermittelt.</p>
+    <input type="checkbox" id="bugBot" class="hidden" tabindex="-1" autocomplete="off">
+    <div class="dlg-actions">
+      <span class="msg" id="bugMsgInfo"></span>
+      <button type="button" class="btn" id="bugCancel">Abbrechen</button>
+      <button type="submit" class="btn primary" id="bugSend">Senden</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="onb hidden" id="onb" role="dialog" aria-modal="true" aria-label="Willkommen"></div>
+<div class="gt hidden" id="gt" role="dialog" aria-modal="true" aria-label="Rundgang"><div class="gt-spot" id="gtSpot"></div><div class="gt-card" id="gtCard"></div><span class="gt-ripple" id="gtRipple"></span><span class="gt-cursor" id="gtCursor"><svg viewBox="0 0 24 24"><path d="M4 2.5 19.5 12l-6.6 1.6L9.6 20z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg></span></div>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="upd hidden" id="upd" role="status" aria-live="polite">
+  <div class="upd-ic" id="updIc"><svg class="i" style="width:18px;height:18px"><use href="#i-dl"/></svg></div>
+  <div class="upd-body">
+    <b id="updTitle"></b>
+    <p id="updText"></p>
+    <div class="bar8 hidden" id="updBar"><i id="updFill"></i></div>
+    <div class="upd-btns" id="updBtns"><button class="btn sm" id="updLater">Später</button><button class="btn sm primary" id="updGo">Aktualisieren</button></div>
+  </div>
+</div>
+<audio id="audio" preload="auto"></audio>
+<audio id="previewAudio"></audio>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

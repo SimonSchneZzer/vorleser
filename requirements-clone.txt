@@ -1,0 +1,2 @@
+chatterbox-tts==0.1.7
+setuptools<81   # perth (Wasserzeichen) braucht pkg_resources
