@@ -3,6 +3,11 @@
 Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als Release-Notiz übernommen;
 **die erste Zeile erscheint in der Update-Hinweiskarte der App** – kurz und für Nutzer formulieren.
 
+## 2.5.1
+Neue Versionen werden jetzt nach wenigen Minuten gemeldet statt erst nach Stunden.
+
+- **Updates:** die App prüft minütlich, ob es eine neue Version gibt – ohne Grenze bei vielen Nutzern im selben Netz
+
 ## 2.5.0
 Neuer Export: in drei klaren Schritten zum Hörbuch – mit Fortschritt pro Kapitel und Restzeit.
 
