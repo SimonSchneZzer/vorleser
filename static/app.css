@@ -852,3 +852,50 @@ dialog.confirm .dlg-actions .btn { flex: 1; }
 /* Statuszeile: neuer Text gleitet einmal kurz herein (kein Dauer-Effekt) */
 #status.swap > span:last-child { animation: statusIn .32s cubic-bezier(.2, .9, .3, 1.15) both; }
 @keyframes statusIn { from { opacity: 0; transform: translateY(4px); filter: blur(2px); } }
+
+/* ===================== Ein-/Ausgänge (einmalig, keine Dauer-Effekte) ===================== */
+/* Neuer Text landet in der Bibliothek: Platz öffnet sich, Akzent leuchtet einmal auf */
+.lib li.landed { overflow: hidden; animation: libLand .5s var(--ease-out) both; animation-delay: var(--ago, 0ms); }
+.lib li.landed > a { animation: libFlash 1.6s var(--ease) both; animation-delay: var(--ago, 0ms); }
+@keyframes libLand { from { height: 0; opacity: 0; transform: translateY(-6px); } to { height: var(--lh, 72px); opacity: 1; transform: none; } }
+@keyframes libFlash { 0%, 35% { background-color: var(--tint); } }
+
+/* Export: Fortschritt erscheint, beim Fertigwerden Haken + grüner Balken + Button springt herein */
+.xprog.enter { animation: fadeUp .4s var(--ease-out) both; }
+.xl { display: inline-flex; align-items: center; gap: 6px; }
+.xok { display: none; width: 16px; height: 16px; color: var(--ok); stroke-width: 2.6; }
+.xprog.done .xok { display: inline-block; }
+.xok.popin { animation: cfPop .45s var(--spring) both; }
+.xprog .bar8 i { transition: width .45s var(--ease), background-color .5s var(--ease); }
+.xprog.done .bar8 i { background-color: var(--ok); }
+#xDownload.popin { animation: btnPop .45s var(--spring) both; }
+@keyframes btnPop { from { opacity: 0; transform: scale(.85); } }
+
+/* Update-Karte: Knöpfe ↔ Ladebalken */
+.upd .bar8.enter { animation: barReveal .55s var(--ease-out) both; }
+@keyframes barReveal { from { opacity: 0; clip-path: inset(0 100% 0 0 round 4px); } to { opacity: 1; clip-path: inset(0 0 0 0 round 4px); } }
+.upd-btns.enter { animation: fadeUp .4s var(--ease-out) both; }
+.upd-body.swap > b, .upd-body.swap > p { animation: fadeUp .4s var(--ease-out) both; }
+
+/* Datei reinziehen: Fläche hebt sich, Symbol schwebt; beim Loslassen plumpst es hinein */
+.dropzone { transition: transform .35s var(--spring), border-color .2s var(--ease), background-color .2s var(--ease), box-shadow .3s var(--ease); }
+.dropzone > svg { transition: transform .35s var(--spring); }
+.dropzone.drop-on { transform: scale(1.015); box-shadow: var(--shadow); }
+.dropzone.drop-on > svg { transform: translateY(-6px) scale(1.08); }
+.dropzone > svg.plop { animation: plop .55s var(--spring) both; }
+@keyframes plop { 0% { transform: translateY(-18px) scale(.9); opacity: .4; } 60% { transform: translateY(2px) scale(1.04, .94); opacity: 1; } }
+
+/* „erkannt“-Chip springt einmal auf */
+.hint-chip.popin { animation: cfPop .4s var(--spring) both; }
+
+/* Vorab erzeugte Abschnitte: Unterstreichung blendet weich ein statt zu springen */
+.chunk { text-decoration: underline dotted transparent; text-underline-offset: 6px;
+  transition: background-color .25s var(--ease), color .35s var(--ease), text-decoration-color .6s var(--ease); }
+.chunk.ready:not(.current) { text-decoration-color: var(--line); }
+
+/* Schmales Fenster: Seitenleiste gleitet mit Ease-out, Rest wird abgedunkelt */
+@media (max-width: 900px) {
+  .side { transition: transform .38s var(--ease-out), box-shadow .38s var(--ease), background-color .25s var(--ease), border-color .25s var(--ease), color .25s var(--ease);
+    box-shadow: 0 0 0 100vmax transparent; }
+  .side.open { box-shadow: var(--shadow), 0 0 0 100vmax rgba(0, 0, 0, .28); }
+}

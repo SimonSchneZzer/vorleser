@@ -3,6 +3,15 @@
 Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als Release-Notiz übernommen;
 **die erste Zeile erscheint in der Update-Hinweiskarte der App** – kurz und für Nutzer formulieren.
 
+## 2.4.0
+Weichere Übergänge – Texte, Player und Export bewegen sich jetzt sanft statt zu springen.
+
+- **Bibliothek:** neue Texte landen sichtbar oben, gelöschte gleiten hinaus (auch eigene Stimmen)
+- **Player:** fährt beim Öffnen eines Texts von unten herein und beim Bearbeiten wieder hinaus
+- **Export:** Fortschritt blendet ein; fertig mit Haken, grünem Balken und hereinspringendem Download-Knopf
+- **Update:** nach „Aktualisieren“ geht die Karte weich in den Ladebalken über
+- **Kleinigkeiten:** Datei-Ablage hebt sich beim Hineinziehen, „erkannt“-Hinweis springt auf, vorbereitete Abschnitte blenden ihre Markierung ein, Seitenleiste im schmalen Fenster gleitet mit Abdunklung
+
 ## 2.3.9
 Der Vorleser ist jetzt Open Source – freie Software unter GPL-3.0.
 

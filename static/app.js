@@ -146,6 +146,33 @@ function animateIn(el, cls = "enter") {
   el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
   el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
 }
+const EASE = "cubic-bezier(.2, .8, .2, 1)", EASE_OUT = "cubic-bezier(.16, 1, .3, 1)";
+/** Höhe vorher messen; die zurückgegebene Funktion nach der Änderung aufrufen → Höhe gleitet zum neuen Wert. */
+function heightFrom(el) {
+  const h0 = el.offsetHeight;
+  return (dur = 420) => {
+    if (!h0 || reducedMotion.matches || !el.animate) return;
+    const h1 = el.offsetHeight; if (!h1 || Math.abs(h1 - h0) < 2) return;
+    el._sh?.cancel();
+    el.style.overflow = "hidden";
+    const a = el._sh = el.animate([{ height: `${h0}px` }, { height: `${h1}px` }], { duration: dur, easing: EASE_OUT });
+    a.onfinish = a.oncancel = () => { if (el._sh === a) el.style.overflow = ""; };
+  };
+}
+function smoothHeight(el, fn) { const done = heightFrom(el); fn(); done(); }
+/** Zeile gleitet nach links hinaus, dann klappt ihre Höhe zu (Einträge darunter rücken nach). */
+function collapseOut(el) {
+  if (!el || reducedMotion.matches || !el.animate) return Promise.resolve();
+  const cs = getComputedStyle(el);
+  const full = { height: `${el.offsetHeight}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, borderTopWidth: cs.borderTopWidth, borderBottomWidth: cs.borderBottomWidth };
+  const zero = { height: "0px", paddingTop: "0px", paddingBottom: "0px", borderTopWidth: "0px", borderBottomWidth: "0px" };
+  el.style.overflow = "hidden"; el.style.pointerEvents = "none";
+  return el.animate([
+    { ...full, opacity: 1, transform: "none" },
+    { ...full, opacity: 0, transform: "translateX(-24px)", offset: 0.45 },
+    { ...zero, opacity: 0, transform: "translateX(-24px)" },
+  ], { duration: 460, easing: EASE, fill: "forwards" }).finished.catch(() => {});
+}
 
 /* ===================================================================== */
 /* Ansichten & Seitenleiste                                               */
@@ -160,11 +187,30 @@ function showView(name) {
   hideTip();
   requestAnimationFrame(() => { segThumbs(); moveInk(); });
   $("settingsBtn").classList.toggle("active", name === "settings");
-  $("player").classList.toggle("hidden", !st.doc || name === "edit");
-  syncPlayerHeight();
+  setPlayer(!!st.doc && name !== "edit");
   $("side").classList.remove("open");
   closePops();
   renderLibrary();
+}
+/** Player-Leiste fährt von unten herein bzw. hinaus; der Inhalt darüber wächst/schrumpft mit (negativer Rand). */
+function setPlayer(on) {
+  const p = $("player");
+  if (p._on === on) return;
+  p._on = on;
+  p._pa?.cancel(); p._pa = null;
+  const vis = !p.classList.contains("hidden");
+  if (on === vis || reducedMotion.matches || !p.animate) { p.classList.toggle("hidden", !on); return syncPlayerHeight(); }
+  if (on) {
+    p.classList.remove("hidden"); syncPlayerHeight();
+    const h = p.offsetHeight;
+    p._pa = p.animate([{ marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 },
+      { marginBottom: "0px", transform: "none", opacity: 1 }], { duration: 520, easing: EASE_OUT });
+  } else {
+    const h = p.offsetHeight;
+    const a = p._pa = p.animate([{ marginBottom: "0px", transform: "none", opacity: 1 },
+      { marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 }], { duration: 280, easing: EASE, fill: "forwards" });
+    a.onfinish = () => { p.classList.add("hidden"); a.cancel(); syncPlayerHeight(); };
+  }
 }
 document.querySelectorAll("[data-menu]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); $("side").classList.toggle("open"); }));
 document.addEventListener("click", (e) => { if (!$("side").contains(e.target)) $("side").classList.remove("open"); });
@@ -182,19 +228,33 @@ function renderLibrary() {
   const ul = $("library");
   const docs = [...(st.demoEntry ? [st.demoEntry] : []), ...st.docs].filter((d) => !q || d.title.toLowerCase().includes(q));
   if (!docs.length) { ul.innerHTML = `<li class="empty">${q ? "Nichts gefunden." : "Noch keine Texte."}</li>`; return; }
-  const sig = docs.map((d) => d.id).join();
-  const stagger = sig !== st.libSig; st.libSig = sig;
+  const ids = docs.map((d) => d.id), sig = ids.join();
+  // Gestaffelt einblenden nur bei echtem Listenwechsel – nicht, wenn genau ein Text dazukommt oder wegfällt.
+  const stagger = sig !== st.libSig && !oneChanged(st.libSig ? st.libSig.split(",") : [], ids); st.libSig = sig;
+  // Neu angelegter Text „landet“ (Höhe wächst + Akzent leuchtet einmal auf). Läuft über Neuzeichnungen
+  // hinweg weiter: negative Verzögerung = bereits vergangene Zeit.
+  const ago = st.libLand ? performance.now() - st.libLand.t : Infinity;
+  const land = ago < 1800 ? st.libLand.id : null;
   ul.innerHTML = docs.map((d, n) => {
     const pct = docPct(d), state = docState(d, pct);
     const active = view === "read" && st.doc?.id === d.id ? " active" : "";
     const ts = d.progress.updated || d.created;
     const full = new Date(ts * 1000).toLocaleString(LOC(), { dateStyle: "medium", timeStyle: "short" });
-    return `<li class="${stagger ? "enter" : ""}" style="--i:${Math.min(n, 12)}"><a href="#" class="${active}" data-id="${d.id}">
+    const cls = d.id === land ? "landed" : stagger ? "enter" : "";
+    return `<li class="${cls}" style="--i:${Math.min(n, 12)}${d.id === land ? `;--ago:${-Math.round(ago)}ms` : ""}"><a href="#" class="${active}" data-id="${d.id}">
         <span class="row1">${jobRing(d.id)}<span class="t" data-noi18n>${esc(d.title)}</span><span class="when" title="${d.progress.updated ? "Zuletzt gehört" : "Erstellt"}: ${full}">${fmtWhen(ts)}</span></span>
         <span class="m"><b>${esc(d.lang.toUpperCase())}</b>·<span>${d.chapters ? `${d.chapters} Kapitel` : nAbschn(d.count)}</span>·<span class="st">${state}</span></span>
         <span class="bar"><i class="pre" style="width:${d.count ? Math.round((d.prepared || 0) / d.count * 100) : 0}%"></i><i class="pos" style="width:${pct}%"></i></span></a>
       <button class="dots" data-dots="${d.id}" aria-label="Aktionen für ${esc(d.title)}" aria-haspopup="menu">${icon("i-dots", "i", "width:18px;height:18px")}</button></li>`;
   }).join("");
+  const li = ul.querySelector("li.landed");
+  if (li) li.style.setProperty("--lh", `${li.firstElementChild.offsetHeight}px`);
+}
+/** Unterscheiden sich die Listen um genau einen Eintrag (einer dazu oder einer weg)? */
+function oneChanged(a, b) {
+  if (Math.abs(a.length - b.length) !== 1) return false;
+  const [long, short] = a.length > b.length ? [a, b] : [b, a];
+  return short.every((x) => long.includes(x));
 }
 // Hörfortschritt: EINE Rechnung für Player-Balken und Bibliothek – (Abschnitt + Anteil darin) / Abschnitte.
 function docPct(d) {
@@ -252,7 +312,12 @@ async function deleteDoc(id) {
     text: "Der Text wird mit Lesezeichen und Hörbuch-Export endgültig entfernt. Das lässt sich nicht rückgängig machen." });
   if (!ok) return;
   await api(`/api/docs/${id}`, { method: "DELETE" });
-  if (st.doc?.id === id) { stop(); st.doc = null; showNew(); }
+  const cur = st.doc?.id === id;
+  if (cur) stop();
+  const li = $("library").querySelector(`a[data-id="${id}"]`)?.closest("li");
+  st.docs = st.docs.filter((x) => x.id !== id);         // falls zwischendurch neu gezeichnet wird: bleibt weg
+  await collapseOut(li);
+  if (cur) { st.doc = null; showNew(); }
   await refreshLibrary();
   toast("Gelöscht");
 }
@@ -444,7 +509,13 @@ function setNewLang(lang, auto) {
   $("newLang").value = lang;
   st.newVoice = st.defaults[lang];
   setVoicePill($("newVoiceAv"), $("newVoiceLbl"), st.newVoice);
-  $("langHint").classList.toggle("hidden", !auto);
+  showHint(auto);
+}
+/** „erkannt“-Chip: springt beim Erscheinen einmal kurz auf. */
+function showHint(on) {
+  const h = $("langHint"), was = !h.classList.contains("hidden");
+  h.classList.toggle("hidden", !on);
+  if (on && !was) animateIn(h, "popin");
 }
 function updateCount() {
   const t = $("text").value;
@@ -462,7 +533,7 @@ $("text").oninput = () => {
   detectTimer = setTimeout(async () => {
     const { lang } = await api("/api/detect", { method: "POST", body: JSON.stringify({ text: $("text").value.slice(0, 8000) }) });
     if (!st.langManual && $("text").value.trim() && lang !== $("newLang").value) setNewLang(lang, true);
-    else if (!st.langManual) $("langHint").classList.remove("hidden");
+    else if (!st.langManual) showHint(true);
   }, 400);
 };
 $("newLang").onchange = () => { st.langManual = true; setNewLang($("newLang").value, false); };
@@ -500,7 +571,9 @@ wrap.addEventListener("dragover", (e) => { e.preventDefault(); $("srcFile").clas
 wrap.addEventListener("dragleave", (e) => { if (!wrap.contains(e.relatedTarget)) { $("srcFile").classList.remove("drop-on"); $("srcPaste").classList.remove("drop-on"); } });
 wrap.addEventListener("drop", (e) => {
   e.preventDefault(); $("srcFile").classList.remove("drop-on"); $("srcPaste").classList.remove("drop-on");
-  const f = e.dataTransfer.files[0]; if (f) importFile(f);
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  importFile(f);
+  animateIn($("srcFile").querySelector("svg"), "plop");   // Datei-Symbol „plumpst“ einmal in die Fläche
 });
 
 $("createBtn").onclick = async () => {
@@ -510,6 +583,7 @@ $("createBtn").onclick = async () => {
     const d = await api("/api/docs", { method: "POST", body: JSON.stringify({
       title: $("title").value, text: $("text").value, lang, voice: st.newVoice || st.defaults[lang] }) });
     $("title").value = ""; $("text").value = ""; st.langManual = false; $("langHint").classList.add("hidden"); updateCount();
+    st.libLand = { id: d.id, t: performance.now() };
     await refreshLibrary();
     openDoc(d.id);
   } catch (err) { toastErr(err); $("createBtn").disabled = false; }
@@ -1210,16 +1284,22 @@ function jobRing(docId) {
 jobsPoll();
 
 /* ---------- Export ---------- */
-let xTimer = null;
+let xTimer = null, xPrev = null;   // xPrev: letzter Status (null = Dialog gerade geöffnet → nichts animieren)
 async function exportPoll() {
   clearTimeout(xTimer);
   if (!st.doc || !$("exportDlg").open) return;
   const j = await api(`/api/docs/${st.doc.id}/export`);
-  const running = j.status === "running";
-  $("xProgress").classList.toggle("hidden", !running && j.status !== "ready");
-  $("xCancel").classList.toggle("hidden", !running);
-  $("xStart").classList.toggle("hidden", running);
-  $("xDownload").classList.toggle("hidden", j.status !== "ready");
+  const running = j.status === "running", ready = j.status === "ready";
+  const changed = xPrev !== null && xPrev !== j.status; xPrev = j.status;
+  smoothHeight($("exportDlg"), () => {
+    $("xProgress").classList.toggle("hidden", !running && !ready);
+    $("xProgress").classList.toggle("done", ready);
+    $("xCancel").classList.toggle("hidden", !running);
+    $("xStart").classList.toggle("hidden", running);
+    $("xDownload").classList.toggle("hidden", !ready);
+  });
+  if (changed && running) animateIn($("xProgress"));
+  if (changed && ready) { animateIn($("xOk"), "popin"); animateIn($("xDownload"), "popin"); }   // fertig: Haken + Button springen herein
   $("xFmts").querySelectorAll("input").forEach((i) => (i.disabled = running));
   $("xMsg").textContent = "";
   if (running) {
@@ -1250,7 +1330,7 @@ $("exportBtn").onclick = () => {
   const chars = st.doc.chunks.reduce((s, c) => s + c.text.length, 0);
   $("xInfo").textContent = `„${st.doc.title}“ (ca. ${fmtDuration(chars / 15)}) wird komplett vertont und mit Kapitelmarken zu einer Datei zusammengefügt. Läuft im Hintergrund weiter.` +
     (st.doc.voice.startsWith("clone:") ? " Mit eigener Stimme dauert das deutlich länger." : "");
-  $("exportDlg").showModal(); exportPoll();
+  xPrev = null; $("exportDlg").showModal(); exportPoll();
 };
 $("xStart").onclick = async () => {
   const fmt = $("xFmts").querySelector("input:checked").value;
@@ -1453,7 +1533,11 @@ $("voiceLib").onclick = async (e) => {
   if (del) {
     const v = voiceById(del.dataset.delv);
     if (!v || !(await ask({ title: `Eigene Stimme „${v.name}“ löschen?`, text: "Die Sprachprobe wird entfernt. Texte, die diese Stimme nutzen, lesen danach mit der Standardstimme.", ok: "Löschen", danger: true }))) return;
-    try { await api(`/api/clones/${v.id.split(":")[1]}`, { method: "DELETE" }); await reloadVoices(); renderVoiceLib(); }
+    try {
+      await api(`/api/clones/${v.id.split(":")[1]}`, { method: "DELETE" });
+      await collapseOut(del.closest(".vl-row"));
+      await reloadVoices(); renderVoiceLib();
+    }
     catch (err) { toastErr(err); }
   }
 };
@@ -2116,6 +2200,16 @@ function openExternal(url) {
 }
 function updRender() {
   const s = upd.s; if (!s || !s.enabled) return;
+  // Wechsel Knöpfe ↔ Ladebalken (z. B. nach „Aktualisieren“): Karte ändert ihre Höhe weich, Balken bzw.
+  // Knöpfe und Texte gleiten einmal herein.
+  const card = $("upd"), busy = ["downloading", "preparing", "installing"].includes(s.state);
+  const flip = !card.classList.contains("hidden") && !card.classList.contains("leaving") && card.classList.contains("busy") !== busy;
+  const done = flip ? heightFrom(card) : null;
+  updRenderCard();
+  if (flip) { done(480); animateIn(busy ? $("updBar") : $("updBtns")); animateIn(card.querySelector(".upd-body"), "swap"); }
+}
+function updRenderCard() {
+  const s = upd.s;
   $("updRow").classList.remove("hidden");
   $("verTxt").textContent = `Version ${s.current}`;
   $("updNote").textContent = s.available ? `Version ${s.latest} ist verfügbar` : s.latest ? "Du hast die neueste Version" : "Prüft bei jedem Start automatisch";

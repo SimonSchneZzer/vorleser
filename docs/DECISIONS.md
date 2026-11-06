@@ -5,6 +5,17 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-06 · Ein-/Ausgänge animiert (Bibliothek, Player, Export, Update-Karte)
+**Kontext:** Elemente sprangen beim Erscheinen/Verschwinden (nur `hidden` umgeschaltet bzw. neu gezeichnet).
+**Entscheidung:** Einmalige Bewegungen über Web Animations: `collapseOut` (Zeile gleitet hinaus, Höhe klappt
+zu), `heightFrom`/`smoothHeight` (Höhe gleitet bei Inhaltswechsel – Export-Dialog, Update-Karte),
+`setPlayer` (Player per negativem `margin-bottom` + `translateY`, damit der Inhalt darüber mitwächst).
+Neuer Text „landet“ per CSS-Animation mit **negativer Verzögerung** (`--ago`), weil `renderLibrary` die Liste
+oft neu zeichnet (z. B. `jobsPoll` alle 2 s) – so läuft die Animation nach dem Neuzeichnen nahtlos weiter.
+Gestaffeltes Einblenden der Bibliothek nur noch, wenn sich mehr als ein Eintrag ändert.
+**Stolperfalle:** Klassenname `pop` ist für Popover vergeben (`position: fixed`) → Einspring-Animationen heißen
+`popin`.
+
 ## 2026-11-06 · Open Source unter GPL-3.0-or-later
 **Kontext:** Actions-Minuten im privaten Repo (macOS zählt 10-fach) waren nach einem Tag mit vielen Pushes
 aufgebraucht. Beim Prüfen der Lizenzen: `piper-tts` (≥ 1.3) ist GPL-3.0, `EbookLib` AGPL-3.0 – eine
