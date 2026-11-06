@@ -5,6 +5,16 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Export-Dialog in drei Stufen
+**Kontext:** Formatwahl, Fortschritt und Ergebnis standen gleichzeitig im Dialog; zwei orange Knöpfe
+(„Herunterladen“/„Neu exportieren“); unklar, ob „Schließen“ abbricht. Entwurf vorher im Design-Artefakt abgestimmt.
+**Entscheidung:** Stufen Auswählen → Läuft → Fertig (`xSetView`). Jede Höhenänderung läuft über `xChange`
+(Höhe messen → ändern → gleiten), auch Textänderungen während des Exports. Fortschritt in Kapitel geteilt
+(ab 30 Kapiteln ein Balken), Restzeit aus `started` des Auftrags. „Im Hintergrund weiter“ statt „Schließen“;
+Bibliotheks-Ring zeigt jetzt auch Exporte; beim Fertigwerden Hinweis (außer der Dialog zeigt es gerade).
+**Stolperfalle:** Klassennamen kollidieren leicht mit bestehenden (`play` = Play-Knopf, 52 px!) → Export-Klassen
+mit Präfix `x…`. `animateIn` beendet nur noch beim eigenen `animationend` (Kinder-Events bubbeln).
+
 ## 2026-11-06 · Ein-/Ausgänge animiert (Bibliothek, Player, Export, Update-Karte)
 **Kontext:** Elemente sprangen beim Erscheinen/Verschwinden (nur `hidden` umgeschaltet bzw. neu gezeichnet).
 **Entscheidung:** Einmalige Bewegungen über Web Animations: `collapseOut` (Zeile gleitet hinaus, Höhe klappt

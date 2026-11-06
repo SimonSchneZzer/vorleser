@@ -367,21 +367,47 @@
   </div>
 </dialog>
 
-<dialog id="exportDlg">
+<dialog id="exportDlg" class="xdlg">
   <h3>Als Hörbuch exportieren</h3>
-  <p class="d" id="xInfo"></p>
-  <div class="fmts" id="xFmts">
-    <label><input type="radio" name="fmt" value="m4b" checked><b>M4B</b><small>Hörbuch-Apps &amp; Apple Books, mit Kapiteln</small></label>
-    <label><input type="radio" name="fmt" value="mp3"><b>MP3</b><small>Läuft überall, Kapitel je nach Player</small></label>
-    <label><input type="radio" name="fmt" value="wav"><b>WAV</b><small>Unkomprimiert, beste Qualität – sehr große Datei, ohne Kapitel</small></label>
+  <div class="xmeta"><span id="xInfo"></span><span class="xchip hidden" id="xChip" data-noi18n></span></div>
+  <!-- Stufe 1: Format wählen -->
+  <div class="xsec" id="xPick">
+    <div class="xfmts" id="xFmts" role="radiogroup" aria-label="Format">
+      <label class="xfmt"><input type="radio" name="fmt" value="m4b" checked><span class="xdot"></span><span class="nm"><span class="t"><b>M4B</b><span class="xrec">Empfohlen</span></span><small>Hörbuch-Apps &amp; Apple Books · mit Kapiteln</small></span><span class="sz" data-sz="m4b"></span></label>
+      <label class="xfmt"><input type="radio" name="fmt" value="mp3"><span class="xdot"></span><span class="nm"><span class="t"><b>MP3</b></span><small>Läuft überall · Kapitel je nach Player</small></span><span class="sz" data-sz="mp3"></span></label>
+      <label class="xfmt"><input type="radio" name="fmt" value="wav"><span class="xdot"></span><span class="nm"><span class="t"><b>WAV</b></span><small>Unkomprimiert · beste Qualität, ohne Kapitel</small></span><span class="sz" data-sz="wav"></span></label>
+    </div>
+    <p class="xmsg hidden" id="xMsg"></p>
+    <div class="dlg-actions">
+      <button class="btn" id="xClose">Abbrechen</button>
+      <button class="btn primary" id="xStart"><svg class="i" style="width:16px;height:16px"><use href="#i-bolt"/></svg>Hörbuch erstellen</button>
+    </div>
   </div>
-  <div class="xprog hidden" id="xProgress"><div class="r"><span class="xl"><svg class="i xok" id="xOk"><use href="#i-check"/></svg><b id="xPhase"></b></span><span id="xCount"></span></div><div class="bar8"><i id="xFill"></i></div></div>
-  <div class="dlg-actions">
-    <span class="msg" id="xMsg"></span>
-    <button class="btn" id="xClose">Schließen</button>
-    <button class="btn hidden" id="xCancel">Abbrechen</button>
-    <a class="btn primary hidden" id="xDownload" href="#"><svg class="i" style="width:16px;height:16px"><use href="#i-dl"/></svg>Herunterladen</a>
-    <button class="btn primary" id="xStart">Export starten</button>
+  <!-- Stufe 2: läuft -->
+  <div class="xsec hidden" id="xRun">
+    <div class="xrun-top"><b id="xPhase"></b><span id="xPct"></span></div>
+    <div class="xsegs" id="xSegs"></div>
+    <div class="xsub"><span id="xChap"></span><span id="xLeft"></span></div>
+    <div class="xhint"><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>Du kannst den Dialog schließen – der Export läuft im Hintergrund weiter. Die Bibliothek zeigt den Fortschritt, und wir melden uns, wenn er fertig ist.</span></div>
+    <div class="dlg-actions">
+      <button class="linkbtn xdanger" id="xCancel">Export abbrechen</button>
+      <span class="xgrow"></span>
+      <button class="btn" id="xBg">Im Hintergrund weiter</button>
+    </div>
+  </div>
+  <!-- Stufe 3: fertig -->
+  <div class="xsec hidden" id="xDone">
+    <div class="xfile">
+      <div class="xtile" aria-hidden="true"><i style="height:14px"></i><i style="height:24px"></i><i style="height:32px"></i><i style="height:20px"></i><i style="height:12px"></i></div>
+      <div class="nm"><b id="xFile" data-noi18n></b><small id="xFileMeta"></small></div>
+      <svg class="xcheck" width="28" height="28" viewBox="0 0 28 28" role="img" aria-label="Fertig"><circle cx="14" cy="14" r="11.5"/><path d="m9 14.5 3.4 3.4L19.5 10"/></svg>
+    </div>
+    <div class="dlg-actions">
+      <button class="linkbtn xother" id="xOther">Anderes Format …</button>
+      <span class="xgrow"></span>
+      <button class="btn" id="xDoneBtn">Fertig</button>
+      <a class="btn primary" id="xDownload" href="#"><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M8 3h8l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M10.5 7v3M13.5 7v3M16.5 8v2"/></svg>Speichern</a>
+    </div>
   </div>
 </dialog>
 

@@ -144,7 +144,11 @@ function withTransition(fn) {
 function animateIn(el, cls = "enter") {
   if (!el) return;
   el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
-  el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
+  // Nur das eigene Animationsende zählt – Kinder (z. B. der Auswahlpunkt) würden sonst zu früh abbrechen.
+  el.addEventListener("animationend", function done(e) {
+    if (e.target !== el && el.getAnimations?.().length) return;
+    el.classList.remove(cls); el.removeEventListener("animationend", done);
+  });
 }
 const EASE = "cubic-bezier(.2, .8, .2, 1)", EASE_OUT = "cubic-bezier(.16, 1, .3, 1)";
 /** Höhe vorher messen; die zurückgegebene Funktion nach der Änderung aufrufen → Höhe gleitet zum neuen Wert. */
@@ -1261,7 +1265,16 @@ async function jobsPoll() {
   let r; try { r = await api("/api/jobs"); } catch { return; }
   const cur = new Map(r.jobs.map((j) => [`${j.doc}#${j.kind}`, j]));
   for (const [k, j] of jobs.prev) {
-    if (cur.has(k) || j.kind !== "prepare") continue;    // beendet → war es vollständig?
+    if (cur.has(k)) continue;
+    if (j.kind === "export") {                            // Export fertig → melden (außer der Dialog zeigt es gerade)
+      api(`/api/docs/${j.doc}/export`).then((x) => {
+        if (x.status !== "ready" || ($("exportDlg").open && st.doc?.id === j.doc)) return;
+        const d = st.docs.find((y) => y.id === j.doc);
+        toast(`„${d?.title || "Text"}“ ist als Hörbuch fertig`);
+      }).catch(() => {});
+      continue;
+    }
+    if (j.kind !== "prepare") continue;                   // beendet → war es vollständig?
     api(`/api/docs/${j.doc}/prepare`).then((p) => {
       if (p.status !== "ready") return;
       const d = st.docs.find((x) => x.id === j.doc);
@@ -1275,43 +1288,83 @@ async function jobsPoll() {
   if (r.jobs.length) jobs.t = setTimeout(jobsPoll, 2000);
 }
 function jobRing(docId) {
-  const j = jobs.list.find((x) => x.doc === docId && x.kind === "prepare");
+  const j = jobs.list.find((x) => x.doc === docId && x.kind === "prepare") || jobs.list.find((x) => x.doc === docId && x.kind === "export");
   if (!j) return "";
   const c = 2 * Math.PI * 5.5, off = c * (1 - (j.total ? j.done / j.total : 0));
-  return `<svg class="jobring" viewBox="0 0 14 14" role="img" aria-label="Wird vorbereitet: ${j.done} von ${j.total}"><title>Wird vorbereitet: ${j.done} von ${j.total}</title>
+  const lbl = `${j.kind === "export" ? "Wird exportiert" : "Wird vorbereitet"}: ${j.done} von ${j.total}`;
+  return `<svg class="jobring" viewBox="0 0 14 14" role="img" aria-label="${lbl}"><title>${lbl}</title>
     <circle class="bg" cx="7" cy="7" r="5.5"/><circle class="fg" cx="7" cy="7" r="5.5" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}"/></svg>`;
 }
 jobsPoll();
 
 /* ---------- Export ---------- */
-let xTimer = null, xPrev = null;   // xPrev: letzter Status (null = Dialog gerade geöffnet → nichts animieren)
+// Drei Stufen: Auswählen → Läuft → Fertig. JEDE Änderung, die die Höhe des Dialogs ändern kann, läuft über
+// xChange(): Höhe vorher messen, ändern, dann gleitet der Dialog zur neuen Höhe (kein Sprung).
+let xTimer = null, xPrev = null, xView = null;   // xPrev: letzter Status (null = gerade geöffnet → nichts animieren)
+const X_VIEWS = { pick: "xPick", run: "xRun", done: "xDone" };
+function xChange(fn, animate = true) {
+  const dlg = $("exportDlg");
+  if (!animate || !dlg.open) return fn();
+  const done = heightFrom(dlg); fn(); done(480);
+}
+function xSetView(v, animate) {
+  if (v === xView) return;
+  xChange(() => {
+    for (const [k, id] of Object.entries(X_VIEWS)) $(id).classList.toggle("hidden", k !== v);
+    $("xChip").classList.toggle("hidden", v === "pick");
+    $("xDone").classList.toggle("xplay", v === "done" && animate);   // Fertig-Animationen nur beim echten Übergang
+  }, animate);
+  xView = v;
+  if (!animate) return;
+  animateIn($(X_VIEWS[v]), "rise");
+  if (v !== "pick") animateIn($("xChip"), "popin");
+}
+function xMsg(text) {
+  if ($("xMsg").textContent === text) return;
+  xChange(() => { $("xMsg").textContent = text; $("xMsg").classList.toggle("hidden", !text); });
+}
+function xDocInfo() {
+  const d = st.doc, chars = d.chunks.reduce((s, c) => s + c.text.length, 0), sec = chars / 15;
+  $("xInfo").textContent = [d.title, `ca. ${fmtDuration(sec)}`, d.chapters.length ? `${d.chapters.length} Kapitel` : ""].filter(Boolean).join(" · ");
+  // Größe grob schätzen: M4B/MP3 mit 64 kbit/s, WAV unkomprimiert (24 kHz, 16 bit, mono)
+  const est = { m4b: sec * 8000, mp3: sec * 8000, wav: sec * 48000 };
+  document.querySelectorAll("#xFmts [data-sz]").forEach((el) => (el.textContent = `≈ ${fmtMB(est[el.dataset.sz])}`));
+  // Fortschritt in Kapitel geteilt (bei sehr vielen Kapiteln ein durchgehender Balken)
+  const n = d.chunks.length, starts = d.chapters.map((c) => c.chunk).filter((c) => c > 0);
+  const bounds = starts.length && starts.length < 30 ? [0, ...starts, n] : [0, n];
+  xDocInfo.bounds = bounds;
+  $("xSegs").innerHTML = bounds.slice(0, -1).map((s0, k) => `<span class="xseg" style="flex:${Math.max(1, bounds[k + 1] - s0)}"><i></i></span>`).join("");
+}
+function xRunRender(j) {
+  const coding = j.phase === "Kodieren", d = st.doc, done = coding ? j.total : j.done;
+  const pct = coding ? 100 : j.total ? (j.done / j.total) * 100 : 0;
+  $("xPhase").textContent = coding ? "Datei wird erstellt …" : "Wird vertont …";
+  $("xPct").textContent = `${Math.floor(pct)} %`;
+  const b = xDocInfo.bounds || [0, j.total];
+  $("xSegs").querySelectorAll("i").forEach((el, k) => {
+    const len = b[k + 1] - b[k]; el.style.width = `${Math.max(0, Math.min(1, (done - b[k]) / (len || 1))) * 100}%`;
+  });
+  const chs = d.chapters, ci = chs.reduce((acc, c, k) => (c.chunk <= j.done ? k : acc), -1);
+  $("xChap").textContent = coding ? "Kapitelmarken werden gesetzt" : ci >= 0 && chs.length > 1 ? `Kapitel ${ci + 1} von ${chs.length} · ${chs[ci].title}` : `${j.done} von ${j.total} Abschnitten`;
+  const elapsed = j.started ? Date.now() / 1000 - j.started : 0;
+  $("xLeft").textContent = coding ? "gleich fertig" : fmtEta(j.done > 0 && elapsed > 3 ? (elapsed / j.done) * (j.total - j.done) : null);
+}
 async function exportPoll() {
   clearTimeout(xTimer);
   if (!st.doc || !$("exportDlg").open) return;
   const j = await api(`/api/docs/${st.doc.id}/export`);
-  const running = j.status === "running", ready = j.status === "ready";
-  const changed = xPrev !== null && xPrev !== j.status; xPrev = j.status;
-  smoothHeight($("exportDlg"), () => {
-    $("xProgress").classList.toggle("hidden", !running && !ready);
-    $("xProgress").classList.toggle("done", ready);
-    $("xCancel").classList.toggle("hidden", !running);
-    $("xStart").classList.toggle("hidden", running);
-    $("xDownload").classList.toggle("hidden", !ready);
-  });
-  if (changed && running) animateIn($("xProgress"));
-  if (changed && ready) { animateIn($("xOk"), "popin"); animateIn($("xDownload"), "popin"); }   // fertig: Haken + Button springen herein
-  $("xFmts").querySelectorAll("input").forEach((i) => (i.disabled = running));
-  $("xMsg").textContent = "";
-  if (running) {
-    const coding = j.phase === "Kodieren";
-    $("xPhase").textContent = coding ? "Datei wird erstellt …" : "Wird vertont …";
-    $("xCount").textContent = coding ? "" : `${j.done} von ${j.total} Abschnitten`;
-    $("xFill").style.width = `${coding ? 100 : j.total ? (j.done / j.total) * 100 : 0}%`;
+  if (!$("exportDlg").open) return;
+  const animate = xPrev !== null && xPrev !== j.status; xPrev = j.status;
+  if (j.format) $("xChip").textContent = j.format.toUpperCase();
+  if (j.status === "running") {
+    xMsg("");
+    if (xView === "run") xChange(() => xRunRender(j)); else xRunRender(j);   // längere Zeile → Höhe gleitet mit
+    xSetView("run", animate);
     xTimer = setTimeout(exportPoll, 1000);
   } else if (j.status === "ready") {
-    $("xPhase").textContent = `${j.format.toUpperCase()} fertig`;
-    $("xCount").textContent = [fmtMB(j.size), j.duration ? fmtDuration(j.duration) : ""].filter(Boolean).join(" · ");
-    $("xFill").style.width = "100%";
+    $("xFile").textContent = `${st.doc.title}.${j.format}`;
+    $("xFileMeta").textContent = [fmtMB(j.size), j.duration ? fmtDuration(j.duration) : "",
+      j.format !== "wav" && st.doc.chapters.length ? `${st.doc.chapters.length} Kapitel` : ""].filter(Boolean).join(" · ");
     $("xDownload").href = `/api/docs/${st.doc.id}/export/file`;
     $("xDownload").onclick = window.pywebview ? async (e) => {   // Desktop-App: „Sichern unter …“
       e.preventDefault();
@@ -1320,25 +1373,32 @@ async function exportPoll() {
         if (r.ok) toast("Gespeichert"); else if (!r.cancelled) toast(r.error || "Speichern fehlgeschlagen", true);
       } catch (err) { toastErr(err); }
     } : null;
-    $("xStart").textContent = "Neu exportieren";
+    xSetView("done", animate);
   } else {
-    $("xMsg").textContent = j.status === "error" ? `Fehler: ${j.error}` : j.status === "cancelled" ? "Abgebrochen" : "";
-    $("xStart").textContent = "Export starten";
+    xSetView("pick", animate);
+    xMsg(j.status === "error" ? `Fehler: ${j.error}` : j.status === "cancelled" ? "Abgebrochen" : "");
   }
 }
 $("exportBtn").onclick = () => {
-  const chars = st.doc.chunks.reduce((s, c) => s + c.text.length, 0);
-  $("xInfo").textContent = `„${st.doc.title}“ (ca. ${fmtDuration(chars / 15)}) wird komplett vertont und mit Kapitelmarken zu einer Datei zusammengefügt. Läuft im Hintergrund weiter.` +
-    (st.doc.voice.startsWith("clone:") ? " Mit eigener Stimme dauert das deutlich länger." : "");
-  xPrev = null; $("exportDlg").showModal(); exportPoll();
+  xDocInfo();
+  xPrev = null; xView = null;
+  $("xMsg").textContent = ""; $("xMsg").classList.add("hidden");
+  $("exportDlg").showModal(); exportPoll();
 };
 $("xStart").onclick = async () => {
   const fmt = $("xFmts").querySelector("input:checked").value;
-  await api(`/api/docs/${st.doc.id}/export`, { method: "POST", body: JSON.stringify({ format: fmt }) });
-  exportPoll();
+  $("xStart").disabled = true;
+  try {
+    await api(`/api/docs/${st.doc.id}/export`, { method: "POST", body: JSON.stringify({ format: fmt }) });
+    xPrev = xPrev ?? "none";      // Übergang Auswählen → Läuft animieren
+    await exportPoll();
+    jobsPoll();                   // Bibliothek zeigt den Fortschritt, Hinweis beim Fertigwerden
+  } catch (err) { xMsg(`Fehler: ${err.message}`); }
+  $("xStart").disabled = false;
 };
 $("xCancel").onclick = async () => { await api(`/api/docs/${st.doc.id}/export`, { method: "DELETE" }); setTimeout(exportPoll, 300); };
-$("xClose").onclick = () => $("exportDlg").close();
+$("xOther").onclick = () => { xMsg(""); xSetView("pick", true); };
+$("xClose").onclick = $("xBg").onclick = $("xDoneBtn").onclick = () => $("exportDlg").close();
 
 /* ---------- Tastatur ---------- */
 document.addEventListener("keydown", (e) => {

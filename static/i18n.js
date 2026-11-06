@@ -188,6 +188,12 @@ const I18N_EN = {
   "Als Hörbuch exportieren": "Export as audiobook", "Hörbuch-Apps & Apple Books, mit Kapiteln": "Audiobook apps & Apple Books, with chapters",
   "Läuft überall, Kapitel je nach Player": "Plays everywhere, chapters depend on the player",
   "Unkomprimiert, beste Qualität – sehr große Datei, ohne Kapitel": "Uncompressed, best quality – very large file, no chapters",
+  "Hörbuch erstellen": "Create audiobook", "Empfohlen": "Recommended", "Hörbuch-Apps & Apple Books · mit Kapiteln": "Audiobook apps & Apple Books · with chapters",
+  "Läuft überall · Kapitel je nach Player": "Plays everywhere · chapters depend on the player", "Unkomprimiert · beste Qualität, ohne Kapitel": "Uncompressed · best quality, no chapters",
+  "Export abbrechen": "Cancel export", "Im Hintergrund weiter": "Continue in background", "Anderes Format …": "Other format …", "Fertig": "Done",
+  "Kapitelmarken werden gesetzt": "Adding chapter marks", "Format": "Format",
+  "Du kannst den Dialog schließen – der Export läuft im Hintergrund weiter. Die Bibliothek zeigt den Fortschritt, und wir melden uns, wenn er fertig ist.":
+    "You can close this dialog – the export keeps running in the background. The library shows the progress, and we’ll let you know when it’s done.",
   "Export starten": "Start export", "Neu exportieren": "Export again", "Herunterladen": "Download", "Wird vertont …": "Generating audio …",
   "Datei wird erstellt …": "Creating file …", "Abgebrochen": "Cancelled",
 
@@ -280,6 +286,12 @@ const I18N_PATTERNS = [
   [/^(\d+) (Std\.|Min\.)( (\d+) Min\.)?$/, (m) => DUR(m)],
   [/^Erzeuge (\d+)\/(\d+)$/, (m, a, b) => `Generating ${a}/${b}`],
   [/^„(.+)“ ist vollständig vorbereitet$/, (m, n) => `“${n}” is fully prepared`],
+  [/^„(.+)“ ist als Hörbuch fertig$/, (m, n) => `“${n}” is ready as an audiobook`],
+  [/^Wird exportiert: (\d+) von (\d+)$/, (m, a, b) => `Exporting: ${a} of ${b}`],
+  [/^Kapitel (\d+) von (\d+)$/, (m, a, b) => `Chapter ${a} of ${b}`],
+  [/^ca\. (\d+ (?:Std\.|Min\.)(?: \d+ Min\.)?)$/, (m, d) => `approx. ${DUR(d)}`],
+  [/^≈ ([\d,]+) (KB|MB|GB)$/, (m, n, u) => `≈ ${n.replace(",", ".")} ${u}`],
+
   [/^Wird vorbereitet: (\d+) von (\d+)$/, (m, a, b) => `Preparing: ${a} of ${b}`],
   [/^(MP3|M4B|WAV) fertig$/, (m, f) => `${f} ready`],
   [/^Fehler: (.+)$/, (m, e) => `Error: ${tr1(e) ?? e}`],

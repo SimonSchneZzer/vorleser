@@ -255,15 +255,6 @@ dialog.bug { width: min(520px, calc(100vw - 32px)); }
 .bug-ok .cf-icon svg { width: 24px; height: 24px; }
 .bug-ok .dlg-actions { justify-content: center; }
 #bugForm.sending { opacity: .7; pointer-events: none; transition: opacity .2s var(--ease); }
-.fmts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 520px) { .fmts { grid-template-columns: 1fr; } }
-.fmts label { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 13px 15px; border-radius: 12px; border: 2px solid var(--line); cursor: pointer; }
-.fmts label:has(input:checked) { border-color: var(--acc-text); background: var(--tint); }
-.fmts input { position: absolute; opacity: 0; }
-.fmts b { font-size: 15px; }
-.fmts small { font-size: 13px; color: var(--muted); line-height: 1.4; }
-.xprog { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--bg); margin-top: 16px; font-size: 13px; }
-.xprog .r { display: flex; justify-content: space-between; }
 .bar8 { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .bar8 i { display: block; height: 100%; background: var(--acc-text); width: 0; transition: width .3s; }
 .readme { font: 16px/1.65 var(--read); background: var(--bg); border-radius: 12px; padding: 14px 16px; margin: 0 0 14px; max-height: 200px; overflow: auto; }
@@ -860,17 +851,6 @@ dialog.confirm .dlg-actions .btn { flex: 1; }
 @keyframes libLand { from { height: 0; opacity: 0; transform: translateY(-6px); } to { height: var(--lh, 72px); opacity: 1; transform: none; } }
 @keyframes libFlash { 0%, 35% { background-color: var(--tint); } }
 
-/* Export: Fortschritt erscheint, beim Fertigwerden Haken + grüner Balken + Button springt herein */
-.xprog.enter { animation: fadeUp .4s var(--ease-out) both; }
-.xl { display: inline-flex; align-items: center; gap: 6px; }
-.xok { display: none; width: 16px; height: 16px; color: var(--ok); stroke-width: 2.6; }
-.xprog.done .xok { display: inline-block; }
-.xok.popin { animation: cfPop .45s var(--spring) both; }
-.xprog .bar8 i { transition: width .45s var(--ease), background-color .5s var(--ease); }
-.xprog.done .bar8 i { background-color: var(--ok); }
-#xDownload.popin { animation: btnPop .45s var(--spring) both; }
-@keyframes btnPop { from { opacity: 0; transform: scale(.85); } }
-
 /* Update-Karte: Knöpfe ↔ Ladebalken */
 .upd .bar8.enter { animation: barReveal .55s var(--ease-out) both; }
 @keyframes barReveal { from { opacity: 0; clip-path: inset(0 100% 0 0 round 4px); } to { opacity: 1; clip-path: inset(0 0 0 0 round 4px); } }
@@ -899,3 +879,66 @@ dialog.confirm .dlg-actions .btn { flex: 1; }
     box-shadow: 0 0 0 100vmax transparent; }
   .side.open { box-shadow: var(--shadow), 0 0 0 100vmax rgba(0, 0, 0, .28); }
 }
+
+/* ===================== Export-Dialog: Auswählen → Läuft → Fertig ===================== */
+.xmeta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 24px; color: var(--muted); font-size: 13.5px; }
+.xchip { font-size: 12px; font-weight: 700; color: var(--acc-text); background: var(--tint); border-radius: 999px; padding: 2px 9px; }
+.xchip.popin { animation: chipIn .55s var(--spring) both; }
+@keyframes chipIn { from { opacity: 0; transform: translateY(14px) scale(.6); } }
+.xsec.rise { animation: fadeUp .5s var(--ease-out) both; }
+.xfmts { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.xfmt { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); cursor: pointer;
+  transition: border-color .2s var(--ease), background-color .2s var(--ease); }
+.xfmt:hover { border-color: color-mix(in srgb, var(--acc-text) 45%, var(--line)); }
+.xfmt:has(input:checked) { border-color: var(--acc-text); background: color-mix(in srgb, var(--acc-text) 10%, transparent); }
+.xfmt:has(input:focus-visible) { outline: 2px solid var(--acc-text); outline-offset: 2px; }
+.xfmt input { position: absolute; opacity: 0; pointer-events: none; }
+.xdot { width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; transition: border-color .2s var(--ease); }
+.xfmt:has(input:checked) .xdot { border-color: var(--acc-text); }
+.xfmt:has(input:checked) .xdot::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--acc-text); animation: dotIn .35s var(--spring); }
+@keyframes dotIn { from { transform: scale(0); } }
+.xfmt .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.xfmt .t { display: flex; align-items: center; gap: 8px; }
+.xfmt b { font-size: 14.5px; }
+.xfmt small { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.xfmt .sz { font-size: 12.5px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.xrec { font-size: 11px; font-weight: 600; color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); border-radius: 999px; padding: 1px 8px; }
+.xmsg { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+.xrun-top { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 0 10px; }
+.xrun-top b { font-size: 15px; }
+#xPct { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.xsegs { display: flex; gap: 4px; }
+.xseg { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; min-width: 4px; }
+.xseg i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--acc-text); transition: width .6s var(--ease-out); }
+.xsub { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.xhint { display: flex; gap: 10px; margin-top: 18px; padding: 12px 14px; border-radius: 12px; background: var(--bg); color: var(--muted); font-size: 13px; line-height: 1.5; }
+.xhint svg { margin-top: 2px; }
+.xgrow { flex: 1; }
+.xdlg .dlg-actions .linkbtn { text-decoration: none; font-size: 13.5px; }
+.xdanger { color: var(--danger) !important; }
+.xother { color: var(--muted) !important; }
+.xother:hover { color: var(--ink) !important; }
+.xfile { display: flex; align-items: center; gap: 14px; margin-top: 22px; padding: 14px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line2); }
+.xfile .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.xfile .nm b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xfile .nm small { font-size: 12.5px; color: var(--muted); }
+.xtile { position: relative; width: 52px; height: 52px; flex-shrink: 0; border-radius: 14px; background: var(--tint); display: flex; align-items: center; justify-content: center; gap: 3px; }
+.xtile i { width: 4px; border-radius: 2px; background: var(--acc-text); }
+.xtile::after { content: ""; position: absolute; inset: 0; border-radius: 14px; border: 2px solid var(--acc-text); opacity: 0; pointer-events: none; }
+.xcheck circle, .xcheck path { fill: none; stroke: var(--ok); stroke-linecap: round; stroke-linejoin: round; }
+.xcheck circle { stroke-width: 2.2; }
+.xcheck path { stroke-width: 2.4; }
+/* Fertig – einmalige Animationen, nur beim echten Übergang (Klasse .play) */
+#xDone.xplay .xtile::after { animation: xRing .9s var(--ease-out) .25s both; }
+@keyframes xRing { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
+#xDone.xplay .xtile i { animation: xWave .9s var(--spring) both; }
+#xDone.xplay .xtile i:nth-child(1) { animation-delay: .30s; } #xDone.xplay .xtile i:nth-child(2) { animation-delay: .36s; }
+#xDone.xplay .xtile i:nth-child(3) { animation-delay: .42s; } #xDone.xplay .xtile i:nth-child(4) { animation-delay: .48s; }
+#xDone.xplay .xtile i:nth-child(5) { animation-delay: .54s; }
+@keyframes xWave { 0% { transform: scaleY(.15); } 55% { transform: scaleY(1.25); } 100% { transform: scaleY(1); } }
+#xDone.xplay .xcheck circle { stroke-dasharray: 72; animation: xDraw72 .5s var(--ease) .15s both; }
+#xDone.xplay .xcheck path { stroke-dasharray: 20; animation: xDraw20 .35s var(--ease) .55s both; }
+@keyframes xDraw72 { from { stroke-dashoffset: 72; } to { stroke-dashoffset: 0; } }
+@keyframes xDraw20 { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+#xDone.xplay #xDownload { animation: btnPop .5s var(--spring) .45s both; }
+@keyframes btnPop { from { opacity: 0; transform: translateY(8px) scale(.9); } }

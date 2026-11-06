@@ -3,6 +3,13 @@
 Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als Release-Notiz übernommen;
 **die erste Zeile erscheint in der Update-Hinweiskarte der App** – kurz und für Nutzer formulieren.
 
+## 2.5.0
+Neuer Export: in drei klaren Schritten zum Hörbuch – mit Fortschritt pro Kapitel und Restzeit.
+
+- **Export:** Format wählen (mit Größenschätzung, M4B empfohlen) → Fortschritt pro Kapitel mit Restzeit → fertige Datei mit „Speichern“
+- **Im Hintergrund:** „Im Hintergrund weiter“ schließt nur den Dialog; die Bibliothek zeigt den Fortschritt, und ein Hinweis meldet, wenn das Hörbuch fertig ist
+- **Animationen:** der Dialog passt seine Größe weich an; beim Fertigwerden zeichnet sich ein Haken und eine Klangwelle springt auf
+
 ## 2.4.0
 Weichere Übergänge – Texte, Player und Export bewegen sich jetzt sanft statt zu springen.
 
