@@ -3,6 +3,12 @@
 Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als Release-Notiz übernommen;
 **die erste Zeile erscheint in der Update-Hinweiskarte der App** – kurz und für Nutzer formulieren.
 
+## 2.3.9
+Der Vorleser ist jetzt Open Source – freie Software unter GPL-3.0.
+
+- **Open Source:** Quellcode auf GitHub, Link unter *Einstellungen › App › Open Source*
+- **Lizenzen:** Lizenztext und Hinweise zu allen mitgelieferten Komponenten liegen der App bei
+
 ## 2.3.8
 Updates laden im Hintergrund – du entscheidest, wann neu gestartet wird.
 
