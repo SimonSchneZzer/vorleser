@@ -184,7 +184,9 @@ def selftest() -> int:
             checks.append((name, f"FEHLER {type(e).__name__}: {e}"))
 
     def https():
-        req = urllib.request.Request("https://api.github.com/zen", headers={"User-Agent": "Vorleser-Selftest"})
+        # Gleiche Quelle wie der Updater (GitHub Pages) – die API hat auf geteilten Build-Rechnern oft kein Kontingent mehr
+        import updater
+        req = urllib.request.Request(updater.JSON_URL, headers={"User-Agent": "Vorleser-Selftest"})
         with urllib.request.urlopen(req, timeout=20) as r:
             assert r.status == 200
     check("HTTPS (Updater)", https)
