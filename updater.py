@@ -26,8 +26,12 @@ API_URL = os.environ.get("VORLESER_UPDATE_URL", f"https://api.github.com/repos/{
 PAGE_URL = "https://simonschnezzer.github.io/vorleser-download/"
 # Ausweichweg ohne API (kein Ratenlimit von 60/h pro IP): die Release-Seite leitet auf /tag/vX.Y.Z weiter
 LATEST_PAGE = os.environ.get("VORLESER_UPDATE_PAGE", f"https://github.com/{REPO}/releases/latest")
+# Hauptweg: kleine Datei auf der Download-Seite (GitHub Pages, kein Ratenlimit). Der Release-Workflow schreibt sie
+# erst, wenn die Installer hochgeladen sind. Die API (60 Anfragen/h pro IP) ist nur noch Ausweichweg.
+JSON_URL = os.environ.get("VORLESER_UPDATE_JSON", PAGE_URL + "latest.json")
 ASSET = "Vorleser-mac.dmg" if paths.IS_MAC else "Vorleser-windows-setup.exe" if paths.IS_WIN else None
-CHECK_EVERY = 6 * 3600
+CHECK_EVERY = 60                       # Sekunden – latest.json kostet nichts
+API_EVERY = 3600                       # Ausweichweg über die API höchstens stündlich (außer „Jetzt suchen“)
 UPDATES_DIR = paths.USER_DIR / "updates"
 LAST_VERSION_FILE = paths.DATA_DIR / "last-version"
 
@@ -37,6 +41,7 @@ _ready: dict | None = None             # {"version", "installer", "staged"} – 
 _checked_once = False                  # erste Prüfung nach dem Start abgeschlossen (Oberfläche wartet darauf)
 _latest: dict | None = None
 _checked = 0.0
+_api_tried = 0.0
 _just_updated: str | None = None
 
 
@@ -93,6 +98,20 @@ def _check_via_redirect() -> dict | None:
     return {"version": tag.lstrip("v"), "url": url, "size": size, "notes": "", "page": PAGE_URL}
 
 
+def _check_via_json() -> dict | None:
+    """Neueste Version aus latest.json. Pages leert seinen CDN-Zwischenspeicher bei jeder Veröffentlichung;
+    ?t= (je Minute) schützt zusätzlich vor Zwischenspeichern unterwegs (Proxys)."""
+    url = f"{JSON_URL}?t={int(time.time() // 60)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Vorleser-Updater", "Cache-Control": "no-cache"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        data = json.loads(r.read())
+    asset = (data.get("assets") or {}).get(ASSET)
+    if not asset or not data.get("version"):
+        return None
+    return {"version": str(data["version"]).lstrip("v"), "url": asset["url"], "size": asset.get("size") or 0,
+            "notes": (data.get("notes") or "").strip()[:600], "page": data.get("page") or PAGE_URL}
+
+
 def check(force: bool = False) -> dict | None:
     """Neuestes Release abfragen (höchstens alle paar Minuten, außer force)."""
     try:
@@ -103,10 +122,23 @@ def check(force: bool = False) -> dict | None:
 
 
 def _check(force: bool = False) -> dict | None:
-    global _latest, _checked
-    if ASSET is None or (not force and time.time() - _checked < 300):
+    global _latest, _checked, _api_tried
+    now = time.time()
+    if ASSET is None or (not force and now - _checked < 50):
         return _latest
-    _checked = time.time()
+    _checked = now
+    try:
+        found = _check_via_json()
+        if found and (not _latest or found["version"] != _latest["version"]):
+            print(f"[update] neueste Version {found['version']} (installiert {paths.APP_VERSION})", flush=True)
+        if found:
+            _latest = found
+        return _latest
+    except Exception as e:
+        print(f"[update] latest.json nicht erreichbar ({type(e).__name__})", flush=True)
+    if not force and now - _api_tried < API_EVERY:
+        return _latest
+    _api_tried = now
     try:
         req = urllib.request.Request(API_URL, headers={"Accept": "application/vnd.github+json",
                                                        "User-Agent": "Vorleser-Updater"})
@@ -295,8 +327,9 @@ def start_background() -> None:
 
     def loop():
         time.sleep(1)                       # bei jedem Start kurz nach dem Öffnen prüfen
+        check(force=True)
         while True:
-            check(force=True)
             time.sleep(CHECK_EVERY)
+            check()
     if status()["enabled"]:
         threading.Thread(target=loop, daemon=True).start()

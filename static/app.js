@@ -2497,5 +2497,5 @@ $("uninGo").onclick = async () => {
   } catch (e) { uninReset(); toastErr(e); }
 };
 
-setInterval(() => { if (!upd.s || upd.s.state === "idle") updRefresh(); }, 30 * 60000);
+setInterval(() => { if (!upd.s || upd.s.state === "idle") updRefresh(); }, 60000);   // Server prüft minütlich (latest.json)
 updRefresh();                                     // Version, „aktualisiert“-Hinweis; fragt nach, bis die erste Prüfung durch ist   // „Gestern“/Uhrzeit aktuell halten

@@ -5,6 +5,16 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Update-Prüfung minütlich über latest.json
+**Kontext:** Updates erschienen erst nach bis zu 6 h. Die GitHub-API erlaubt ohne Anmeldung nur 60 Anfragen/h
+pro öffentlicher IP – mehrere Apps im selben Netz teilen sich das.
+**Entscheidung:** Der Release-Workflow schreibt nach dem Hochladen der Installer `latest.json` (Version, Notizen,
+URL + Größe je Installer) ins Download-Repo; die App liest sie über GitHub Pages minütlich (kein Ratenlimit).
+Die API bleibt Ausweichweg, aus der Schleife höchstens stündlich („Jetzt suchen“ darf immer). Oberfläche fragt
+den lokalen Server ebenfalls minütlich.
+**Folgen:** Pages leert seinen Zwischenspeicher beim Deploy (getestet) → neue Version nach ~1–3 min sichtbar.
+Apps ≤ 2.5.0 prüfen weiter alle 6 h über die API.
+
 ## 2026-11-07 · Export-Dialog in drei Stufen
 **Kontext:** Formatwahl, Fortschritt und Ergebnis standen gleichzeitig im Dialog; zwei orange Knöpfe
 („Herunterladen“/„Neu exportieren“); unklar, ob „Schließen“ abbricht. Entwurf vorher im Design-Artefakt abgestimmt.

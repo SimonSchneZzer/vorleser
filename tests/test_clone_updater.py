@@ -80,9 +80,12 @@ def release_server(monkeypatch):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     monkeypatch.setattr(updater, "API_URL", f"http://127.0.0.1:{srv.server_address[1]}/latest")
     monkeypatch.setattr(updater, "LATEST_PAGE", "http://127.0.0.1:9/releases/latest")   # Tests nie ins Netz
+    monkeypatch.setattr(updater, "JSON_URL", "http://127.0.0.1:9/latest.json")           # → Ausweichweg API
     monkeypatch.setattr(updater, "ASSET", "Vorleser-mac.dmg")
     monkeypatch.setattr(updater, "_latest", None)
     monkeypatch.setattr(updater, "_checked", 0.0)
+    monkeypatch.setattr(updater, "_api_tried", 0.0)
+    _Release.port = srv.server_address[1]
     yield _Release
     srv.shutdown()
 
@@ -121,7 +124,31 @@ def test_fehlende_datei_fuer_system_ignoriert(release_server, monkeypatch):
     assert updater.check(force=True) is None
 
 
+def test_latest_json_ist_hauptweg(release_server, monkeypatch):
+    """latest.json (Download-Seite) wird zuerst gelesen; die API wird dann gar nicht gefragt."""
+    monkeypatch.setattr(paths, "APP_VERSION", "1.0.0")
+    monkeypatch.setattr(updater, "JSON_URL", f"http://127.0.0.1:{release_server.port}/latest.json")
+    monkeypatch.setattr(updater, "API_URL", "http://127.0.0.1:9/nix")
+    release_server.body = {"version": "1.3.0", "notes": "Neu: Export.", "page": "https://x",
+                           "assets": {"Vorleser-mac.dmg": {"url": "http://dl/mac.dmg", "size": 7}}}
+    latest = updater.check(force=True)
+    assert latest == {"version": "1.3.0", "url": "http://dl/mac.dmg", "size": 7, "notes": "Neu: Export.", "page": "https://x"}
+    assert updater.status()["available"]
+
+
+def test_api_ausweichweg_hoechstens_stuendlich(release_server, monkeypatch):
+    """Ist latest.json nicht erreichbar, fragt die minütliche Prüfung die API nur einmal pro Stunde."""
+    monkeypatch.setattr(paths, "APP_VERSION", "1.0.0")
+    release_server.body = _rel("v1.2.0")
+    assert updater.check()["version"] == "1.2.0"                  # erste Prüfung: API
+    release_server.body = _rel("v1.4.0")
+    monkeypatch.setattr(updater, "_checked", 0.0)                  # eine Minute später …
+    assert updater.check()["version"] == "1.2.0"                  # … API noch nicht wieder gefragt
+    assert updater.check(force=True)["version"] == "1.4.0"        # „Jetzt suchen“ darf immer
+
+
 def test_offline_kein_absturz(monkeypatch):
+    monkeypatch.setattr(updater, "JSON_URL", "http://127.0.0.1:9/latest.json")
     monkeypatch.setattr(updater, "API_URL", "http://127.0.0.1:9/nix")
     monkeypatch.setattr(updater, "LATEST_PAGE", "http://127.0.0.1:9/releases/latest")
     monkeypatch.setattr(updater, "ASSET", "Vorleser-mac.dmg")

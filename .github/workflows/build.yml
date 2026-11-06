@@ -109,3 +109,23 @@ jobs:
           printf '\n---\nDownload und Installationshinweise: https://simonschnezzer.github.io/vorleser-download/\n' >> notes.md
           gh release create "$GITHUB_REF_NAME" Vorleser-mac.dmg Vorleser-windows-setup.exe \
             --repo SimonSchneZzer/vorleser-download --title "Vorleser $VER" --notes-file notes.md
+          # latest.json für den Updater der App (Download-Seite, kein Ratenlimit) – erst NACH dem Hochladen,
+          # damit eine App nie eine Version meldet, deren Installer noch fehlt
+          python3 - "$VER" <<'PY'
+          import json, os, sys
+          ver = sys.argv[1]
+          base = f"https://github.com/SimonSchneZzer/vorleser-download/releases/download/v{ver}/"
+          notes = open("notes.md", encoding="utf-8").read().split("\n---\n")[0].strip()[:600]
+          assets = {n: {"url": base + n, "size": os.path.getsize(n)} for n in ("Vorleser-mac.dmg", "Vorleser-windows-setup.exe")}
+          with open("latest.json", "w", encoding="utf-8") as f:
+              json.dump({"version": ver, "notes": notes, "page": "https://simonschnezzer.github.io/vorleser-download/",
+                         "assets": assets}, f, ensure_ascii=False, indent=2)
+          PY
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/SimonSchneZzer/vorleser-download.git" dl
+          cp latest.json dl/latest.json
+          cd dl
+          git config user.name "SimonSchneZzer"
+          git config user.email "50883040+SimonSchneZzer@users.noreply.github.com"
+          git add latest.json
+          git commit -m "latest.json: Vorleser $VER"
+          git push
