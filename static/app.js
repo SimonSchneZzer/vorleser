@@ -1928,6 +1928,8 @@ async function renderStorage() {
   fillStorage(r, fresh);
 }
 function fillStorage(r, fresh) {
+  // Platzhalter → Inhalt: Karten bleiben stehen, ihre Höhe gleitet; nur die Werte blenden ein
+  const grow = fresh ? [...$("tabStorage").querySelectorAll(".box")].map((b) => heightFrom(b)) : [];
   const docsAudio = r.docs.reduce((a, d) => a + d.audio, 0);
   const models = r.whisper.bytes + r.clone.bytes + r.piper;
   const parts = [["audio", "Audio deiner Texte", docsAudio], ["previews", "Hörproben", r.previews.bytes],
@@ -1960,7 +1962,11 @@ function fillStorage(r, fresh) {
   const names = st.voices.filter((v) => v.engine === "piper").map((v) => v.name);
   $("piperCount").textContent = names.length ? `${names.join(", ")} · springt ein, wenn offline` : "keine";
   $("piperSize").textContent = fmtMB(r.piper);
-  if (fresh) for (const el of $("tabStorage").querySelectorAll(".box")) animateIn(el, "fadein");
+  if (fresh) {
+    grow.forEach((g) => g(420));
+    if (!reducedMotion.matches) for (const id of ["stoTotal", "stoStack", "stoLegend", "cacheTxt", "cacheBar", "stoDocs", "stoMisc", "whisperSize", "cloneSize", "piperSize", "whisperNote", "cloneState", "piperCount"])
+      $(id).animate([{ opacity: 0, filter: "blur(3px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 420, easing: EASE });
+  }
 }
 function renderAppTab() {
   if (st.features.desktop) $("appNote").textContent = "Schließt das Fenster und stoppt alles im Hintergrund";

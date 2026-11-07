@@ -4,19 +4,24 @@ Quelle ist das neueste Release im öffentlichen Repo vorleser-download (feste Da
 Installiert wird von einem kleinen Helfer, der wartet, bis die App beendet ist:
   macOS:   DMG einhängen, Vorleser.app austauschen, neu starten
   Windows: Setup still ausführen (Inno Setup), danach neu starten
+Teil-Update (meist ~15 MB statt ~260 MB): nur die geänderten Dateien laden (packaging/make_patch.py). Jede andere
+Datei wird per Prüfsumme gegen die Dateiliste der neuen Version geprüft; passt etwas nicht → komplettes Paket.
 Was die App selbst lädt, bekommt kein Quarantäne-/Internet-Kennzeichen → keine Sicherheitswarnung.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import paths
@@ -109,7 +114,8 @@ def _check_via_json() -> dict | None:
     if not asset or not data.get("version"):
         return None
     return {"version": str(data["version"]).lstrip("v"), "url": asset["url"], "size": asset.get("size") or 0,
-            "notes": (data.get("notes") or "").strip()[:600], "page": data.get("page") or PAGE_URL}
+            "notes": (data.get("notes") or "").strip()[:600], "page": data.get("page") or PAGE_URL,
+            "patch": asset.get("patch")}
 
 
 def check(force: bool = False) -> dict | None:
@@ -167,34 +173,153 @@ def status() -> dict:
     latest = _latest
     ok, why = can_install()
     available = bool(latest and _ver(latest["version"]) > _ver(paths.APP_VERSION))
+    patch = _patch_for(latest)
     with _lock:
         return {**_state, "current": paths.APP_VERSION, "latest": latest["version"] if latest else None,
-                "available": available, "notes": latest["notes"] if latest else "", "size": latest["size"] if latest else 0,
+                "available": available, "notes": latest["notes"] if latest else "",
+                "size": (patch or latest)["size"] if latest else 0, "partial": bool(patch),
                 "canInstall": ok, "reason": why, "page": PAGE_URL, "justUpdated": _just_updated, "checked": _checked_once,
                 "readyVersion": _ready["version"] if _ready else None,
                 "enabled": paths.FROZEN or bool(os.environ.get("VORLESER_UPDATE_URL"))}
 
 
-def _download(latest: dict) -> Path:
+def _patch_for(latest: dict | None) -> dict | None:
+    """Teil-Update, wenn es für die installierte Version gebaut wurde (sonst komplettes Paket)."""
+    p = (latest or {}).get("patch") or None
+    ok = p and p.get("url") and paths.APP_VERSION in (p.get("from") or []) and paths.FROZEN and not os.environ.get("VORLESER_NO_PATCH")
+    return p if ok else None
+
+
+def _download(latest: dict, url: str | None = None, size: int | None = None, name: str = ASSET or "") -> Path:
     UPDATES_DIR.mkdir(parents=True, exist_ok=True)
-    dest = UPDATES_DIR / f"{latest['version']}-{ASSET}"
-    if dest.exists() and (not latest["size"] or dest.stat().st_size == latest["size"]):
+    url, size = url or latest["url"], latest["size"] if size is None else size
+    dest = UPDATES_DIR / f"{latest['version']}-{name}"
+    if dest.exists() and (not size or dest.stat().st_size == size):
         return dest
     part = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(latest["url"], headers={"User-Agent": "Vorleser-Updater"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Vorleser-Updater"})
     with urllib.request.urlopen(req, timeout=60) as r, open(part, "wb") as f:
-        total = int(r.headers.get("Content-Length") or latest["size"] or 0)
+        total = int(r.headers.get("Content-Length") or size or 0)
         done = 0
+        with _lock:
+            _state.update(done=0, total=total)
         while chunk := r.read(1 << 20):
             f.write(chunk)
             done += len(chunk)
             with _lock:
                 _state.update(done=done, total=total)
-    if latest["size"] and part.stat().st_size != latest["size"]:
+    if size and part.stat().st_size != size:
         part.unlink(missing_ok=True)
         raise RuntimeError("Download unvollständig")
     part.replace(dest)
     return dest
+
+
+def _sha256(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        while b := f.read(1 << 20):
+            h.update(b)
+    return h.hexdigest()
+
+
+def _install_root() -> Path:
+    """Ordner, auf den sich die Dateiliste bezieht: Vorleser.app (macOS) bzw. der Programmordner (Windows)."""
+    app = _app_path()
+    return app if paths.IS_MAC else app.parent
+
+
+def _keep_on_windows(rel: str) -> bool:
+    return "/" not in rel and rel.lower().startswith("unins")       # Deinstallationsprogramm von Inno Setup
+
+
+def _apply_patch(zpath: Path, root: Path, target: Path, version: str) -> list[str]:
+    """Neue Version in target zusammensetzen: geänderte Dateien aus dem Paket, alle anderen müssen in root
+    (bzw. der Kopie target) schon mit der richtigen Prüfsumme liegen. Gibt die zu löschenden Pfade zurück.
+    macOS: target = Kopie des ganzen Pakets (wird danach gegen die alte getauscht).
+    Windows: target = Ordner nur mit den neuen Dateien (der Helfer kopiert sie nach dem Beenden drüber)."""
+    with zipfile.ZipFile(zpath) as z:
+        man = json.loads(z.read("manifest.json"))
+        if man.get("version") != version:
+            raise RuntimeError("Teil-Update passt nicht zur Version")
+        files: dict = man["files"]
+        names = set(z.namelist())
+        for rel, f in files.items():
+            dst = target / rel
+            if "l" in f:                                          # Verknüpfung (nur macOS)
+                if not (dst.is_symlink() and os.readlink(dst) == f["l"]):
+                    if dst.is_symlink() or dst.exists():
+                        dst.unlink() if not dst.is_dir() or dst.is_symlink() else shutil.rmtree(dst)
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    os.symlink(f["l"], dst)
+                continue
+            if "files/" + rel in names:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if dst.is_symlink():
+                    dst.unlink()
+                with z.open("files/" + rel) as src, open(dst.with_name(dst.name + ".tmp"), "wb") as out:
+                    shutil.copyfileobj(src, out, 1 << 20)
+                dst.with_name(dst.name + ".tmp").replace(dst)
+                check = dst
+            else:
+                check = root / rel                                # unverändert → muss schon so daliegen
+                if paths.IS_MAC:
+                    check = dst
+                if check.is_symlink() or not check.is_file() or check.stat().st_size != f["s"]:
+                    raise RuntimeError(f"Datei weicht ab: {rel}")
+            if _sha256(check) != f["h"]:
+                raise RuntimeError(f"Prüfsumme falsch: {rel}")
+            if paths.IS_MAC:
+                mode = check.stat().st_mode
+                os.chmod(check, (mode | 0o111) if f.get("x") else (mode & ~0o111))
+    # Dateien, die es in der neuen Version nicht mehr gibt
+    gone = []
+    base = target if paths.IS_MAC else root
+    for dirpath, dirnames, filenames in os.walk(base):
+        d = Path(dirpath)
+        for n in dirnames + filenames:
+            p = d / n
+            rel = p.relative_to(base).as_posix()
+            if (p.is_symlink() or p.is_file()) and rel not in files and not rel.endswith(".tmp"):
+                if not (paths.IS_WIN and _keep_on_windows(rel)):
+                    gone.append(rel)
+        dirnames[:] = [n for n in dirnames if not (d / n).is_symlink()]
+    if paths.IS_MAC:
+        for rel in gone:
+            (target / rel).unlink(missing_ok=True)
+    return gone
+
+
+def _prepare_patch(latest: dict, patch: dict) -> dict:
+    """Teil-Update laden und vollständig vorbereiten – schlägt etwas fehl, nimmt _prepare das komplette Paket."""
+    zpath = _download(latest, patch["url"], patch.get("size") or 0, f"patch-{'mac' if paths.IS_MAC else 'windows'}.zip")
+    with _lock:
+        _state.update(state="preparing")
+    root = _install_root()
+    if paths.IS_MAC:
+        staged = root.with_name(root.name + ".new")
+        subprocess.run(["rm", "-rf", str(staged)], check=False)
+        # APFS: Kopie per Klon (sofort, kein Platz); sonst normal kopieren
+        if subprocess.run(["cp", "-cR", str(root), str(staged)], capture_output=True).returncode != 0:
+            subprocess.run(["rm", "-rf", str(staged)], check=False)
+            subprocess.run(["ditto", str(root), str(staged)], check=True, timeout=600)
+        try:
+            _apply_patch(zpath, root, staged, latest["version"])
+        except Exception:
+            subprocess.run(["rm", "-rf", str(staged)], check=False)
+            raise
+        subprocess.run(["xattr", "-cr", str(staged)], check=False)
+        return {"staged": str(staged)}
+    staged = UPDATES_DIR / f"staged-{latest['version']}"
+    shutil.rmtree(staged, ignore_errors=True)
+    staged.mkdir(parents=True)
+    try:
+        gone = _apply_patch(zpath, root, staged, latest["version"])
+    except Exception:
+        shutil.rmtree(staged, ignore_errors=True)
+        raise
+    (UPDATES_DIR / f"delete-{latest['version']}.txt").write_text("\n".join(gone), "utf-8")
+    return {"staged": str(staged), "patch": True}
 
 
 def _ps(s) -> str:
@@ -237,6 +362,24 @@ fi
         script.chmod(0o755)
         subprocess.Popen(["/bin/bash", str(script)], start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif paths.IS_WIN and _ready.get("patch"):
+        L, S, A, R = _ps(log), _ps(_ready["staged"]), _ps(app), _ps(app.parent)
+        D, V = _ps(UPDATES_DIR / f"delete-{_ready['version']}.txt"), _ps(_ready["version"])
+        ps = (f"Add-Content -Path '{L}' -Value ('== ' + (Get-Date) + ' Teil-Update auf {V}'); "
+              f"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300; "
+              f"robocopy '{S}' '{R}' /E /R:5 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null; $rc = $LASTEXITCODE; "
+              f"Add-Content -Path '{L}' -Value ('robocopy: ' + $rc); "
+              f"if ($rc -lt 8) {{ Get-Content -Path '{D}' -ErrorAction SilentlyContinue | ForEach-Object {{ "
+              f"if ($_) {{ Remove-Item -LiteralPath (Join-Path '{R}' $_) -Force -ErrorAction SilentlyContinue }} }}; "
+              # Versionsanzeige unter „Apps“ (Inno Setup) nachziehen
+              f"foreach ($h in 'HKCU:','HKLM:') {{ $k = $h + '\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{{6E1B7C52-4D0A-4C1E-9F43-7A8C2B9D0E11}}_is1'; "
+              f"if (Test-Path $k) {{ Set-ItemProperty -Path $k -Name DisplayVersion -Value '{V}' -ErrorAction SilentlyContinue }} }}; "
+              f"Remove-Item -LiteralPath '{S}' -Recurse -Force -ErrorAction SilentlyContinue }}"
+              + (f"; Start-Process -FilePath '{A}'" if relaunch else ""))
+        flags = 0x00000008 | 0x00000200 | 0x08000000
+        subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+                          "-Command", ps], creationflags=flags, close_fds=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     elif paths.IS_WIN:
         L, I, A = _ps(log), _ps(_ready["installer"]), _ps(app)
         ps = (f"Add-Content -Path '{L}' -Value ('== ' + (Get-Date) + ' Update'); "
@@ -257,6 +400,19 @@ def _prepare() -> None:
         latest = check(force=True)
         if not latest or _ver(latest["version"]) <= _ver(paths.APP_VERSION):
             raise RuntimeError("Keine neuere Version gefunden")
+        patch = _patch_for(latest)
+        if patch:
+            try:
+                info = _prepare_patch(latest, patch)
+                _ready = {"version": latest["version"], "installer": None, **info}
+                with _lock:
+                    _state.update(state="ready")
+                print(f"[update] {latest['version']} bereit (Teil-Update, {patch.get('size', 0) // 1_000_000} MB)", flush=True)
+                return
+            except Exception as e:
+                print(f"[update] Teil-Update nicht möglich ({e}) – lade komplettes Paket", flush=True)
+                with _lock:
+                    _state.update(state="downloading", done=0, total=latest["size"])
         installer = _download(latest)
         with _lock:
             _state.update(state="preparing")
@@ -319,7 +475,7 @@ def start_background() -> None:
     if UPDATES_DIR.exists():
         for p in UPDATES_DIR.iterdir():
             if paths.APP_VERSION in p.name or p.suffix == ".part":
-                p.unlink(missing_ok=True)
+                shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
 
     app = _app_path() if paths.IS_MAC and paths.FROZEN else None
     if app and app.with_name(app.name + ".new").exists():      # Rest eines abgebrochenen Updates (~450 MB)

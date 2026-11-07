@@ -132,7 +132,7 @@ def test_latest_json_ist_hauptweg(release_server, monkeypatch):
     release_server.body = {"version": "1.3.0", "notes": "Neu: Export.", "page": "https://x",
                            "assets": {"Vorleser-mac.dmg": {"url": "http://dl/mac.dmg", "size": 7}}}
     latest = updater.check(force=True)
-    assert latest == {"version": "1.3.0", "url": "http://dl/mac.dmg", "size": 7, "notes": "Neu: Export.", "page": "https://x"}
+    assert latest == {"version": "1.3.0", "url": "http://dl/mac.dmg", "size": 7, "notes": "Neu: Export.", "page": "https://x", "patch": None}
     assert updater.status()["available"]
 
 

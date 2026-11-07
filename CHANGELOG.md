@@ -4,6 +4,19 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.8.0
+A new glass look – and from now on, updates download only what changed.
+
+- **Glass look:** the player floats as a frosted glass panel with the follow-along line inside; text and settings
+  scroll behind it. The buttons at the top of the text, menus, tooltips, dialogs, the tour and the update card share
+  the same glass
+- **Smaller updates:** instead of the whole app (~260 MB), updates now load only the changed files (usually around
+  15 MB). Every other file is checked first; if anything doesn't match, the full update is downloaded as before.
+  Takes effect from the next update on
+- **Storage:** when the sizes are ready, the cards no longer briefly disappear and float in again – their height
+  glides and only the values fade in
+- **About:** the bubble at Simon's name shows GitHub and LinkedIn side by side
+
 ## 2.7.1
 Smoother follow-along line, and Simon's name now leads to GitHub or LinkedIn.
 

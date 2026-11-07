@@ -301,7 +301,7 @@
         <div class="set-body hidden" id="tabApp">
           <div class="set-sec"><h2 class="big">App</h2></div>
           <div class="box store">
-            <div class="r"><span class="who"><b>Vorleser</b><span class="beta static">BETA</span><span class="by">von <button class="byname" data-by aria-haspopup="menu" aria-expanded="false">Simon Schnetzer<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span></span><span id="verTxt"></span></div>
+            <div class="r"><span class="who"><b>Vorleser</b><span class="beta static">BETA</span><span class="by">von <button class="byname" data-by aria-haspopup="menu" aria-expanded="false">Simon Schnetzer</button></span></span><span id="verTxt"></span></div>
             <div class="sto-list app-list">
               <div class="sto-row"><span class="nm">Rundgang<small>Alle Funktionen in einer Minute</small></span><button class="btn sm" id="tourBtn">Starten</button></div>
               <div class="sto-row" id="newsRow"><span class="nm">Was ist neu<small>Was in welcher Version dazugekommen ist</small></span><button class="btn sm" id="newsBtn">Anzeigen</button></div>
@@ -315,10 +315,10 @@
         </div>
       </div>
     </section>
-    <!-- Mitlesezeile: außerhalb der Textseite der gesprochene Satz (ohne Hintergrund, Ränder blenden aus) -->
-    <div class="ml hidden" id="ml" aria-hidden="true"><div class="ml-win" id="mlWin" data-noi18n></div></div>
     <!-- Player: in allen Ansichten sichtbar, solange ein Text geladen ist (Wiedergabe läuft weiter) -->
     <footer class="player hidden" id="player">
+      <!-- Mitlesezeile: außerhalb der Textseite der gesprochene Satz (Teil der Glasfläche, Ränder blenden aus) -->
+      <div class="ml hidden" id="ml" aria-hidden="true"><div class="ml-win" id="mlWin" data-noi18n></div></div>
       <div class="prog-row">
         <span id="posL"></span>
         <div class="prog" id="prog" role="slider" tabindex="0" aria-label="Position im Text">

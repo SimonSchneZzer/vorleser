@@ -66,7 +66,6 @@ svg.i.fill { fill: currentColor; stroke: none; }
 .side-foot { border-top: 1px solid var(--line); padding: 8px 14px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
   box-sizing: border-box; margin: 0 -14px -14px; }
 /* Trennlinie auf Höhe der Abspielleiste: Fußbereich so hoch wie der Player (per JS gemessen) */
-.has-player .side-foot { height: var(--player-h); }
 .navlink { flex: 1; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; border-radius: var(--radius); border: 0; background: transparent; color: var(--ink); font-weight: 500; text-align: left; }
 .navlink:hover, .navlink.active { background: var(--subtle); }
 .navlink.active { font-weight: 600; }
@@ -376,9 +375,7 @@ details[open]:not(.closing) > summary::before { rotate: 45deg; }
 .byname { font: inherit; color: var(--ink); font-weight: 600; border: 0; padding: 0 0 1px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;
   background: linear-gradient(var(--acc-text), var(--acc-text)) 0 100% / 0 1.5px no-repeat; transition: background-size .35s var(--ease-out), color .2s; }
 .byname:hover, .byname.on { color: var(--acc-text); background-size: 100% 1.5px; }
-.byname svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .4s cubic-bezier(.34, 1.56, .64, 1); }
-.byname.on svg { transform: rotate(180deg); }
-.bypop { --ax: 0px; position: fixed; z-index: 400; left: 0; top: 0; width: 264px; padding: 6px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line);
+.bypop { --ax: 0px; position: fixed; z-index: 400; left: 0; top: 0; display: flex; gap: 4px; padding: 5px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line);
   box-shadow: var(--shadow), 0 18px 50px rgba(0, 0, 0, .28); translate: -50% -6px; transform-origin: calc(50% + var(--ax)) -10px; scale: .8; opacity: 0; visibility: hidden; pointer-events: none;
   transition: opacity .16s var(--ease), scale .2s var(--ease), translate .2s var(--ease), visibility 0s .2s; }
 .bypop.up { translate: -50% 6px; transform-origin: calc(50% + var(--ax)) calc(100% + 10px); }
@@ -387,18 +384,18 @@ details[open]:not(.closing) > summary::before { rotate: 45deg; }
 .bypop.up::before { top: auto; bottom: -7px; rotate: 225deg; }
 .bypop.open { opacity: 1; scale: 1; translate: -50% 0; visibility: visible; pointer-events: auto;
   transition: opacity .2s var(--ease), scale .5s cubic-bezier(.34, 1.56, .64, 1), translate .5s cubic-bezier(.34, 1.56, .64, 1), visibility 0s; }
-.bypop .opt { --i: 0; display: flex; align-items: center; gap: 12px; padding: 9px 11px; border-radius: 11px; color: var(--ink); text-decoration: none;
+.bypop .opt { --i: 0; position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; width: 116px; padding: 12px 8px 10px; border-radius: 12px; text-align: center; color: var(--ink); text-decoration: none;
   opacity: 0; translate: 0 8px; transition: background-color .2s var(--ease), opacity .15s var(--ease), translate .2s var(--ease); }
 .bypop .opt + .opt { --i: 1; }
 .bypop.open .opt { opacity: 1; translate: 0 0; transition: background-color .2s var(--ease), opacity .3s var(--ease) calc(.08s + var(--i) * .06s), translate .5s cubic-bezier(.34, 1.56, .64, 1) calc(.08s + var(--i) * .06s); }
 .bypop .ico { width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; background: var(--bg); border: 1px solid var(--line);
   transition: transform .4s cubic-bezier(.34, 1.56, .64, 1), background-color .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease); }
 .bypop .ico svg { width: 17px; height: 17px; fill: currentColor; }
-.bypop .txt { flex: 1; min-width: 0; line-height: 1.3; }
+.bypop .txt { line-height: 1.3; }
 .bypop b { display: block; font-size: 14px; }
-.bypop small { font-size: 12.5px; color: var(--muted); }
-.bypop .go { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); opacity: .5;
-  transition: translate .35s cubic-bezier(.34, 1.56, .64, 1), opacity .2s, color .2s; }
+.bypop small { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.bypop .go { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); opacity: 0;
+  position: absolute; top: 8px; right: 8px; transition: translate .35s cubic-bezier(.34, 1.56, .64, 1), opacity .2s, color .2s; }
 .bypop .opt:hover, .bypop .opt:focus-visible { background: var(--tint); outline: none; }
 .bypop .opt:hover .ico, .bypop .opt:focus-visible .ico { transform: rotate(-8deg) scale(1.08); background: var(--acc); color: var(--on-acc); border-color: transparent; }
 .bypop .opt:hover .go, .bypop .opt:focus-visible .go { translate: 3px -3px; opacity: 1; color: var(--acc-text); }
@@ -431,7 +428,6 @@ dialog.news:focus { outline: none; }
 @keyframes skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 .legend .sk { margin-right: 4px; }
 .sto-row .nm .sk { display: block; margin: 2px 0; }
-.box.fadein { animation: fadeUp .45s var(--ease-out) both; }
 .app-list .sto-row .btn { flex-shrink: 0; min-width: 104px; justify-content: center; }
 .app-list .danger-row { margin-top: 10px; border-top: 1px dashed color-mix(in srgb, var(--danger) 35%, var(--line)); padding-top: 14px; }
 .app-list .danger-row .nm { color: var(--danger); }
@@ -1068,3 +1064,39 @@ dialog.news[open] { display: flex; }
 .vprep.full em { color: var(--acc-text); }
 #voicePanel:not(.leaving) .vprep .vbar i { animation: vpGrow .6s var(--ease-out) .12s both; }   /* wächst beim Öffnen einmal */
 @keyframes vpGrow { from { width: 0; } }
+
+/* ===================== Glas (Liquid Glass) =====================
+   Nur, was ÜBER Inhalt schwebt: Player + Mitlesezeile, Pillen oben im Text, Menüs, Sprechblase, Tooltips, Dialoge,
+   Update-Karte. Seitenleiste, Karten und Lesetext bleiben deckend (dahinter liegt nichts – Glas wäre nur grau). */
+:root { --glass: rgba(255, 255, 255, .62); --glass-line: rgba(24, 24, 27, .08); --glass-hi: rgba(255, 255, 255, .9);
+  --glass-shade: 0 18px 50px rgba(24, 24, 27, .16); --glass-sheen: rgba(255, 255, 255, .55); }
+:root[data-theme="anthrazit"] { --glass: rgba(37, 41, 45, .55); --glass-line: rgba(255, 255, 255, .09); --glass-hi: rgba(255, 255, 255, .14);
+  --glass-shade: 0 18px 50px rgba(0, 0, 0, .38); --glass-sheen: rgba(255, 255, 255, .09); }
+.player, .pop, .bypop, .tip, .upd, dialog, #viewRead .topbar .pill, #viewRead .topbar .ib, .gt-card, .onb-card {
+  background: var(--glass); -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
+  border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shade);
+  background-image: linear-gradient(180deg, var(--glass-sheen), transparent 40%);
+}
+.bypop::before { background: var(--glass); -webkit-backdrop-filter: blur(26px); backdrop-filter: blur(26px); border-color: var(--glass-line); }
+.tip { color: var(--ink); }
+dialog::backdrop { background: rgba(0, 0, 0, .32); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+
+/* Player schwebt über dem Inhalt; der Inhalt läuft dahinter weiter */
+.main { position: relative; }
+.player { position: absolute; z-index: 20; left: 16px; right: 16px; bottom: 14px; border-radius: 22px; }
+.has-player .scroll { padding-bottom: calc(var(--player-h) + 28px); }
+.player .ml { padding: 2px 0 0; }
+.upd { bottom: calc(var(--player-h, 100px) + 30px); }
+
+/* Pillen oben im Text: schweben, der Text scrollt darunter durch */
+#viewRead { position: relative; }
+#viewRead .topbar { position: absolute; z-index: 15; top: 0; left: 0; right: 0; border-bottom: 0; pointer-events: none; }
+#viewRead .topbar > * { pointer-events: auto; }
+#viewRead .topbar .ib { border-radius: 999px; width: 38px; height: 38px; }
+#readScroll { padding-top: 64px; }
+@media (max-width: 760px) { .player { left: 8px; right: 8px; bottom: 8px; border-radius: 18px; } }
+.player .pill { background: color-mix(in srgb, var(--surface) 35%, transparent); border-color: var(--glass-line); }
+/* Rundgang/Einführung: Bühne oben durchscheinend statt deckend */
+.gt-stage { background: linear-gradient(160deg, var(--tint), transparent 75%), color-mix(in srgb, var(--bg) 35%, transparent); border-bottom-color: var(--glass-line); }
+.gt-x { background: transparent; }

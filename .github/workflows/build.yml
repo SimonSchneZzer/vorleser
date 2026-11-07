@@ -76,12 +76,25 @@ jobs:
           [ -f "$ISCC" ] || choco install innosetup -y --no-progress
           "$ISCC" "//DAppVersion=$(cat VERSION)" packaging/vorleser.iss
 
+      # Teil-Update: Dateiliste mit Prüfsummen + Paket nur mit den Dateien, die sich gegenüber den letzten
+      # Versionen geändert haben (macOS erst NACH make_dmg.sh – dort wird das Paket signiert)
+      - name: Teil-Update erstellen
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PREV=$(gh release list -R SimonSchneZzer/vorleser-download --limit 5 --exclude-drafts --json tagName -q '.[].tagName' | sed 's/^v//' | tr '\n' ' ')
+          echo "Vorversionen: $PREV"
+          if [ "${{ matrix.name }}" = "mac" ]; then ROOT="dist/Vorleser.app"; else ROOT="dist/Vorleser"; fi
+          python packaging/make_patch.py ${{ matrix.name }} "$ROOT" "$(cat VERSION)" dist/patch $PREV
+
       - uses: actions/upload-artifact@v4
         with:
           name: Vorleser-${{ matrix.name }}
           path: |
             dist/*.dmg
             dist/*-setup.exe
+            dist/patch/*
           if-no-files-found: error
 
   publish:
@@ -97,6 +110,8 @@ jobs:
         run: |
           mv out/Vorleser-mac/*.dmg Vorleser-mac.dmg
           mv out/Vorleser-windows/*-setup.exe Vorleser-windows-setup.exe
+          find out -path '*patch*' -type f -exec mv {} . \;      # Dateilisten + Teil-Updates (falls vorhanden)
+          ls -la
       - name: Im Download-Repo veröffentlichen
         env:
           GH_TOKEN: ${{ secrets.DOWNLOAD_REPO_TOKEN }}
@@ -107,7 +122,8 @@ jobs:
           awk -v v="## $VER" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md | sed '/./,$!d' > notes.md
           if [ ! -s notes.md ]; then echo "::error::Kein Abschnitt '## $VER' in CHANGELOG.md"; exit 1; fi
           printf '\n---\nDownload and installation notes: https://simonschnezzer.github.io/vorleser-download/\n' >> notes.md
-          gh release create "$GITHUB_REF_NAME" Vorleser-mac.dmg Vorleser-windows-setup.exe \
+          EXTRA=$(ls Vorleser-*-manifest.json Vorleser-*-patch.zip 2>/dev/null | tr '\n' ' ')
+          gh release create "$GITHUB_REF_NAME" Vorleser-mac.dmg Vorleser-windows-setup.exe $EXTRA \
             --repo SimonSchneZzer/vorleser-download --title "Vorleser $VER" --notes-file notes.md
           # latest.json für den Updater der App (Download-Seite, kein Ratenlimit) – erst NACH dem Hochladen,
           # damit eine App nie eine Version meldet, deren Installer noch fehlt
@@ -117,6 +133,11 @@ jobs:
           base = f"https://github.com/SimonSchneZzer/vorleser-download/releases/download/v{ver}/"
           notes = open("notes.md", encoding="utf-8").read().split("\n---\n")[0].strip()[:600]
           assets = {n: {"url": base + n, "size": os.path.getsize(n)} for n in ("Vorleser-mac.dmg", "Vorleser-windows-setup.exe")}
+          # Teil-Update je System (nur für die in patch.json genannten Vorversionen; sonst lädt die App alles)
+          for plat, n in (("mac", "Vorleser-mac.dmg"), ("windows", "Vorleser-windows-setup.exe")):
+              z, info = f"Vorleser-{plat}-patch.zip", f"Vorleser-{plat}-patch.json"
+              if os.path.exists(z) and os.path.exists(info):
+                  assets[n]["patch"] = {"url": base + z, "size": os.path.getsize(z), "from": json.load(open(info))["from"]}
           with open("latest.json", "w", encoding="utf-8") as f:
               json.dump({"version": ver, "notes": notes, "page": "https://simonschnezzer.github.io/vorleser-download/",
                          "assets": assets}, f, ensure_ascii=False, indent=2)

@@ -5,6 +5,36 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Glas-Look (Liquid Glass) für alles, was über Inhalt schwebt
+**Kontext:** Simon wollte die Mitlesezeile mit „glossy blur“ und den Look überall, wo er Sinn macht (Entwurf im
+Design-Artifact freigegeben).
+**Entscheidung:** Glas = halbtransparente Fläche + `backdrop-filter: blur(26px) saturate(1.7)`, dünner Rand,
+Lichtkante oben, weicher Schatten (Variablen `--glass*`, hell/dunkel). Nur für schwebende Teile: Player (jetzt
+schwebend, mit Mitlesezeile darin; Inhalt scrollt dahinter, `.scroll` bekommt unten `--player-h` Platz), Pillen oben im
+Text, Menüs, Sprechblase, Tooltips, Dialoge (+ unscharfer Hintergrund), Update-Karte. Seitenleiste, Karten und
+Lesetext bleiben deckend – dahinter liegt nichts. Hinweis: View Transitions zeigen `backdrop-filter` nicht (kurzer
+Moment ohne Unschärfe beim Moduswechsel).
+
+## 2026-11-07 · Teil-Updates: nur geänderte Dateien laden (Prüfsummen statt Diff-Ketten)
+**Kontext:** Jedes Update lud die ganze App (~260 MB), obwohl sich meist nur Programm und Oberfläche ändern (~15 MB);
+Stimmen (121 MB) und Bibliotheken bleiben gleich.
+**Entscheidung:** Der Build schreibt je System eine Dateiliste (Pfad → SHA-256, Größe, ausführbar; Verknüpfungen →
+Ziel) und ein Paket mit allen Dateien, die sich gegenüber einer der letzten 5 Versionen geändert haben
+(`packaging/make_patch.py`; macOS erst nach `make_dmg.sh`, weil dort signiert wird). `latest.json` nennt das Paket
+und die abgedeckten Versionen. Die App prüft beim Einspielen JEDE Datei: geänderte aus dem Paket, alle anderen
+müssen per Prüfsumme schon stimmen – sonst lädt sie wie bisher das komplette Installationspaket. macOS: APFS-Klon
+der App (`cp -c`, sofort, kein Platz) → Paket drüber → überzählige Dateien weg → Ergebnis ist bitgleich mit der
+neuen Version (Signatur bleibt gültig) → Tausch wie bisher beim Neustart. Windows: neue Dateien vorbereiten, nach
+dem Beenden per robocopy drüber, Überzähliges löschen (außer `unins*`), Versionsanzeige unter „Apps“ nachziehen.
+**Verworfen:** Binäre Diffs (bsdiff) – mehr Code, kaum Gewinn, da sich ganze Dateien ändern; Patch-Ketten über
+mehrere Versionen – die Prüfsummen machen sie unnötig. **Folge:** Wirkt erst ab der zweiten Version mit Dateiliste;
+ältere Apps (ohne neuen Updater) laden noch einmal komplett.
+
+## 2026-11-07 · Speicher: nach den Platzhaltern bleiben die Karten stehen
+**Kontext:** Nach dem Laden spielte jede Karte ihre Einblend-Animation neu (kurz unsichtbar, dann neu hereinschweben).
+**Entscheidung:** Karten bleiben; ihre Höhe gleitet von Platzhalter- auf echte Höhe (`heightFrom`), nur die Werte
+blenden weich ein.
+
 ## 2026-11-07 · Mitlesezeile: von oben, nur ein Satzwechsel; Name → GitHub/LinkedIn; weiches `<details>`
 **Kontext:** Die Zeile kam von unten (wie der Player), wirkt über dem Player aber wie „aus dem Text heruntergereicht“
 – Simon wollte oben rein, oben raus. Nach dem Ziehen lief der Satzwechsel doppelt: `buildWords` setzte erst Wort 0

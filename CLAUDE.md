@@ -71,3 +71,6 @@ in der App, kurz und für Nutzer; alles erscheint unter „Was ist neu“) → c
 veröffentlicht im Download-Repo (braucht Secret `DOWNLOAD_REPO_TOKEN`: Fine-grained Token, nur
 `vorleser-download`, „Contents: Read and write“). Danach schreibt er `latest.json` ins Download-Repo; laufende
 Apps prüfen diese Datei minütlich und melden das Update nach wenigen Minuten (GitHub-API nur Ausweichweg, max. 1×/h).
+Teil-Updates: der Build legt je System `Vorleser-<plat>-manifest.json` (+ `-patch.zip`, wenn es Vorversionen mit
+Dateiliste gibt) ins Release; die App lädt dann nur geänderte Dateien und prüft alle übrigen per Prüfsumme
+(`packaging/make_patch.py`, `updater._apply_patch`). Schlägt etwas fehl → komplettes Paket wie bisher.
