@@ -436,7 +436,7 @@ def install(quit_app=None) -> dict:
         if _state["state"] in ("downloading", "preparing", "ready", "installing"):
             return dict(_state)
         _state.clear()
-        _state.update(state="downloading", done=0, total=_latest["size"] if _latest else 0)
+        _state.update(state="downloading", done=0, total=(_patch_for(_latest) or _latest or {}).get("size", 0))   # Teil-Update: gleich die kleine Größe
     threading.Thread(target=_prepare, daemon=True).start()
     return status()
 
