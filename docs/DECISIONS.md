@@ -5,6 +5,16 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Beta-Kennzeichen, Karte „aktualisiert“ und „Was ist neu“
+**Kontext:** Nutzer sollen sehen, dass der Vorleser noch nicht fertig ist, und nach einem Update erfahren, was neu ist.
+**Entscheidung:** „BETA“-Plakette (Seitenleiste, Einstellungen › App, Webseite) statt anderer Versionsnummern –
+GitHub-Releases werden **nicht** als Pre-release markiert (sonst brechen `releases/latest`-Links und der API-Ausweichweg).
+`CHANGELOG.md` liegt der App bei; `/api/changelog` liefert sie geparst (`parse_changelog`). Nach einem Update zeigt die
+Update-Karte „Auf Version X aktualisiert“ mit „Was ist neu“; offen bleibt sie per `localStorage` (`vorleser.newsPending`)
+auch über einen Neustart, bis sie geschlossen wird. Ein Dialog für Karte, Einstellungen und Klick auf BETA.
+**Folgen:** Der Changelog ist nur deutsch (auch in der englischen Oberfläche). Test: oberster Abschnitt = `VERSION`,
+jeder Abschnitt hat eine erste Zeile.
+
 ## 2026-11-07 · Seitenleiste und Playbar: eine Quelle für „vorbereitet“
 **Kontext:** Nach dem Löschen von Audio zeigte die Seitenleiste weiter den alten Balken, die Speicherliste kurz
 wieder den gelöschten Eintrag. Ursachen: Bibliothek wurde nur bei `refreshLibrary()` aktualisiert; `fillStorage`

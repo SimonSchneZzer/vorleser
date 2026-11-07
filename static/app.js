@@ -2296,7 +2296,8 @@ function updRender() {
   if (flip) { done(480); animateIn(busy ? $("updBar") : $("updBtns")); animateIn(card.querySelector(".upd-body"), "swap"); }
 }
 function updRenderCard() {
-  const s = upd.s;
+  const s = upd.s, card = $("upd");
+  card.classList.remove("news"); updIcon("i-dl"); $("updLater").textContent = "Später";
   $("updRow").classList.remove("hidden");
   $("verTxt").textContent = `Version ${s.current}`;
   $("updNote").textContent = s.available ? `Version ${s.latest} ist verfügbar` : s.latest ? "Du hast die neueste Version" : "Prüft bei jedem Start automatisch";
@@ -2335,6 +2336,15 @@ function updRenderCard() {
     $("updGo").textContent = "Download-Seite";
     return updShow(true);
   }
+  if (newsPending()) {                                  // gerade aktualisiert → einmal zeigen, was neu ist
+    card.classList.add("news"); updIcon("i-check");
+    $("updTitle").textContent = `Auf Version ${s.current} aktualisiert`;
+    $("updText").textContent = news.data?.releases.find((r) => r.version === s.current)?.lead || "";
+    $("updLater").textContent = "Schließen";
+    $("updGo").textContent = "Was ist neu";
+    if (!news.data) newsLoad().then(() => newsPending() && updRender()).catch(() => {});
+    return updShow(true);
+  }
   if (s.available && !updDismissed(s.latest)) {
     $("updTitle").textContent = `Vorleser ${s.latest} ist da`;
     const first = (s.notes || "").split("\n").map((x) => x.trim()).find((x) => x && !/^https?:/.test(x)) || "";
@@ -2350,12 +2360,7 @@ async function updRefresh(force = false) {
   clearTimeout(upd.timer);
   try { upd.s = await api(force ? "/api/update/check" : "/api/update", force ? { method: "POST" } : {}); } catch { return null; }
   if (upd.s.justUpdated) {
-    try {
-      if (sessionStorage.getItem("vorleser.updToast") !== upd.s.justUpdated) {
-        sessionStorage.setItem("vorleser.updToast", upd.s.justUpdated);
-        toast(`Auf Version ${upd.s.justUpdated} aktualisiert`);
-      }
-    } catch {}
+    try { if (localStorage.getItem(NEWS_SEEN) !== upd.s.justUpdated) localStorage.setItem(NEWS_PENDING, upd.s.justUpdated); } catch {}
   }
   updRender();
   if (["downloading", "preparing", "installing"].includes(upd.s.state)) upd.timer = setTimeout(updRefresh, 600);
@@ -2363,12 +2368,14 @@ async function updRefresh(force = false) {
   return upd.s;
 }
 $("updLater").onclick = () => {
+  if ($("upd").classList.contains("news")) { newsSeen(); return updShow(false); }
   if (upd.s?.state === "ready") { upd.later = true; return updShow(false); }   // wird beim Beenden eingespielt
   try { localStorage.setItem(updLaterKey, JSON.stringify({ v: upd.s?.latest, until: Date.now() + 24 * 3600e3 })); } catch {}
   updShow(false);
 };
 $("updGo").onclick = async () => {
   const s = upd.s; if (!s) return;
+  if ($("upd").classList.contains("news")) { newsSeen(); updShow(false); return openNews(); }
   if (s.state === "ready") {
     try { upd.s = await api("/api/update/restart", { method: "POST" }); } catch (e) { return toastErr(e); }
     return updRender();
@@ -2378,6 +2385,36 @@ $("updGo").onclick = async () => {
   updRender();
   upd.timer = setTimeout(updRefresh, 400);
 };
+function updIcon(id) { $("updIc").querySelector("use")?.setAttribute("href", `#${id}`); }
+
+/* ---------- Was ist neu (Versionsverlauf aus CHANGELOG.md) ---------- */
+const NEWS_PENDING = "vorleser.newsPending", NEWS_SEEN = "vorleser.newsSeen";
+const news = { data: null };
+function newsPending() {
+  try { const v = localStorage.getItem(NEWS_PENDING); return !!v && v === upd.s?.current && localStorage.getItem(NEWS_SEEN) !== v; } catch { return false; }
+}
+function newsSeen() {
+  try { localStorage.setItem(NEWS_SEEN, upd.s?.current || ""); localStorage.removeItem(NEWS_PENDING); } catch {}
+}
+async function newsLoad() { return (news.data ||= await api("/api/changelog")); }
+const mdBold = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+async function openNews() {
+  let d; try { d = await newsLoad(); } catch (e) { return toastErr(e); }
+  const cur = d.current;
+  $("newsSub").textContent = d.releases.some((r) => r.version === cur) ? `Du hast Version ${cur} · alle Versionen, neueste zuerst` : "Alle Versionen, neueste zuerst";
+  $("newsList").innerHTML = d.releases.map((r) => `<section class="rel${r.version === cur ? " now" : ""}">
+      <div class="rel-h"><b>${esc(r.version)}</b>${r.version === cur ? `<span class="rel-chip">${UI_LANG === "en" ? "Installed" : "Installiert"}</span>` : ""}</div>
+      ${r.lead ? `<p class="lead">${mdBold(r.lead)}</p>` : ""}
+      ${r.items.length ? `<ul>${r.items.map((i) => `<li>${mdBold(i)}</li>`).join("")}</ul>` : ""}</section>`).join("");
+  $("newsList").scrollTop = 0;
+  $("newsBug").classList.toggle("hidden", !bug.info?.enabled);
+  $("newsDlg").showModal();
+}
+$("newsBtn").onclick = openNews;
+$("betaBtn").onclick = openNews;
+$("newsClose").onclick = () => $("newsDlg").close();
+$("newsBug").onclick = (e) => { e.preventDefault(); $("newsDlg").close(); openBug(); };
+
 $("srcBtn").onclick = () => openExternal("https://github.com/SimonSchneZzer/vorleser");
 $("updCheck").onclick = async () => {
   const b = $("updCheck"); b.disabled = true;

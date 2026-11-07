@@ -1,4 +1,5 @@
 """HTTP-API gegen einen echten Server (Wegwerf-Datenordner)."""
+import pathlib
 import time
 from urllib.parse import quote
 
@@ -177,3 +178,24 @@ def test_vorbereitet_ist_eine_wahrheit(api, doc):
         time.sleep(0.3)
     assert p3["status"] == "ready" and p3["done"] == p3["total"] and all(p3["cached"])
     assert not any(j["doc"] == doc["id"] for j in api.json("GET", "/api/jobs")[1]["jobs"])
+
+
+def test_changelog_fuer_was_ist_neu(api):
+    """„Was ist neu“ liest CHANGELOG.md: jede Version mit Kurzfassung, neueste zuerst, aktuelle Version enthalten."""
+    s, body = api.json("GET", "/api/changelog")
+    assert s == 200
+    rel = body["releases"]
+    assert rel and all(r["lead"] for r in rel), "jeder Abschnitt braucht eine erste Zeile (Text der Update-Karte)"
+    vers = [tuple(map(int, r["version"].split("."))) for r in rel]
+    assert vers == sorted(vers, reverse=True)
+    assert (pathlib.Path(__file__).resolve().parents[1] / "VERSION").read_text().strip() == rel[0]["version"]
+
+
+def test_changelog_parser(tmp_path):
+    import server
+    p = tmp_path / "CHANGELOG.md"
+    p.write_text("# Änderungen\n\nText oben.\n\n## 1.1\nKurz.\n\n- **A:** eins\n  weiter\n- zwei\n\n## 1.0\nErste.\n", "utf-8")
+    assert server.parse_changelog(p) == [
+        {"version": "1.1", "lead": "Kurz.", "items": ["**A:** eins weiter", "zwei"]},
+        {"version": "1.0", "lead": "Erste.", "items": []}]
+    assert server.parse_changelog(tmp_path / "fehlt.md") == []

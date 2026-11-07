@@ -60,7 +60,7 @@
   <aside class="side" id="side">
     <div class="brand">
       <span class="logo"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5v6M6 2.5v11M9 5v6M12 6.5v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-      Vorleser
+      Vorleser<button class="beta" id="betaBtn" data-tip="Noch in Entwicklung – Fehler gern melden">BETA</button>
     </div>
     <button class="btn-new" id="newBtn"><svg class="i"><use href="#i-plus"/></svg>Neuer Text</button>
     <label class="search hidden" id="libSearchBox"><svg class="i" style="width:15px;height:15px"><use href="#i-search"/></svg>
@@ -68,8 +68,8 @@
     <div class="label">Bibliothek</div>
     <ul class="lib" id="library"></ul>
     <div class="side-foot" id="sideFoot">
-      <button class="navlink" id="settingsBtn"><svg class="i"><use href="#i-gear"/></svg>Einstellungen</button>
       <button class="navlink hidden" id="bugSideBtn"><svg class="i"><use href="#i-bug"/></svg>Fehler melden</button>
+      <button class="navlink" id="settingsBtn"><svg class="i"><use href="#i-gear"/></svg>Einstellungen</button>
     </div>
   </aside>
 
@@ -290,9 +290,10 @@
         <div class="set-body hidden" id="tabApp">
           <div class="set-sec"><h2 class="big">App</h2></div>
           <div class="box store">
-            <div class="r"><span class="who"><b>Vorleser</b><span class="by">von <a href="https://github.com/SimonSchneZzer" target="_blank" rel="noopener">Simon Schnetzer</a></span></span><span id="verTxt"></span></div>
+            <div class="r"><span class="who"><b>Vorleser</b><span class="beta static">BETA</span><span class="by">von <a href="https://github.com/SimonSchneZzer" target="_blank" rel="noopener">Simon Schnetzer</a></span></span><span id="verTxt"></span></div>
             <div class="sto-list app-list">
               <div class="sto-row"><span class="nm">Rundgang<small>Alle Funktionen in einer Minute</small></span><button class="btn sm" id="tourBtn">Starten</button></div>
+              <div class="sto-row" id="newsRow"><span class="nm">Was ist neu<small>Was in welcher Version dazugekommen ist</small></span><button class="btn sm" id="newsBtn">Anzeigen</button></div>
               <div class="sto-row hidden" id="updRow"><span class="nm">Updates<small id="updNote">Prüft bei jedem Start automatisch</small></span><button class="btn sm" id="updCheck">Jetzt suchen</button></div>
               <div class="sto-row hidden" id="bugRow"><span class="nm">Fehler melden<small>Kurz beschreiben, was nicht klappt</small></span><button class="btn sm" id="bugBtn">Melden</button></div>
               <div class="sto-row"><span class="nm">Open Source<small>Freie Software unter GPL-3.0 · Quellcode und Lizenzen auf GitHub</small></span><button class="btn sm" id="srcBtn">Ansehen</button></div>
@@ -467,6 +468,18 @@
       <button type="submit" class="btn primary" id="bugSend">Senden</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="newsDlg" class="news" aria-labelledby="newsTitle">
+  <div class="news-h">
+    <h3 id="newsTitle">Was ist neu <span class="beta static">BETA</span></h3>
+    <p id="newsSub"></p>
+  </div>
+  <div class="news-list" id="newsList" data-noi18n></div>
+  <div class="news-f">
+    <small>Der Vorleser ist noch in der Beta: Er läuft im Alltag, aber hier und da kann noch etwas haken. <a href="#" id="newsBug">Fehler melden</a></small>
+    <button class="btn" id="newsClose">Schließen</button>
+  </div>
 </dialog>
 
 <div class="onb hidden" id="onb" role="dialog" aria-modal="true" aria-label="Willkommen"></div>

@@ -102,6 +102,31 @@ def doc_summary(doc: dict) -> dict:
 # --------------------------------------------------------------------------- #
 # HTTP
 # --------------------------------------------------------------------------- #
+def parse_changelog(path: Path) -> list[dict]:
+    """CHANGELOG.md → [{version, lead, items}] (neueste zuerst). Erste Zeile eines Abschnitts = Kurzfassung,
+    „- “-Zeilen = Punkte (eingerückte Folgezeilen gehören zum Punkt davor)."""
+    try:
+        text = path.read_text("utf-8")
+    except OSError:
+        return []
+    out: list[dict] = []
+    for line in text.splitlines():
+        m = re.match(r"^## (\d+(?:\.\d+)*)\s*$", line)
+        if m:
+            out.append({"version": m.group(1), "lead": "", "items": []})
+            continue
+        if not out or not line.strip():
+            continue
+        rel = out[-1]
+        if line.startswith("- "):
+            rel["items"].append(line[2:].strip())
+        elif line.startswith((" ", "\t")) and rel["items"]:
+            rel["items"][-1] += " " + line.strip()
+        elif not rel["lead"] and not rel["items"]:
+            rel["lead"] = line.strip()
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "Vorleser/2.0"
 
@@ -454,6 +479,9 @@ class Handler(BaseHTTPRequestHandler):
     def update_status(self):
         self.json(updater.status())
 
+    def changelog(self):
+        self.json({"current": paths.APP_VERSION, "releases": parse_changelog(paths.CHANGELOG)})
+
     def update_check(self):
         updater.check(force=True)
         self.json(updater.status())
@@ -524,6 +552,7 @@ ROUTES = [
     (rf"/api/storage/(docs)/{D}", "DELETE", Handler.storage_delete),
     (r"/api/storage/(previews|other|exports|whisper)", "DELETE", Handler.storage_delete),
     (r"/api/update", "GET", Handler.update_status),
+    (r"/api/changelog", "GET", Handler.changelog),
     (r"/api/update/check", "POST", Handler.update_check),
     (r"/api/update/install", "POST", Handler.update_install),
     (r"/api/update/restart", "POST", Handler.update_restart),

@@ -41,6 +41,7 @@ USER_VOICES = USER_DIR / "voices"             # nachinstallierte Piper-Stimmen
 CLONE_ENV = USER_DIR / (".venv-clone" if not FROZEN else "clone-env")
 CLONE_PY = CLONE_ENV / ("Scripts/python.exe" if IS_WIN else "bin/python")
 CLONE_WORKER = APP_DIR / "clone_worker.py"
+CHANGELOG = APP_DIR / "CHANGELOG.md"          # für „Was ist neu“ (liegt der App bei)
 CLONE_MODELS = USER_DIR / "clone-models"     # Chatterbox-Modell (nur App; Entwicklung: HF-Standardcache)
 LOG_FILE = DATA_DIR / "server.log"
 try:
