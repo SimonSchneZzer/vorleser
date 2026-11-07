@@ -362,7 +362,11 @@ dialog.bug { width: min(520px, calc(100vw - 32px)); }
 .mini .bar8 { height: 4px; }
 .store { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 .store .r { display: flex; justify-content: space-between; font-size: 14px; }
-.store .r span:last-child { color: var(--muted); }
+.store .r > span:last-child { color: var(--muted); }
+.store .who { display: flex; align-items: baseline; gap: 8px; }
+.store .by, .gt-by { color: var(--muted); font-size: 13px; }
+.store .by a, .gt-by a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; transition: color .15s, text-decoration-color .15s; }
+.store .by a:hover, .gt-by a:hover { color: var(--acc-text); text-decoration-color: currentColor; }
 /* Speicher: Übersicht als gestapelter Balken + Listen mit Löschknopf */
 .stack { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--track); gap: 2px; }
 .stack i { display: block; height: 100%; min-width: 3px; transition: flex-grow .6s var(--ease-out); }
@@ -941,3 +945,4 @@ dialog.confirm .dlg-actions .btn { flex: 1; }
 @keyframes xDraw20 { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
 #xDone.xplay #xDownload { animation: btnPop .5s var(--spring) .45s both; }
 @keyframes btnPop { from { opacity: 0; transform: translateY(8px) scale(.9); } }
+.gt p.gt-by { margin-top: 10px; font-size: 13px; }

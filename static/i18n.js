@@ -245,6 +245,9 @@ const I18N_EN = {
   "Nimm 15–30 Sekunden auf – danach liest der Vorleser mit deiner Stimme. Mit ★ machst du Stimmen zu Favoriten.": "Record 15–30 seconds – afterwards Vorleser reads in your voice. Use ★ to make voices favorites.",
   "Ganz nach deinem Geschmack": "Make it yours",
   "Hell oder Dunkel, Akzentfarbe, Sprache und wie genau mitgelesen wird – alles hier in den Einstellungen.": "Light or dark, accent color, language and how precisely to follow along – all here in Settings.",
+  "von": "by", "Gebaut von": "Built by", "Deine Meldung geht direkt an Simon, der den Vorleser entwickelt. Was ist passiert, und was hast du davor gemacht? Je genauer, desto schneller lässt es sich beheben.": "Your report goes straight to Simon, who develops Vorleser. What happened, and what did you do right before? The more precise, the faster it can be fixed.",
+  "Sie ist bei Simon angekommen. Bei Rückfragen meldet er sich per E-Mail.": "Simon has received it. He'll reply by e-mail if he has questions.",
+  "Sie ist bei Simon angekommen.": "Simon has received it.",
   "Fertig!": "All set!", "Das war's. Den Rundgang findest du jederzeit unter Einstellungen › App.": "That's it. You can find the tour anytime under Settings › App.",
 
   // Server-Meldungen

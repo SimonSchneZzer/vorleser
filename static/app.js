@@ -2043,7 +2043,7 @@ const TOUR = [
   { view: "settings", tab: "voices", via: "#settingsBtn", target: () => (st.features.clone || st.features.cloneSetup ? $("newCloneBtn") : $("voiceLib")), il: "voice", t: "Deine eigene Stimme",
     p: "Nimm 15–30 Sekunden auf – danach liest der Vorleser mit deiner Stimme. Mit ★ machst du Stimmen zu Favoriten." },
   { view: "read", target: null, il: "tips", t: "Fertig!",
-    p: "Das war's. Den Rundgang findest du jederzeit unter Einstellungen › App." },
+    p: "Das war's. Den Rundgang findest du jederzeit unter Einstellungen › App.", by: true },
 ];
 
 const gt = { i: 0, prev: null, wordsTimer: null, token: 0 };
@@ -2116,7 +2116,7 @@ function gtCardHTML(i) {
     <button class="gt-x" id="gtX" aria-label="Rundgang beenden" data-tip="Rundgang beenden · Esc">${icon("i-x")}</button>
     <div class="gt-step">
       ${step.il ? `<div class="gt-stage"><div class="il" data-noi18n>${ILL[step.il]()}</div></div>` : ""}
-      <div class="gt-body"><div class="num">${i + 1} / ${TOUR.length}</div><h3>${esc(step.t)}</h3><p>${esc(step.p)}</p>
+      <div class="gt-body"><div class="num">${i + 1} / ${TOUR.length}</div><h3>${esc(step.t)}</h3><p>${esc(step.p)}</p>${step.by ? `<p class="gt-by">Gebaut von <a href="https://github.com/SimonSchneZzer" target="_blank" rel="noopener">Simon Schnetzer</a></p>` : ""}
         <div class="gt-foot"><span class="spacer"></span>
           ${i > 0 ? `<button class="btn" id="gtBack">Zurück</button>` : ""}
           <button class="btn primary" id="gtNext">${i === TOUR.length - 1 ? "Los geht's" : "Weiter"}</button></div></div></div>` };
@@ -2457,7 +2457,7 @@ $("bugForm").onsubmit = async (e) => {
     if (!r.ok || !res.success) throw new Error(res.message || `HTTP ${r.status}`);
     try { localStorage.setItem("vorleser.bugs", JSON.stringify([...recent, Date.now()])); } catch {}
     $("bugMsg").value = "";
-    $("bugOkText").textContent = mail ? "Sie ist angekommen. Bei Rückfragen melde ich mich per E-Mail." : "Sie ist angekommen.";
+    $("bugOkText").textContent = mail ? "Sie ist bei Simon angekommen. Bei Rückfragen meldet er sich per E-Mail." : "Sie ist bei Simon angekommen.";
     $("bugForm").classList.add("hidden");
     $("bugOk").classList.remove("hidden");
   } catch (err) {

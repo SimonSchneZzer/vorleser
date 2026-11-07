@@ -3,6 +3,14 @@
 Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als Release-Notiz übernommen;
 **die erste Zeile erscheint in der Update-Hinweiskarte der App** – kurz und für Nutzer formulieren.
 
+## 2.5.4
+Speicher und Bibliothek zeigen jetzt immer denselben Stand – und man sieht, von wem der Vorleser ist.
+
+- **Speicher:** Gelöschtes Audio taucht nicht mehr kurz wieder auf; der „vorbereitet“-Balken in der Seitenleiste
+  stimmt jetzt immer mit der Playbar überein
+- **Über den Vorleser:** Name des Entwicklers in Einstellungen › App, im Rundgang und bei „Fehler melden“;
+  Copyright im Finder-Infofenster und in den Windows-Dateieigenschaften
+
 ## 2.5.3
 Eigene Stimme liest jetzt etwa 2,5-mal so schnell vor (Mac mit Apple-Chip).
 

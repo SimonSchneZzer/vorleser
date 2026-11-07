@@ -5,6 +5,20 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Seitenleiste und Playbar: eine Quelle für „vorbereitet“
+**Kontext:** Nach dem Löschen von Audio zeigte die Seitenleiste weiter den alten Balken, die Speicherliste kurz
+wieder den gelöschten Eintrag. Ursachen: Bibliothek wurde nur bei `refreshLibrary()` aktualisiert; `fillStorage`
+zeichnete vor dem Neuladen die zwischengespeicherten alten Werte; `clearCache()` vergaß `st.srvCached` nicht.
+**Entscheidung:** `markReady()` schreibt den Stand des offenen Texts in die Bibliothek (`syncLibPrepared`);
+laufende Aufträge lösen `refreshLibrary()` aus, wenn sich ihr Fortschritt ändert; Löschen übernimmt den neuen
+Stand aus der DELETE-Antwort; `clearCache()` leert auch `srvCached`.
+
+## 2026-11-07 · Windows-Versionsinfo als Text in der Spec
+**Kontext:** Copyright/Firma sollen in den Dateieigenschaften der .exe stehen. `PyInstaller.utils.win32.versioninfo`
+lässt sich nur unter Windows importieren (pefile/pywin32).
+**Entscheidung:** Die Spec schreibt die Versionsinfo als Text (Format von `pyi-grab_version`) nach `build/` und
+übergibt den Pfad an `EXE(version=…)` – kein Import nötig, lokal auf dem Mac prüfbar.
+
 ## 2026-11-07 · Stimmklon auf Apple-Chip: T3 auf der CPU, S3Gen auf MPS
 **Kontext:** Eigene Stimme brauchte auf einem M4 ~54 s pro Abschnitt (~8 s Audio). Messung: T3 (autoregressive
 Token-Schleife, CFG-Batch 2) ~80 %, S3Gen ~18 %, Aufbereitung der Sprachprobe ~5 %, Wasserzeichen <1 %.

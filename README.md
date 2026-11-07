@@ -3,6 +3,8 @@
 **Macht aus jedem Text ein Hörbuch – kostenlos, ohne Konto, für Mac und Windows.**
 *Turns any text into an audiobook – free, no account, for Mac and Windows. (UI in German and English.)*
 
+Ein Projekt von **[Simon Schnetzer](https://github.com/SimonSchneZzer)**.
+
 Text einfügen oder EPUB, PDF, TXT, Markdown oder HTML hineinziehen – der Vorleser liest vor, markiert dabei
 Wort für Wort, merkt sich die Stelle und exportiert auf Wunsch als Hörbuch mit Kapiteln.
 
@@ -66,5 +68,7 @@ Fehler und Ideen gern als [Issue](https://github.com/SimonSchneZzer/vorleser/iss
 App über *Fehler melden*. Pull Requests sind willkommen; bitte vorher `pytest` laufen lassen.
 
 ## Lizenz
+Copyright © 2026 Simon Schnetzer
+
 Der Vorleser ist freie Software unter der **GNU General Public License v3.0 oder später** – siehe
 [`LICENSE`](LICENSE). Mitgelieferte Komponenten und ihre Lizenzen: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

@@ -49,6 +49,27 @@ a = Analysis(
 pyz = PYZ(a.pure)
 
 icon = str(ROOT / "packaging" / "icon.png")      # PyInstaller wandelt per Pillow in .icns/.ico um
+AUTHOR = "Simon Schnetzer"
+COPYRIGHT = f"© 2026 {AUTHOR}"
+
+version_file = None
+if IS_WIN:                                       # Datei-Eigenschaften der .exe: Firma, Copyright, Version
+    nums = tuple((list(map(int, VERSION.split(".")[:4])) + [0, 0, 0, 0])[:4])
+    strings = {"CompanyName": AUTHOR, "FileDescription": "Vorleser", "FileVersion": VERSION, "InternalName": "Vorleser",
+               "LegalCopyright": COPYRIGHT, "OriginalFilename": "Vorleser.exe", "ProductName": "Vorleser",
+               "ProductVersion": VERSION}
+    version_file = Path(workpath) / "version_info.txt"   # Textformat, das PyInstaller unter Windows einliest
+    version_file.parent.mkdir(parents=True, exist_ok=True)
+    version_file.write_text(f"""VSVersionInfo(
+  ffi=FixedFileInfo(filevers={nums}, prodvers={nums}, mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1,
+                    subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040704B0', [{", ".join(f"StringStruct({k!r}, {v!r})" for k, v in strings.items())}])]),
+    VarFileInfo([VarStruct('Translation', [0x0407, 1200])])
+  ]
+)
+""", encoding="utf-8")
+    version_file = str(version_file)
 
 exe = EXE(
     pyz,
@@ -58,6 +79,7 @@ exe = EXE(
     name="Vorleser",
     console=False,                               # kein Konsolenfenster
     icon=icon,
+    version=version_file,
     codesign_identity=None,
     entitlements_file=None,
     upx=False,
@@ -75,6 +97,7 @@ if IS_MAC:
             "CFBundleDisplayName": "Vorleser",
             "CFBundleShortVersionString": VERSION,
             "CFBundleVersion": VERSION,
+            "NSHumanReadableCopyright": COPYRIGHT,     # Finder › Informationen, „Über Vorleser“
             "LSMinimumSystemVersion": "12.0",
             "NSHighResolutionCapable": True,
             "NSMicrophoneUsageDescription": "Zum Diktieren und zum Aufnehmen deiner eigenen Stimme.",

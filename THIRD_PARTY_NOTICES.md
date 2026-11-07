@@ -1,6 +1,6 @@
 # Mitgelieferte Komponenten und ihre Lizenzen
 
-Der Vorleser selbst steht unter der **GNU General Public License v3.0 oder später** (siehe `LICENSE`).
+Der Vorleser selbst (Copyright © 2026 Simon Schnetzer) steht unter der **GNU General Public License v3.0 oder später** (siehe `LICENSE`).
 Quellcode: https://github.com/SimonSchneZzer/vorleser
 
 Die App enthält bzw. lädt folgende freie Software. Die vollständigen Lizenztexte liegen den jeweiligen
