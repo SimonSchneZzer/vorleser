@@ -4,6 +4,14 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.9.1
+Cleaner highlighting and steadier dragging.
+
+- **Highlighting:** the spoken sentence gets one rounded area per line – no square line starts, no overlap
+- **Progress bar:** dragging no longer selects text, and clicking doesn't leave a focus ring
+- **Sidebar:** the footer is as tall as the player, so their lines meet
+- **Updates:** a partial update shows its small size right from the start
+
 ## 2.9.0
 Every move has a direction now – and a live preview of your colors.
 
