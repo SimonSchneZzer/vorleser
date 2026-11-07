@@ -211,7 +211,8 @@ def _clone_voices() -> list[dict]:
                 out.append({"id": f"clone:{d.name}", "engine": "clone", "lang": lang, "region": "",
                             "label": f"{meta.get('name') or d.name} (eigene Stimme)", "gender": "",
                             "name": meta.get("name") or d.name,
-                            "meta": "Lädt länger · am besten vorab erzeugen"})
+                            "meta": "Lädt länger · am besten vorab erzeugen",
+                            "warming": f"clone:{d.name}" in _warming})
     return out
 
 
@@ -503,16 +504,25 @@ _inflight: dict[Path, threading.Event] = {}     # Klon-Abschnitte, die gerade er
 _inflight_lock = threading.Lock()
 
 
+_warming: set[str] = set()      # neue eigene Stimmen, deren erste Hörprobe (inkl. Modell-Laden) noch läuft
+
+
 def warm_clone_preview(voice_id: str, first_lang: str = "de") -> None:
     """Hörprobe einer neuen eigenen Stimme sofort im Hintergrund erzeugen – erst in der Oberflächensprache.
-    Niedrige Priorität: Wird vorgelesen, wartet sie (ein laufender Abschnitt wird noch fertig)."""
+    Niedrige Priorität: Wird vorgelesen, wartet sie (ein laufender Abschnitt wird noch fertig).
+    Bis die erste fertig ist, meldet `list_voices` die Stimme als `warming` (Oberfläche zeigt „wird vorbereitet“)."""
     langs = [first_lang] + [l for l in LANGS if l != first_lang]
-    for lang in langs:
-        try:
-            synthesize(PREVIEW_TEXT[lang], voice_id, lang, fallback=False, low=True)
-        except Exception as e:
-            print(f"[clone] Hörprobe ({lang}) nicht erzeugt: {e}", flush=True)
-            return
+    _warming.add(voice_id)
+    try:
+        for lang in langs:
+            try:
+                synthesize(PREVIEW_TEXT[lang], voice_id, lang, fallback=False, low=True)
+            except Exception as e:
+                print(f"[clone] Hörprobe ({lang}) nicht erzeugt: {e}", flush=True)
+                return
+            _warming.discard(voice_id)
+    finally:
+        _warming.discard(voice_id)
 
 
 def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: bool = False) -> tuple[bytes, str, str]:

@@ -139,7 +139,9 @@ svg.i.fill { fill: currentColor; stroke: none; }
 .jobring .bg { stroke: var(--line); }
 .jobring .fg { stroke: var(--acc-text); stroke-linecap: round; transition: stroke-dashoffset .6s var(--ease-out); }
 /* Aufnahme-Dialog: Knöpfe verrutschen nicht, wenn sich Texte ändern */
-#cloneDlg .dlg-actions .msg { flex: 1; min-width: 0; }
+#cloneDlg .dlg-actions { flex-wrap: wrap; }
+#cloneDlg .dlg-actions .msg { flex: 0 0 100%; order: -1; min-height: 1.5em; margin: -6px 0 2px; }   /* eigene Zeile: Hinweis drückt nichts weg */
+#cloneDlg .recbtn { min-width: 152px; font-variant-numeric: tabular-nums; }                          /* Zeit ändert die Breite nicht */
 #cloneDlg .dlg-actions .btn, #cloneDlg .dlg-actions label.btn { flex-shrink: 0; }
 #cRec { min-width: 148px; justify-content: center; font-variant-numeric: tabular-nums; }
 .player { flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 12px 24px 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -979,3 +981,12 @@ dialog.news[open] { display: flex; }
 .news-f small { flex: 1; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
 .news-f a { color: var(--ink); }
 .upd.news .upd-ic { animation: cfPop .45s var(--spring) .1s both; }
+
+/* Neue eigene Stimme: kurz pulsieren beim Erscheinen, Spinner solange sie vorbereitet wird, Aufleuchten wenn bereit */
+.vl-row.landed { animation: voicePulse .9s var(--ease) 2; }
+.vl-row.readied { animation: voicePulse .9s var(--ease) 1; }
+@keyframes voicePulse {
+  0%, 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+  40% { background: color-mix(in srgb, var(--acc) 14%, transparent); box-shadow: inset 3px 0 0 var(--acc); }
+}
+.vl-row.warming .nm small { color: var(--acc-text); }

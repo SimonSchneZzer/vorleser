@@ -12,7 +12,8 @@ GitHub-Releases werden **nicht** als Pre-release markiert (sonst brechen `releas
 `CHANGELOG.md` liegt der App bei; `/api/changelog` liefert sie geparst (`parse_changelog`). Nach einem Update zeigt die
 Update-Karte „Auf Version X aktualisiert“ mit „Was ist neu“; offen bleibt sie per `localStorage` (`vorleser.newsPending`)
 auch über einen Neustart, bis sie geschlossen wird. Ein Dialog für Karte, Einstellungen und Klick auf BETA.
-**Folgen:** Der Changelog ist nur deutsch (auch in der englischen Oberfläche). Test: oberster Abschnitt = `VERSION`,
+**Folgen:** Changelog-Einträge sind **englisch** (Simons Wunsch: wichtiger als eine deutsche Fassung) – auch in der
+deutschen Oberfläche; Release-Notizen auf GitHub ebenso. Test: oberster Abschnitt = `VERSION`,
 jeder Abschnitt hat eine erste Zeile.
 
 ## 2026-11-07 · Seitenleiste und Playbar: eine Quelle für „vorbereitet“

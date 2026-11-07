@@ -123,7 +123,7 @@ const I18N_EN = {
   // Stimmen-Panel
   "Aktuell": "Current", "★ Favoriten": "★ Favorites", "Eigene Stimme": "Your voice", "Eigene Stimmen": "Your voices", "lokal": "local",
   "lokal · langsam": "local · slow", "Stimmen-Bibliothek öffnen": "Open voice library", "Online · natürlich": "Online · natural",
-  "Lädt länger · am besten vorab erzeugen": "Takes longer to load · best prepared in advance",
+  "Wird vorbereitet … ca. 1 Min.": "Getting ready … about 1 min", "Lädt länger · am besten vorab erzeugen": "Takes longer to load · best prepared in advance",
   "Weiblich": "Female", "Männlich": "Male", "mehrsprachig": "multilingual",
   "Deutschland": "Germany", "Österreich": "Austria", "Schweiz": "Switzerland", "USA": "USA", "Großbritannien": "United Kingdom",
   "Australien": "Australia", "Kanada": "Canada", "Irland": "Ireland", "Indien": "India", "Neuseeland": "New Zealand",

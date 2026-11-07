@@ -401,7 +401,13 @@ function setVoicePill(av, lbl, id) {
 async function reloadVoices() {
   const d = await api("/api/voices");
   st.voices = d.voices; st.langs = d.langs; st.defaults = d.defaults; st.features = d.features;
-  for (const v of st.voices) if (v.engine === "clone") v.meta = "Lädt länger · am besten vorab erzeugen";
+  for (const v of st.voices) if (v.engine === "clone") v.meta = v.warming ? "Wird vorbereitet … ca. 1 Min." : "Lädt länger · am besten vorab erzeugen";
+  // Neue eigene Stimme lädt noch (Modell + erste Hörprobe): nachfragen, bis sie bereit ist
+  const warm = new Set(st.voices.filter((v) => v.warming).map((v) => v.id));
+  for (const id of st.warmIds || []) if (!warm.has(id)) st.voiceReady = { id, t: performance.now() };   // eben fertig geworden
+  st.warmIds = warm;
+  clearTimeout(st.warmT);
+  if (warm.size) st.warmT = setTimeout(() => reloadVoices().then(() => { if (setTab === "voices") renderVoiceLib(); }).catch(() => {}), 3000);
 }
 
 /* ---------- Stimmen-Panel ---------- */
@@ -433,7 +439,7 @@ function renderVoicePanel() {
       <button class="pick" data-id="${esc(v.id)}"><span class="avl">${esc(v.name.slice(0, 1).toUpperCase())}</span>
         <span class="nm"><b data-noi18n>${esc(v.name)}</b><small>${esc(v.meta || "")}</small></span>
         ${on ? icon("i-check", "i check") : ""}</button>
-      <button class="prev" data-prev="${esc(v.id)}" aria-label="Hörprobe ${esc(v.name)}">${icon("i-play", "i fill", "width:14px;height:14px")}</button></div>`;
+      <button class="prev${v.warming ? " loading" : ""}" data-prev="${esc(v.id)}" aria-label="Hörprobe ${esc(v.name)}">${icon("i-play", "i fill", "width:14px;height:14px")}</button></div>`;
   };
   const favs = list.filter((v) => v.engine !== "clone" && isFav(v.id));
   const own = list.filter((v) => v.engine === "clone");
@@ -1461,6 +1467,7 @@ async function uploadClone(blob) {
     const r = await fetch("/api/clones", { method: "POST", body: blob, headers: { "X-Name": encodeURIComponent($("cName").value.trim() || $("cName").placeholder), "X-Lang": UI_LANG } });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
+    st.voiceLand = { id: d.id, t: performance.now() };
     await reloadVoices();
     $("cloneDlg").close();
     renderSettings();
@@ -1575,11 +1582,16 @@ function renderVoiceLib() {
   if (q) list = list.filter((v) => `${v.name} ${v.meta}`.toLowerCase().includes(q));
   const row = (v) => {
     const own = v.engine === "clone", fav = isFav(v.id), isStd = v.id === std;
-    return `<div class="vl-row${own ? " own" : ""}">
+    // Gerade aufgenommen → Zeile pulsiert kurz; bereit geworden → leuchtet einmal auf. Läuft über Neuzeichnungen
+    // hinweg weiter (negative Verzögerung = bereits vergangene Zeit), statt neu zu starten.
+    const fx = (k, dur) => { const m = st[k], ago = m?.id === v.id ? performance.now() - m.t : Infinity; return ago < dur ? ago : null; };
+    const land = fx("voiceLand", 1800), ready = land == null ? fx("voiceReady", 900) : null, ago = land ?? ready;
+    const cls = (own ? " own" : "") + (v.warming ? " warming" : "") + (land != null ? " landed" : ready != null ? " readied" : "");
+    return `<div class="vl-row${cls}"${ago != null ? ` style="animation-delay:${-Math.round(ago)}ms"` : ""}>
       <span class="avl">${esc(v.name.slice(0, 1).toUpperCase())}</span>
       <span class="nm"><b data-noi18n>${esc(v.name)}</b><small>${esc(v.meta || "")}</small></span>
       ${isStd ? `<span class="stdtag">Standard</span>` : `<button class="stdlink" data-std="${esc(v.id)}">Als Standard</button>`}
-      <button class="prev" data-prev="${esc(v.id)}" aria-label="Hörprobe ${esc(v.name)}">${icon("i-play", "i fill", "width:14px;height:14px")}</button>
+      <button class="prev${v.warming ? " loading" : ""}" data-prev="${esc(v.id)}" aria-label="Hörprobe ${esc(v.name)}">${icon("i-play", "i fill", "width:14px;height:14px")}</button>
       ${own ? `<button class="star" data-delv="${esc(v.id)}" aria-label="${esc(v.name)} löschen" title="Löschen">${icon("i-trash", "i", "width:16px;height:16px")}</button>`
             : `<button class="star${fav ? " on" : ""}" data-fav="${esc(v.id)}" aria-pressed="${fav}" aria-label="${esc(v.name)} ${fav ? "aus Favoriten entfernen" : "zu Favoriten hinzufügen"}" title="${fav ? "Favorit" : "Zu Favoriten"}">${icon("i-star", "i", "width:18px;height:18px")}</button>`}
     </div>`;

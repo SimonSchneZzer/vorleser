@@ -1,140 +1,143 @@
-# Änderungen
+# Changelog
 
-Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als Release-Notiz übernommen;
-**die erste Zeile erscheint in der Update-Hinweiskarte der App** – kurz und für Nutzer formulieren.
+Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als Release-Notiz übernommen und
+erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
+Update-Karte der App** – kurz und für Nutzer formulieren.
 
 ## 2.5.4
-Speicher und Bibliothek zeigen jetzt immer denselben Stand – und man sieht, von wem der Vorleser ist.
+Storage and library now always show the same state – and you can see who makes Vorleser.
 
-- **Speicher:** Gelöschtes Audio taucht nicht mehr kurz wieder auf; der „vorbereitet“-Balken in der Seitenleiste
-  stimmt jetzt immer mit der Playbar überein
-- **Über den Vorleser:** Name des Entwicklers in Einstellungen › App, im Rundgang und bei „Fehler melden“;
-  Copyright im Finder-Infofenster und in den Windows-Dateieigenschaften
+- **Storage:** deleted audio no longer briefly reappears; the "prepared" bar in the sidebar now always matches
+  the player
+- **About Vorleser:** developer's name in Settings › App, in the tour and in "Report a problem"; copyright in the
+  Finder info window and in the Windows file properties
 
 ## 2.5.3
-Eigene Stimme liest jetzt etwa 2,5-mal so schnell vor (Mac mit Apple-Chip).
+Your own voice now reads about 2.5 times faster (Mac with Apple chip).
 
-- **Eigene Stimme:** schneller auf dem Mac, bei gleicher Qualität; die Sprachprobe wird nur einmal aufbereitet
+- **Own voice:** faster on the Mac with the same quality; the voice sample is processed only once
 
 ## 2.5.2
-Neue Versionen werden jetzt nach wenigen Minuten gemeldet statt erst nach Stunden.
+New versions are now announced within minutes instead of hours.
 
-- **Updates:** die App prüft minütlich, ob es eine neue Version gibt – ohne Grenze bei vielen Nutzern im selben Netz
+- **Updates:** the app checks for a new version every minute – no limit even with many users on the same network
 
 ## 2.5.0
-Neuer Export: in drei klaren Schritten zum Hörbuch – mit Fortschritt pro Kapitel und Restzeit.
+New export: three clear steps to your audiobook – with progress per chapter and time remaining.
 
-- **Export:** Format wählen (mit Größenschätzung, M4B empfohlen) → Fortschritt pro Kapitel mit Restzeit → fertige Datei mit „Speichern“
-- **Im Hintergrund:** „Im Hintergrund weiter“ schließt nur den Dialog; die Bibliothek zeigt den Fortschritt, und ein Hinweis meldet, wenn das Hörbuch fertig ist
-- **Animationen:** der Dialog passt seine Größe weich an; beim Fertigwerden zeichnet sich ein Haken und eine Klangwelle springt auf
+- **Export:** pick a format (with size estimate, M4B recommended) → progress per chapter with time remaining →
+  finished file with "Save"
+- **In the background:** "Continue in background" only closes the dialog; the library shows the progress, and a
+  notice tells you when the audiobook is ready
+- **Animations:** the dialog resizes smoothly; when it finishes, a check mark draws itself and a sound wave pops up
 
 ## 2.4.0
-Weichere Übergänge – Texte, Player und Export bewegen sich jetzt sanft statt zu springen.
+Smoother transitions – texts, player and export now move gently instead of jumping.
 
-- **Bibliothek:** neue Texte landen sichtbar oben, gelöschte gleiten hinaus (auch eigene Stimmen)
-- **Player:** fährt beim Öffnen eines Texts von unten herein und beim Bearbeiten wieder hinaus
-- **Export:** Fortschritt blendet ein; fertig mit Haken, grünem Balken und hereinspringendem Download-Knopf
-- **Update:** nach „Aktualisieren“ geht die Karte weich in den Ladebalken über
-- **Kleinigkeiten:** Datei-Ablage hebt sich beim Hineinziehen, „erkannt“-Hinweis springt auf, vorbereitete Abschnitte blenden ihre Markierung ein, Seitenleiste im schmalen Fenster gleitet mit Abdunklung
+- **Library:** new texts visibly land at the top, deleted ones slide out (own voices too)
+- **Player:** slides in from below when you open a text and out again when you edit it
+- **Export:** progress fades in; when done, a check mark, a green bar and a download button that pops in
+- **Update:** after "Update", the card smoothly turns into the progress bar
+- **Details:** the drop zone lifts while dragging a file, the "detected" hint pops up, prepared sections fade in
+  their marking, the sidebar slides in with a dimmed background in narrow windows
 
 ## 2.3.9
-Der Vorleser ist jetzt Open Source – freie Software unter GPL-3.0.
+Vorleser is now open source – free software under GPL-3.0.
 
-- **Open Source:** Quellcode auf GitHub, Link unter *Einstellungen › App › Open Source*
-- **Lizenzen:** Lizenztext und Hinweise zu allen mitgelieferten Komponenten liegen der App bei
+- **Open source:** source code on GitHub, linked under *Settings › App › Open Source*
+- **Licenses:** the license text and notices for all bundled components ship with the app
 
 ## 2.3.8
-Updates laden im Hintergrund – du entscheidest, wann neu gestartet wird.
+Updates download in the background – you decide when to restart.
 
-- **Updates:** werden direkt nach dem Start zuverlässig erkannt (vorher erschien der Hinweis manchmal erst nach 30 Minuten)
-- **Update bereit:** „Jetzt neu starten“ oder „Später“ – dann läuft beim nächsten Öffnen die neue Version
-- **Schneller Neustart:** die neue Version wird schon vorher entpackt; der Neustart dauert unter einer Sekunde statt rund zehn
-- **Statuszeile:** flackert nicht mehr; neuer Text gleitet kurz herein
-- **Seitenleiste:** mehr Abstand zwischen „Neuer Text“ und „Bibliothek“
-- **Fortschritt:** die Bibliothek zeigt denselben Stand wie der Player und läuft beim Hören live mit
-- **Stimmen:** Sprache, Filter und Suche in einer Zeile
+- **Updates:** are detected reliably right after launch (the notice sometimes appeared only after 30 minutes)
+- **Update ready:** "Restart now" or "Later" – then the new version runs the next time you open Vorleser
+- **Fast restart:** the new version is unpacked in advance; restarting takes under a second instead of about ten
+- **Status line:** no more flickering; new text slides in briefly
+- **Sidebar:** more space between "New text" and "Library"
+- **Progress:** the library shows the same state as the player and updates live while you listen
+- **Voices:** language, filter and search in one row
 
 ## 2.3.6
-Feinschliff: kein weißes Aufblitzen beim Start, eigener Reiter „App“, Speicher lädt sichtbar.
+Polish: no white flash on launch, a separate "App" tab, storage loads visibly.
 
-- **Dunkelmodus:** Beim Start blitzt das Fenster nicht mehr weiß auf, auch bei „Darstellung: System“
-- **Einstellungen:** „Speicher“ und „App“ sind getrennte Reiter
-- **Speicher:** Platzhalter, bis die Größen berechnet sind; beim erneuten Öffnen erscheinen die letzten Werte sofort
-- **Alles vorbereitet:** sieht nicht mehr wie ein Knopf aus; Hinweise passend zum Zustand
-- **Seitenleiste:** Trennlinie unten auf Höhe der Abspielleiste, „Fehler melden“ ausgeschrieben, Suche erst ab
-  7 Texten, der Balken jedes Texts zeigt hell, was schon vorbereitet ist
+- **Dark mode:** the window no longer flashes white on launch, also with "Appearance: System"
+- **Settings:** "Storage" and "App" are separate tabs
+- **Storage:** placeholders until sizes are calculated; when reopened, the last values appear instantly
+- **All prepared:** no longer looks like a button; hints match the current state
+- **Sidebar:** bottom divider aligned with the player bar, "Report a problem" spelled out, search only from
+  7 texts, each text's bar shows in a lighter shade what is already prepared
 
 ## 2.3.5
-Aufgeräumt: der App-Bereich in den Einstellungen, und die App öffnet sich nicht mehr doppelt.
+Tidied up: the App section in Settings, and the app no longer opens twice.
 
-- **Einstellungen › App:** eine Zeile pro Aktion mit kurzer Erklärung, Version oben rechts, Deinstallieren abgesetzt
-- **Kein zweites Fenster mehr:** Wird der Vorleser erneut gestartet (z. B. eine zweite Kopie der App), holt er das
-  bestehende Fenster nach vorne, statt ein weiteres zu öffnen
+- **Settings › App:** one row per action with a short explanation, version at the top right, uninstall set apart
+- **No second window:** if Vorleser is started again (e.g. a second copy of the app), it brings the existing
+  window to the front instead of opening another one
 
 ## 2.3.4
-Neu: Vorlesen und Vorab-Erzeugen laufen im Hintergrund weiter – der Player bleibt immer sichtbar.
+New: reading and preparing keep running in the background – the player is always visible.
 
-- **Player überall:** Die Wiedergabe läuft weiter, wenn du in die Einstellungen oder zu „Neuer Text“ wechselst;
-  die Abspielleiste bleibt unten, ein Klick auf den Titel führt zurück zum Text
-- **Im Hintergrund (Mac):** Vorlesen läuft weiter, wenn das Fenster verdeckt oder die App nicht im Vordergrund ist
-- **Vorab erzeugen:** läuft im Hintergrund weiter (Fortschrittsring in der Bibliothek, Meldung wenn fertig),
-  lässt dem Vorlesen den Vortritt; Abbrechen über ein eigenes ✕ statt versehentlich per Klick auf den Knopf
-- **„Vorbereitet“ stimmt überall:** Knopf, Statuszeile, Balken und Markierung im Text zeigen dasselbe
-- Eigene Stimme aufnehmen: Die Knöpfe verrutschen nicht mehr
-- Beim Beenden mit ⌘Q laufen keine Hintergrundprozesse mehr weiter
-
-- Installation der eigenen Stimme: Der Modell-Download startet sofort (vorher über eine Minute „0 MB“);
-  am Anfang steht „wird vorbereitet“ statt „Verbindung langsam“; die Karte springt nicht mehr in der Höhe
+- **Player everywhere:** playback continues when you switch to Settings or "New text"; the player bar stays at
+  the bottom, and clicking the title takes you back to the text
+- **In the background (Mac):** reading continues when the window is hidden or the app isn't in front
+- **Prepare in advance:** keeps running in the background (progress ring in the library, notice when done) and
+  lets reading go first; cancel with its own ✕ instead of accidentally clicking the button
+- **"Prepared" is consistent:** button, status line, bar and the marking in the text all show the same
+- **Record own voice:** the buttons no longer shift
+- **Quitting with ⌘Q:** no more background processes left running
+- **Installing your own voice:** the model download starts immediately (previously "0 MB" for over a minute); it
+  starts with "getting ready" instead of "slow connection"; the card no longer jumps in height
 
 ## 2.3.3
-Feinschliff: ruhigere Animationen beim Rundgang und bei der Installation der eigenen Stimme.
+Polish: calmer animations in the tour and while installing your own voice.
 
-- **Rundgang:** Die Hinweiskarte steht von Anfang an an der richtigen Stelle; Spotlight und Karte gleiten flüssiger
-- **Eigene Stimme installieren:** am Ende „Fast fertig – das Stimmmodell wird eingerichtet“ statt scheinbar endlosem
-  Download; der Schimmer im Balken springt nicht mehr; die Karte löst sich am Ende auf und der Inhalt rückt weich nach
-- **Eigene Stimme:** Nach der Installation öffnet sich direkt die Aufnahme; der Name ist nur ein Vorschlag; die
-  Hörprobe der neuen Stimme wird sofort im Hintergrund vorbereitet (Vorlesen hat Vorrang)
+- **Tour:** the hint card is in the right place from the start; spotlight and card glide more smoothly
+- **Install own voice:** at the end "Almost done – setting up the voice model" instead of a seemingly endless
+  download; the shimmer in the bar no longer jumps; the card dissolves at the end and the content moves up softly
+- **Own voice:** recording opens right after installation; the name is only a suggestion; the new voice's preview
+  is prepared in the background right away (reading takes priority)
 
 ## 2.3.2
-Behoben: Updates werden auf dem Mac wieder gefunden.
+Fixed: updates are found on the Mac again.
 
-- **Mac:** Die automatische Update-Prüfung schlug seit 2.1.0 fehl. Wer 2.1.0 bis 2.3.1 hat, installiert diese
-  Version einmal von Hand von der Download-Seite – danach kommen Updates wieder automatisch.
-- Eigene Stimme aufnehmen: Der Vorlesetext ist ganz sichtbar, ohne Scrollen
+- **Mac:** the automatic update check had been failing since 2.1.0. If you have 2.1.0 to 2.3.1, install this
+  version once by hand from the download page – after that, updates arrive automatically again.
+- **Record own voice:** the text to read is fully visible without scrolling
 
 ## 2.3.1
-Neu: Vorleser lässt sich direkt aus der App deinstallieren.
+New: Vorleser can be uninstalled directly from the app.
 
-- **Deinstallieren:** Einstellungen › Speicher & App – zeigt vorher, was gelöscht wird, und fragt zweimal nach.
-  Auf Wunsch bleiben Texte und eigene Stimmen erhalten.
-- **Windows:** Beim Entfernen über „Apps“ fragt der Vorleser, ob auch deine Daten gelöscht werden sollen.
+- **Uninstall:** Settings › Storage & App – shows what will be deleted beforehand and asks twice. Texts and own
+  voices can be kept if you like.
+- **Windows:** when removing via "Apps", Vorleser asks whether your data should be deleted too.
 
 ## 2.2.0
-Neu: Speicher gezielt aufräumen – pro Text, Hörproben, Reste, Exporte und Modelle.
+New: clean up storage selectively – per text, previews, leftovers, exports and models.
 
-- **Speicher:** Übersicht, wer wie viel Platz belegt; einzelne Teile löschen statt nur „Alles leeren“
-- **Text löschen** entfernt jetzt auch sein erzeugtes Audio
-- **Rundgang:** Der Beispieltext bleibt danach in der Bibliothek (auch bei Abbruch), ohne Kopien beim erneuten Rundgang
-- **Eigene Stimme aufnehmen:** Text in der Sprache der Oberfläche, Umschalter Deutsch | English
-- **Installation der eigenen Stimme:** drei wechselnde Szenen beim Stimmmodell (Wellenform › Netz › Sprechblase);
-  die Gesamtgröße bleibt fest bei 3.060 MB
-- Englische Oberfläche: Zahlen richtig formatiert (1,404 MB statt 1.404 MB)
-- Update-Prüfung bei jedem Start schon nach wenigen Sekunden
+- **Storage:** overview of what takes up how much space; delete individual parts instead of only "Clear all"
+- **Deleting a text** now also removes its generated audio
+- **Tour:** the sample text stays in the library afterwards (even if cancelled), without copies on a repeated tour
+- **Record own voice:** text in the interface language, with a Deutsch | English switch
+- **Installing your own voice:** three alternating scenes for the voice model (waveform › network › speech
+  bubble); the total size stays fixed at 3,060 MB
+- **English interface:** numbers formatted correctly (1,404 MB instead of 1.404 MB)
+- **Update check:** within a few seconds of every launch
 
 ## 2.1.0
-Neu: Fehler direkt aus der App melden und eine übersichtlichere Installation der eigenen Stimme.
+New: report problems directly from the app, and a clearer installation of your own voice.
 
-- **Fehler melden:** Käfer unten links (oder Einstellungen › Speicher & App) – Beschreibung eingeben, fertig.
-- **Eigene Stimme:** ein Knopf „Eigene Stimme verwenden“; die Installation zeigt jetzt Größe, Geschwindigkeit,
-  Restzeit und was gerade passiert. Abbrechen funktioniert zuverlässig.
-- **Mitlesen:** Die Wortmarkierung bleibt sichtbar, wenn die Maus darüber steht; läuft bei der Offline-Stimme
-  nicht mehr davon.
-- **Windows:** EPUB-Dateien lassen sich wieder importieren.
-- **Updates** werden auch dann gefunden, wenn GitHub gerade viele Anfragen bekommt.
+- **Report a problem:** bug icon at the bottom left (or Settings › Storage & App) – describe it, done.
+- **Own voice:** one "Use your own voice" button; the installation now shows size, speed, time remaining and
+  what's happening. Cancelling works reliably.
+- **Follow along:** the word marking stays visible when the mouse is over it; no longer runs ahead with the
+  offline voice.
+- **Windows:** EPUB files can be imported again.
+- **Updates** are found even when GitHub is receiving a lot of requests.
 
 ## 2.0.0
-Erste Desktop-Version für macOS (Apple-Chip) und Windows 10/11.
+First desktop version for macOS (Apple chip) and Windows 10/11.
 
-- Eigenes App-Fenster statt Browser, Installation per Doppelklick
-- Eigene Stimme als optionaler Download direkt aus der App
-- Automatische Updates mit einem Klick
+- Its own app window instead of a browser, installed with a double-click
+- Own voice as an optional download directly from the app
+- Automatic updates with one click

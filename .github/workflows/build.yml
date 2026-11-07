@@ -106,7 +106,7 @@ jobs:
           # Notizen aus CHANGELOG.md (Abschnitt „## X.Y.Z“); erste Zeile zeigt die App in der Update-Karte
           awk -v v="## $VER" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md | sed '/./,$!d' > notes.md
           if [ ! -s notes.md ]; then echo "::error::Kein Abschnitt '## $VER' in CHANGELOG.md"; exit 1; fi
-          printf '\n---\nDownload und Installationshinweise: https://simonschnezzer.github.io/vorleser-download/\n' >> notes.md
+          printf '\n---\nDownload and installation notes: https://simonschnezzer.github.io/vorleser-download/\n' >> notes.md
           gh release create "$GITHUB_REF_NAME" Vorleser-mac.dmg Vorleser-windows-setup.exe \
             --repo SimonSchneZzer/vorleser-download --title "Vorleser $VER" --notes-file notes.md
           # latest.json für den Updater der App (Download-Seite, kein Ratenlimit) – erst NACH dem Hochladen,

@@ -62,8 +62,8 @@ Weitere Variablen: `VORLESER_DEBUG=1` (DevTools), `VORLESER_VERSION`, `VORLESER_
 - App ist **unsigniert** (Entscheidung); Erstinstallation zeigt eine Warnung, Updates über den Updater nicht.
 
 ## Neue Version veröffentlichen
-`VERSION` erhöhen, Abschnitt `## X.Y.Z` oben in `CHANGELOG.md` (erste Zeile = Text der Update-Karte in der
-App, kurz und für Nutzer) → committen → `git tag vX.Y.Z && git push origin main vX.Y.Z`. Der Workflow testet, baut und
+`VERSION` erhöhen, Abschnitt `## X.Y.Z` oben in `CHANGELOG.md` (**auf Englisch**; erste Zeile = Text der Update-Karte
+in der App, kurz und für Nutzer; alles erscheint unter „Was ist neu“) → committen → `git tag vX.Y.Z && git push origin main vX.Y.Z`. Der Workflow testet, baut und
 veröffentlicht im Download-Repo (braucht Secret `DOWNLOAD_REPO_TOKEN`: Fine-grained Token, nur
 `vorleser-download`, „Contents: Read and write“). Danach schreibt er `latest.json` ins Download-Repo; laufende
 Apps prüfen diese Datei minütlich und melden das Update nach wenigen Minuten (GitHub-API nur Ausweichweg, max. 1×/h).
