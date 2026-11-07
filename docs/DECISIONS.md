@@ -5,6 +5,32 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Mitlesezeile über der Playbar; Dock-Icon in der Akzentfarbe
+**Kontext:** Wer außerhalb der Textseite zuhört (Einstellungen, Neuer Text), sah nicht, wo der Vorleser gerade ist.
+Das App-Icon (eckige Balken, fest Petrol) passte nicht zum Logo in der App (runde Striche, Akzentfarbe).
+**Entscheidung:** `#ml` zeigt außerhalb der Textseite den aktuellen Satz – nur Text, Ränder per Maske ausgeblendet,
+ein-/ausgeschoben wie der Player (`slideBar`). Alle gleitenden Boxen (Wort im Text, Rahmen beim Ziehen, beides in der
+Zeile) laufen über `boxIn`, Wörter/Sätze über `tokenize` – eine Logik statt Kopien. Beim Ziehen zeigt die Zeile den
+Zielsatz mit Rahmen; die Abschnitt-Blase der Leiste ist dann aus (würde die Zeile verdecken). „Zum Text“ ist kein Knopf,
+sondern Tooltip am Titel; auf der Textseite ist der Titel kein Link. Icon: dasselbe Zeichen wie das Logo; auf dem Mac
+zeichnet die Oberfläche es in der Akzentfarbe und setzt es über `Api.set_icon` als Dock-Icon (Windows: festes Icon).
+
+## 2026-11-07 · „vorbereitet“ zählt alle kommenden Abschnitte, Leiste zeigt Lücken; Tab „Wiedergabe“
+**Kontext:** Die eigene Stimme wird nicht streng der Reihe nach fertig. Der Text markierte alle fertigen Abschnitte,
+die Statuszeile zählte aber nur lückenlos ab dem nächsten → „0 Abschnitte vorbereitet“ neben markiertem Text.
+**Entscheidung:** Statuszeile zählt alle fertigen kommenden Abschnitte, Punkt rot = der *nächste* fehlt
+(+ „der nächste fehlt noch“). Die Leiste zeigt fertige Stücke hinter einer Lücke als eigene Segmente (`#bufMore`).
+„Im Voraus erzeugen“, „Markierung“ und die Vorschau ziehen in einen eigenen Tab „Wiedergabe“ (Darstellung = Aussehen
+und Sprache). Später passen dort Standard-Tempo, Sprungweite, Mitscrollen hin.
+
+## 2026-11-07 · Installation: Leiste springt bei 100 % nicht mehr zurück; Sterne ploppen nur beim Klick
+**Kontext:** Im letzten Schritt wächst die Größe nicht mehr (alles geladen) → `stalled` → der „sanft weiterlaufen“-Zweig
+setzte die Leiste auf max. 97 % zurück, die nächste Messung wieder auf 100 % – Flackern im Sekundentakt. Messung
+selbst geprüft (kompletter Download mitgeschnitten): sie zählt richtig. Favoriten-Sterne: `.star.on svg` hatte eine
+Animation, die bei jedem Neuzeichnen der Liste (alle 3 s, solange eine Stimme vorbereitet wird) neu lief.
+**Entscheidung:** Der Zweig hebt nur an, nie ab; bei `step=finish` kein Schimmer, kein MB/s, „X MB geladen“.
+Stern-Animation nur mit Klasse `pop`, die der Klick setzt.
+
 ## 2026-11-07 · Einstellung „Im Voraus erzeugen“ + Stand je Stimme im Stimmen-Menü
 **Kontext:** Fest 3 Abschnitte voraus; bei der eigenen Stimme zu wenig, bei Online-Stimmen genug. Im Stimmen-Menü
 war nicht zu sehen, ob ein Text in einer Stimme schon erzeugt ist.

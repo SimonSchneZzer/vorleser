@@ -4,6 +4,21 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.7.0
+Follow along from anywhere: the spoken sentence now shows above the player – and a new "Playback" tab.
+
+- **Follow along:** outside the text page (Settings, New text), the current sentence appears above the player with
+  the gliding word marker; long sentences slide along, the next sentence rises in
+- **Progress bar:** while dragging, a frame marks the target word – in the text and in the sentence above the player;
+  after a paused jump the marker stays on that word instead of the first one
+- **Settings › Playback:** new tab for "Generate ahead", "Highlight while reading" and the preview
+- **Prepared:** the bar shows ready sections even after a gap, and the status line counts all of them
+  ("… · next one still missing")
+- **Player title:** "Jump to text" tooltip; not a link while you're already on the text page
+- **Own voice:** the install bar no longer jumps between 97 % and 100 % at the end; favorite stars no longer flash
+  while a voice is getting ready
+- **Icon:** same mark as the logo in the app; on the Mac the Dock icon follows your accent color
+
 ## 2.6.0
 A smoother progress bar, a "What's new" overview after every update – and Vorleser is now marked as beta.
 

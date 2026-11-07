@@ -12,7 +12,7 @@ const I18N_EN = {
   "Prüft bei jedem Start automatisch": "Checks automatically on every start", "Jetzt suchen": "Check now", "Du hast die neueste Version": "You have the latest version",
   "Kurz beschreiben, was nicht klappt": "Briefly describe what isn’t working", "Melden": "Report", "Beenden": "Quit",
   "Schließt das Fenster und stoppt alles im Hintergrund": "Closes the window and stops everything in the background",
-  "Deinstallieren": "Uninstall", "App und Daten von diesem Computer entfernen": "Remove the app and its data from this computer", "Vorab erzeugen abbrechen": "Cancel preparing", "Zum Text": "Go to text",
+  "Deinstallieren": "Uninstall", "App und Daten von diesem Computer entfernen": "Remove the app and its data from this computer", "Vorab erzeugen abbrechen": "Cancel preparing", "Zum Text": "Go to text", "Zum Text springen": "Jump to text",
   "Vorleser deinstallieren": "Uninstall Vorleser", "Vorleser deinstallieren?": "Uninstall Vorleser?", "Deinstallieren": "Uninstall",
   "Die App wird geschlossen und von diesem Computer entfernt. Dabei wird gelöscht:": "The app will close and be removed from this computer. This deletes:",
   "Die App selbst": "The app itself", "Eigene Stimmen": "Own voices", "Erzeugtes Audio und Exporte": "Generated audio and exports",
@@ -112,7 +112,8 @@ const I18N_EN = {
   "Tempo": "Speed", "Stimme wählen": "Choose voice", "Stimme wechseln": "Change voice", "Stimme": "Voice",
   "Bereite vor …": "Preparing …", "Eigene Stimme erzeugt …": "Your voice is generating …", "Lesezeichen": "Bookmark",
   "Fertig gehört": "Finished", "Letzter Abschnitt": "Last section",
-  "Nichts vorbereitet – der nächste Abschnitt muss erst erzeugt werden": "Nothing prepared – the next section still has to be generated",
+  "Der nächste Abschnitt muss erst erzeugt werden": "The next section still has to be generated",
+  "der nächste fehlt noch": "next one still missing",
   "Nächste Abschnitte sind bereit": "Next sections are ready", "offline: Ersatzstimme": "offline: backup voice",
   "Online-Stimme nicht erreichbar – Piper liest offline weiter": "Online voice unreachable – Piper continues offline",
   "Audio konnte nicht geladen werden": "Audio could not be loaded", "Wiedergabe unterbrochen": "Playback interrupted",
@@ -150,7 +151,7 @@ const I18N_EN = {
   "Änderungen verwerfen?": "Discard changes?", "Deine Änderungen am Text gehen verloren.": "Your changes to the text will be lost.",
 
   // Einstellungen
-  "Darstellung": "Appearance", "Stimmen": "Voices", "Speicher": "Storage", "App": "App", "Vorleser": "Vorleser",
+  "Darstellung": "Appearance", "Wiedergabe": "Playback", "Stimmen": "Voices", "Speicher": "Storage", "App": "App", "Vorleser": "Vorleser",
   "Modus": "Mode", "Hell": "Light", "Dunkel": "Dark", "System": "System", "Akzentfarbe": "Accent color",
   "Jede Farbe hat eine helle und eine dunkle Variante, die je nach Modus automatisch greift – immer gut lesbar. Eine eigene Farbe wird bei Bedarf genauso angepasst.":
     "Each color has a light and a dark variant that switches automatically with the mode – always easy to read. A custom color is adjusted the same way if needed.",
@@ -284,6 +285,7 @@ const I18N_PATTERNS = [
   // Installation der eigenen Stimme: „1.404 MB von ca. 3.060 MB · 5,3 MB/s“
   [/^([\d.]+) MB von (ca\. )?([\d.]+) MB(?: · ([\d,]+) MB\/s)?$/, (m, a, ca, b, sp) =>
     `${a.replace(/\./g, ",")} MB of ${ca ? "approx. " : ""}${b.replace(/\./g, ",")} MB${sp ? ` · ${sp.replace(",", ".")} MB/s` : ""}`],
+  [/^([\d.]+) MB geladen$/, (m, a) => `${a.replace(/\./g, ",")} MB downloaded`],
   [/^noch ca\. (\d+) Min\.$/, (m, n) => `about ${n} min left`],
   [/^Version ([\d.]+) ist verfügbar$/, (m, v) => `Version ${v} is available`],
   [/^Version ([\d.]+) startet beim nächsten Öffnen von Vorleser – oder gleich jetzt\.$/, (m, v) => `Version ${v} starts the next time you open Vorleser – or right now.`],

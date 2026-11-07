@@ -173,6 +173,7 @@
         <div style="display:flex;align-items:center;gap:8px"><button class="ib menu-btn" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button><h1>Einstellungen</h1></div>
         <div class="tabs" role="tablist" id="setTabs"><span class="tab-ink" id="tabInk"></span>
           <button role="tab" data-tab="look" class="on">Darstellung</button>
+          <button role="tab" data-tab="play">Wiedergabe</button>
           <button role="tab" data-tab="voices">Stimmen</button>
           <button role="tab" data-tab="storage">Speicher</button>
           <button role="tab" data-tab="app">App</button>
@@ -199,19 +200,22 @@
             <p class="note">Jede Farbe hat eine helle und eine dunkle Variante, die je nach Modus automatisch greift – immer gut lesbar. Eine eigene Farbe wird bei Bedarf genauso angepasst.</p>
             <div class="swatches" id="swatches"></div>
           </div>
-          <div class="set-sec">
-            <h2>Markierung beim Vorlesen</h2>
-            <div class="seg" id="markSeg">
-              <button data-mark="section">Abschnitt</button><button data-mark="sentence">Satz</button><button data-mark="word">Wort</button>
-            </div>
-            <p class="note" id="markHint"></p>
-          </div>
+        </div>
+
+        <div class="set-body hidden" id="tabPlay">
           <div class="set-sec">
             <h2>Im Voraus erzeugen</h2>
             <div class="seg" id="aheadSeg">
               <button data-ahead="low">Knapp</button><button data-ahead="normal">Normal</button><button data-ahead="high">Viel</button><button data-ahead="all">Ganzer Text</button>
             </div>
             <p class="note" id="aheadHint"></p>
+          </div>
+          <div class="set-sec">
+            <h2>Markierung beim Vorlesen</h2>
+            <div class="seg" id="markSeg">
+              <button data-mark="section">Abschnitt</button><button data-mark="sentence">Satz</button><button data-mark="word">Wort</button>
+            </div>
+            <p class="note" id="markHint"></p>
           </div>
           <div class="set-sec">
             <h2>Vorschau</h2>
@@ -311,12 +315,14 @@
         </div>
       </div>
     </section>
+    <!-- Mitlesezeile: außerhalb der Textseite der gesprochene Satz (ohne Hintergrund, Ränder blenden aus) -->
+    <div class="ml hidden" id="ml" aria-hidden="true"><div class="ml-win" id="mlWin" data-noi18n></div></div>
     <!-- Player: in allen Ansichten sichtbar, solange ein Text geladen ist (Wiedergabe läuft weiter) -->
     <footer class="player hidden" id="player">
       <div class="prog-row">
         <span id="posL"></span>
         <div class="prog" id="prog" role="slider" tabindex="0" aria-label="Position im Text">
-          <div class="buf" id="buf"></div><div class="fill" id="fill"></div><div id="ticks"></div><div class="ghost" id="progGhost"></div><div class="knob" id="knob"></div><div class="prog-tip" id="progTip" aria-hidden="true"></div>
+          <div class="buf" id="buf"></div><div id="bufMore"></div><div class="fill" id="fill"></div><div id="ticks"></div><div class="ghost" id="progGhost"></div><div class="knob" id="knob"></div><div class="prog-tip" id="progTip" aria-hidden="true"></div>
         </div>
         <span id="posR"></span>
       </div>

@@ -455,7 +455,7 @@ body, .side, .player, .card, .box, .pill, .btn, .seg, .chip, .topbar, .search, .
 .btn:active:not(:disabled), .pill:active, .ib:active:not(:disabled), .btn-new:active, .navlink:active, .prev:active, .star:active { transform: scale(.96); }
 .sw:hover { transform: scale(1.08); }
 .sw:active { transform: scale(.94); }
-.star.on svg { animation: starPop .35s var(--spring); }
+.star.on.pop svg { animation: starPop .35s var(--spring); }
 @keyframes starPop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
 #bugSideBtn svg { transition: transform .4s var(--spring); }
 #bugSideBtn:hover svg { transform: rotate(-14deg) scale(1.08); }
@@ -1008,6 +1008,22 @@ dialog.news[open] { display: flex; }
 .prog .tick.hit { animation: tickHit .45s var(--spring); }
 @keyframes tickHit { 40% { transform: scaleY(1.9) scaleX(1.6); background: var(--acc-text); } }
 .chunk.peek { background: var(--subtle); }
+/* Mitlesezeile über der Playbar (nur außerhalb der Textseite): nur Text, Ränder blenden aus */
+.ml { flex-shrink: 0; display: flex; justify-content: center; padding: 6px 24px 4px; }
+.ml-win { position: relative; width: 100%; max-width: 760px; height: 36px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.ml-row { position: absolute; left: 0; top: 0; white-space: nowrap; font: 18px/36px var(--read); color: var(--muted); isolation: isolate;
+  transition: transform .45s var(--ease-out); }
+.ml-row.snap { transition: none; }
+.ml-row .mw { transition: color .12s; }
+.ml-row .mw.said { color: var(--ink2); }
+.ml-row .mw.cur { color: var(--on-acc); }
+.player .linkish:disabled { cursor: default; text-decoration: none; }
+/* Beim Ziehen: Rahmen um das geschätzte Zielwort – beim Loslassen füllt ihn die echte Markierung */
+.wghost { position: absolute; z-index: 0; left: 0; top: 0; border-radius: 6px; border: 1.5px solid var(--acc); pointer-events: none; opacity: 0;
+  transition: transform .14s var(--ease-out), width .14s var(--ease-out), height .14s var(--ease-out), opacity .18s var(--ease); }
+.wghost.on { opacity: 1; }
+.wghost.snap { transition: opacity .18s var(--ease); }
 
 /* Stimmen-Menü: wie viel dieses Texts in der Stimme schon erzeugt ist */
 .vprep { display: flex; align-items: center; gap: 8px; margin-top: 5px; }

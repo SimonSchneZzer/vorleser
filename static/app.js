@@ -79,7 +79,22 @@ function applyTheme() {
   try { localStorage.setItem("vorleser.theme", JSON.stringify(t)); } catch {}
   const r = $("reader");
   r.classList.toggle("mark-section", markMode() === "section");
+  syncDockIcon(t.vars["--acc"], t.vars["--on-acc"]);
 }
+/** Mac: Dock-Icon in der Akzentfarbe – dasselbe Zeichen wie das Logo oben links (Windows: festes Icon). */
+let dockKey = "";
+function syncDockIcon(acc, on) {
+  if (acc + on === dockKey || !window.pywebview?.api?.set_icon) return;
+  dockKey = acc + on;
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  const g = c.getContext("2d");
+  g.fillStyle = acc; g.beginPath(); g.roundRect(50, 50, 412, 412, 92); g.fill();     // Raster wie macOS-Icons
+  g.translate(256, 256); g.scale(15.85, 15.85); g.translate(-7.5, -8);
+  g.strokeStyle = on; g.lineWidth = 1.8; g.lineCap = "round";
+  g.stroke(new Path2D("M3 5v6M6 2.5v11M9 5v6M12 6.5v3"));                          // = Logo in index.html
+  window.pywebview.api.set_icon(c.toDataURL("image/png")).catch(() => {});
+}
+window.addEventListener("pywebviewready", () => { if (st.settings) applyTheme(); });
 async function saveSettings(patch) {
   Object.assign(st.settings, patch);                       // sofort anwenden …
   if ("uiLang" in patch) {
@@ -193,30 +208,34 @@ function showView(name) {
   requestAnimationFrame(() => { segThumbs(); moveInk(); });
   $("settingsBtn").classList.toggle("active", name === "settings");
   setPlayer(!!st.doc && name !== "edit");
+  const t = $("nowTitle"); t.disabled = name === "read";                 // auf der Textseite kein Link
+  if (name === "read") delete t.dataset.tip; else t.dataset.tip = "Zum Text springen";
+  mlSync();
   $("side").classList.remove("open");
   closePops();
   renderLibrary();
 }
 /** Player-Leiste fährt von unten herein bzw. hinaus; der Inhalt darüber wächst/schrumpft mit (negativer Rand). */
-function setPlayer(on) {
-  const p = $("player");
-  if (p._on === on) return;
-  p._on = on;
-  p._pa?.cancel(); p._pa = null;
-  const vis = !p.classList.contains("hidden");
-  if (on === vis || reducedMotion.matches || !p.animate) { p.classList.toggle("hidden", !on); return syncPlayerHeight(); }
+/** Leiste unten herein-/hinausschieben (Player, Mitlesezeile darüber). after: nach jeder Höhenänderung. */
+function slideBar(el, on, after) {
+  if (el._on === on) return;
+  el._on = on;
+  el._pa?.cancel(); el._pa = null;
+  const vis = !el.classList.contains("hidden");
+  if (on === vis || reducedMotion.matches || !el.animate) { el.classList.toggle("hidden", !on); return after?.(); }
   if (on) {
-    p.classList.remove("hidden"); syncPlayerHeight();
-    const h = p.offsetHeight;
-    p._pa = p.animate([{ marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 },
+    el.classList.remove("hidden"); after?.();
+    const h = el.offsetHeight;
+    el._pa = el.animate([{ marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 },
       { marginBottom: "0px", transform: "none", opacity: 1 }], { duration: 520, easing: EASE_OUT });
   } else {
-    const h = p.offsetHeight;
-    const a = p._pa = p.animate([{ marginBottom: "0px", transform: "none", opacity: 1 },
+    const h = el.offsetHeight;
+    const a = el._pa = el.animate([{ marginBottom: "0px", transform: "none", opacity: 1 },
       { marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 }], { duration: 280, easing: EASE, fill: "forwards" });
-    a.onfinish = () => { p.classList.add("hidden"); a.cancel(); syncPlayerHeight(); };
+    a.onfinish = () => { el.classList.add("hidden"); a.cancel(); after?.(); };
   }
 }
+const setPlayer = (on) => slideBar($("player"), on, syncPlayerHeight);
 document.querySelectorAll("[data-menu]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); $("side").classList.toggle("open"); }));
 document.addEventListener("click", (e) => { if (!$("side").contains(e.target)) $("side").classList.remove("open"); });
 
@@ -918,25 +937,40 @@ function clearWords() {
   const span = st.spans[W.idx];
   if (span) span.textContent = st.doc.chunks[W.idx].text;
 }
+/** Wörter eines Abschnitts: Text, Leerraum danach, Position im Text, Satznummer. */
+function tokenize(text) {
+  const out = []; let sent = 0;
+  for (const m of text.matchAll(/\S+\s*/g)) {
+    const core = m[0].trimEnd();
+    out.push({ text: core, tail: m[0].slice(core.length), at: m.index, sent });
+    if (isSentenceEnd(core)) sent++;
+  }
+  return out;
+}
 function buildWords(i) {
   clearWords();
   if (markMode() === "section" || !st.spans[i]) return;
-  const span = st.spans[i], text = st.doc.chunks[i].text;
+  const span = st.spans[i];
   span.textContent = "";
   const list = [];
-  let sent = 0;
-  for (const tok of text.match(/\S+\s*/g) || []) {
-    const core = tok.trimEnd();
+  for (const tk of tokenize(st.doc.chunks[i].text)) {
     const w = document.createElement("span"); w.className = "w";
-    const wt = document.createElement("span"); wt.className = "wt"; wt.textContent = core;
+    const wt = document.createElement("span"); wt.className = "wt"; wt.textContent = tk.text;
     w.appendChild(wt);
-    if (tok.length > core.length) w.appendChild(document.createTextNode(tok.slice(core.length)));
+    if (tk.tail) w.appendChild(document.createTextNode(tk.tail));
     span.appendChild(w);
-    list.push({ el: w, text: core, sent, t: 0 });
-    if (isSentenceEnd(core)) sent++;
+    list.push({ el: w, text: tk.text, sent: tk.sent, t: 0 });
   }
   st.words = { doc: st.doc.id, idx: i, list, cur: -1, curSent: -1, timed: false };
   setWord(0, false);
+}
+const wordWeight = (s) => s.length + 2 + (/[,;:–]$/.test(s) ? 4 : 0) + (/[.!?…]["'“”»«)]*$/.test(s) ? 8 : 0);
+/** Wort an einer Stelle (Anteil 0–1 am Abschnitt) schätzen – gleiche Gewichtung wie timeWords, ohne Audio. */
+function wordAtFrac(L, frac) {
+  const total = L.reduce((a, w) => a + wordWeight(w.text), 0) || 1;
+  let acc = 0;
+  for (let k = 0; k < L.length; k++) { acc += wordWeight(L[k].text); if (acc / total > frac) return k; }
+  return Math.max(0, L.length - 1);
 }
 async function timeWords(i) {
   const W = st.words;
@@ -948,7 +982,7 @@ async function timeWords(i) {
     audio.addEventListener("durationchange", () => timeWords(i), { once: true });
     return;
   }
-  const weight = (s) => s.length + 2 + (/[,;:–]$/.test(s) ? 4 : 0) + (/[.!?…]["'“”»«)]*$/.test(s) ? 8 : 0);
+  const weight = wordWeight;
   const total = L.reduce((a, w) => a + weight(w.text), 0) || 1;
   const lead = 0.05, span = Math.max(0.1, dur - lead - 0.25);
   let acc = 0;
@@ -989,30 +1023,64 @@ function setWord(k, scroll = true) {
   if (nw && markMode() === "word") nw.el.classList.add("wc");
   placeWordBox(nw?.el, W.cur >= 0);
   W.cur = k;
+  if (!scrub.drag) mlSync();
   if (scroll && nw) keepVisible(nw.el);
 }
-/** Markierungs-Box hinter das aktuelle Wort schieben (gleitet; bei Zeilenwechsel springt sie). */
-function placeWordBox(el, animate = true) {
-  const reader = $("reader");
-  let box = $("wbox");
-  if (!box || !box.isConnected) {
-    box = document.createElement("span"); box.id = "wbox"; box.className = "wbox"; box.setAttribute("aria-hidden", "true");
-    reader.appendChild(box);
-  }
-  const wt = el?.firstElementChild;
-  if (!wt || markMode() !== "word") { box.classList.remove("on"); box.dataset.y = ""; return; }
-  const R = reader.getBoundingClientRect(), r = wt.getBoundingClientRect();
-  const x = r.left - R.left - 3, y = r.top - R.top - 2;
-  const lineChange = box.dataset.y === "" || box.dataset.y === undefined || Math.abs(+box.dataset.y - y) > r.height / 2;
-  const snap = !animate || lineChange || reducedMotion.matches;
+/** Gleitende Box (Wort-Markierung, Rahmen beim Ziehen – im Text und in der Mitlesezeile) über ein Rechteck legen.
+ *  Gleitet von Wort zu Wort; beim ersten Zeigen und bei Zeilenwechsel springt sie. r = null → ausblenden. */
+function boxIn(host, id, cls, r, animate = true) {
+  let box = host.querySelector(`:scope > #${id}`);
+  if (!box) { box = document.createElement("span"); box.id = id; box.className = cls; box.setAttribute("aria-hidden", "true"); host.appendChild(box); }
+  if (!r) { box.classList.remove("on"); box.dataset.y = ""; return; }
+  const R = host.getBoundingClientRect(), x = r.left - R.left - 3, y = r.top - R.top - 2;
+  const snap = !animate || !box.classList.contains("on") || Math.abs((+box.dataset.y || 0) - y) > r.height / 2 || reducedMotion.matches;
   box.classList.toggle("snap", snap);
   if (snap) void box.offsetWidth;
-  box.style.transform = `translate(${x}px, ${y}px)`;
-  box.style.width = `${r.width + 6}px`;
-  box.style.height = `${r.height + 4}px`;
-  box.dataset.y = y;
-  box.classList.add("on");
+  Object.assign(box.style, { transform: `translate(${x}px, ${y}px)`, width: `${r.width + 6}px`, height: `${r.height + 4}px` });
+  box.dataset.y = y; box.classList.add("on");
   if (snap) requestAnimationFrame(() => box.classList.remove("snap"));
+}
+/* ---------- Mitlesezeile: außerhalb der Textseite der gesprochene Satz über der Playbar ---------- */
+const ml = { key: "" };
+const mlOn = () => !!(st.doc && !st.doc.demo && view !== "read" && view !== "edit" && markMode() !== "section");
+function mlSync() {
+  const W = st.words, on = mlOn() && !!W && W.idx === st.idx && W.doc === st.doc.id;
+  slideBar($("ml"), on);                                // erst sichtbar, dann messen
+  if (on && W.cur >= 0) mlShow(W.idx, W.list, W.cur, false);
+}
+/** Satz von Wort k (aus toks) zeigen; ghost = beim Ziehen geschätzt (Rahmen statt Markierung). */
+function mlShow(i, toks, k, ghost) {
+  const tk = toks[k]; if (!tk) return;
+  const win = $("mlWin"), key = `${st.doc.id}:${i}:${tk.sent}`, first = toks.findIndex((x) => x.sent === tk.sent);
+  let row = win.querySelector(".ml-row:not(.gone)");
+  const fresh = key !== ml.key || !row;
+  if (fresh) {                                           // neuer Satz: alte Zeile hebt sich weg, neue steigt von unten nach
+    ml.key = key;
+    const old = row, swap = old && !ghost && !reducedMotion.matches && !$("ml").classList.contains("hidden");
+    row = document.createElement("div"); row.className = "ml-row";
+    row.innerHTML = toks.filter((x) => x.sent === tk.sent).map((x) => `<span class="mw">${esc(x.text)}</span>`).join(" ");
+    win.appendChild(row);
+    if (swap) {
+      old.classList.add("gone");
+      old.animate([{ opacity: 1, translate: "0 0" }, { opacity: 0, translate: "0 -14px" }], { duration: 220, easing: EASE, fill: "forwards" })
+        .finished.then(() => old.remove(), () => old.remove());
+      row.animate([{ opacity: 0, translate: "0 14px" }, { opacity: 1, translate: "0 0" }], { duration: 420, delay: 120, easing: EASE_OUT, fill: "backwards" });
+    } else win.querySelectorAll(".ml-row").forEach((r) => r !== row && r.remove());
+  }
+  const spans = row.querySelectorAll(".mw"), j = k - first, el = spans[j];
+  for (let n = 0; n < spans.length; n++) spans[n].className = ghost ? "mw" : n < j ? "mw said" : n === j && markMode() === "word" ? "mw cur" : "mw";
+  // Kurzer Satz mittig; langer rutscht so nach, dass das Wort bei ~40 % steht (nie über die Enden hinaus)
+  const Wn = win.clientWidth, rw = row.scrollWidth, x = el.offsetLeft + el.offsetWidth / 2;
+  row.classList.toggle("snap", fresh);
+  row.style.transform = `translateX(${rw <= Wn ? (Wn - rw) / 2 : -Math.max(0, Math.min(x - Wn * 0.4, rw - Wn))}px)`;
+  if (fresh) { void row.offsetWidth; row.classList.remove("snap"); }
+  const word = markMode() === "word";
+  boxIn(row, "mlBox", "wbox", !ghost && word ? el.getBoundingClientRect() : null, !fresh);
+  boxIn(row, "mlGhost", "wghost", ghost && word ? el.getBoundingClientRect() : null);
+}
+/** Markierungs-Box hinter das aktuelle Wort im Text. */
+function placeWordBox(el, animate = true) {
+  boxIn($("reader"), "wbox", "wbox", markMode() === "word" ? el?.firstElementChild?.getBoundingClientRect() : null, animate);
 }
 new ResizeObserver(() => {                 // Umbruch geändert (Fenster, Seitenleiste, Schrift) → Box nachziehen
   const W = st.words;
@@ -1045,6 +1113,10 @@ function highlight(scroll) {
   if (markMode() !== "section" && (!st.words || st.words.idx !== st.idx || st.words.doc !== st.doc.id)) buildWords(st.idx);
   if (markMode() === "section") clearWords();
   const W = st.words;                                   // Markierungsart gewechselt → Wort-Box passend zeigen/verstecken
+  if (W && st.loadedIdx !== st.idx) {                   // Abschnitt noch nicht geladen (z. B. pausiert gesprungen):
+    if (st.pendingFrac != null) setWord(wordAtFrac(W.list, st.pendingFrac), false);   // Wort an der Zielstelle schätzen
+    else if (!st.pendingOffset) setWord(0, false);
+  }
   if (W) {
     const cur = W.list[W.cur]?.el;
     cur?.classList.toggle("wc", markMode() === "word");
@@ -1075,8 +1147,17 @@ function markReady() {
   st.readySet = now;
   if (!st.doc) return;
   syncLibPrepared(st.doc.id, now.size);
-  let n = st.idx; while (n < st.doc.chunks.length && isReady(n)) n++;
-  $("buf").style.width = `${(n / st.doc.chunks.length) * 100}%`;
+  const N = st.doc.chunks.length;
+  let n = st.idx; while (n < N && isReady(n)) n++;
+  $("buf").style.width = `${(n / N) * 100}%`;
+  // Weiter hinten schon fertige Abschnitte (nach einer Lücke) als eigene Stücke zeigen – wie die Markierung im Text
+  const runs = [];
+  for (let i = n; i < N; i++) if (isReady(i)) { const a = i; while (i < N && isReady(i)) i++; runs.push([a, i]); }
+  const key = runs.map((r) => r.join("-")).join(","), more = $("bufMore");
+  if (more.dataset.k !== key) {
+    more.dataset.k = key;
+    more.innerHTML = runs.map(([a, b]) => `<div class="buf" style="left:${(a / N) * 100}%;width:${((b - a) / N) * 100}%"></div>`).join("");
+  }
   updateStatus();
 }
 /** Seitenleiste zeigt für den offenen Text denselben „vorbereitet“-Stand wie die Playbar (eine Quelle). */
@@ -1166,7 +1247,8 @@ function updateStatus(loading = false) {
     $("retryBtn").onclick = () => { const r = st.lastError?.retry; st.lastError = null; r ? r() : play(); };
     return;
   }
-  let ready = 0; for (let i = st.idx + 1; i < st.doc.chunks.length && isReady(i); i++) ready++;
+  let ready = 0; for (let i = st.idx + 1; i < st.doc.chunks.length; i++) if (isReady(i)) ready++;   // alle kommenden, auch nach einer Lücke
+  const nextReady = isReady(st.idx + 1);
   const allReady = st.doc.chunks.every((_, i) => isReady(i));
   const waiting = loadingVisible();
   const ch = currentChapter();
@@ -1174,10 +1256,13 @@ function updateStatus(loading = false) {
   if (ch) parts.push(esc(ch.title));
   const last = st.idx >= st.doc.chunks.length - 1;
   if (waiting) parts.push(st.doc.voice.startsWith("clone:") ? "Eigene Stimme erzeugt …" : "Bereite vor …");
-  else parts.push(allReady ? "Alles vorbereitet" : last ? "Letzter Abschnitt" : `${nAbschn(ready)} vorbereitet`);
+  else {
+    parts.push(allReady ? "Alles vorbereitet" : last ? "Letzter Abschnitt" : `${nAbschn(ready)} vorbereitet`);
+    if (!last && !allReady && ready > 0 && !nextReady) parts.push("der nächste fehlt noch");
+  }
   if (!st.wantPlay && st.pendingOffset > 0) parts.push("Lesezeichen");
   const fb = st.cache.get(st.idx)?.fallback ? ` · <span class="warn" title="Online-Stimme nicht erreichbar – Piper liest offline weiter">offline: Ersatzstimme</span>` : "";
-  const dot = `<span class="dot${!last && ready === 0 ? " empty" : ""}" title="${ready === 0 && !last ? "Nichts vorbereitet – der nächste Abschnitt muss erst erzeugt werden" : "Nächste Abschnitte sind bereit"}"></span>`;
+  const dot = `<span class="dot${!last && !nextReady ? " empty" : ""}" title="${!nextReady && !last ? "Der nächste Abschnitt muss erst erzeugt werden" : "Nächste Abschnitte sind bereit"}"></span>`;
   setStatus(`${waiting ? '<span class="spin"></span>' : dot}<span>${parts.join(" · ")}${fb}</span>`);
 }
 function updateMediaSession() {
@@ -1225,7 +1310,7 @@ function scrubShow(t, drag) {
   tip.textContent = (ch && st.doc.chapters.length > 1 ? `${ch.title} · ` : "") + `Abschn. ${t.i + 1}`;
   const W = $("prog").offsetWidth, half = tip.offsetWidth / 2;   // Blase nicht über den Rand hinausschieben
   tip.style.left = `${Math.max(half - 40, Math.min(W - half + 40, t.p * W))}px`;
-  tip.classList.add("on");
+  tip.classList.toggle("on", !(drag && mlOn()));        // beim Ziehen zeigt die Mitlesezeile die Stelle
   $("progGhost").style.left = `${t.p * 100}%`;
   $("prog").classList.toggle("hovering", !drag);
   if (drag) { $("fill").style.width = `${t.p * 100}%`; $("knob").style.left = `${t.p * 100}%`; }
@@ -1233,12 +1318,29 @@ function scrubShow(t, drag) {
   // Zielabschnitt im Text leicht hinterlegen (nicht den aktuellen: dort liegt die Wort-Markierung)
   const peek = drag && t.i !== st.idx ? st.spans[t.i] : null;
   if (scrub.peek !== peek) { scrub.peek?.classList.remove("peek"); peek?.classList.add("peek"); scrub.peek = peek; }
+  const word = drag && markMode() !== "section";
+  boxIn($("reader"), "wghost", "wghost", word && view === "read" ? ghostRect(t) : null);
+  if (word && mlOn()) { const toks = tokenize(st.doc.chunks[t.i].text); mlShow(t.i, toks, wordAtFrac(toks, t.frac), true); }
+}
+/** Geschätztes Zielwort beim Ziehen: im aktuellen Abschnitt das Wort-Element, sonst per Range im reinen Text. */
+function ghostRect(t) {
+  const W = st.words;
+  if (W && W.idx === t.i && W.doc === st.doc.id) return W.list[wordAtFrac(W.list, t.frac)]?.el.firstElementChild?.getBoundingClientRect();
+  const node = st.spans[t.i]?.firstChild;
+  if (!node || node.nodeType !== 3) return null;
+  const toks = tokenize(node.data), tk = toks[wordAtFrac(toks, t.frac)];
+  if (!tk) return null;
+  const r = document.createRange();
+  r.setStart(node, tk.at); r.setEnd(node, tk.at + tk.text.length);
+  return r.getClientRects()[0] || null;
 }
 function scrubHide() {
   $("progTip").classList.remove("on");
   $("prog").classList.remove("hovering", "dragging");
   for (const el of $("ticks").children) el.classList.remove("near");
   scrub.peek?.classList.remove("peek"); scrub.peek = null;
+  boxIn($("reader"), "wghost", "wghost", null);
+  mlSync();                                              // Mitlesezeile zurück auf die echte Stelle
 }
 $("prog").addEventListener("pointerdown", (e) => {
   if (!st.doc || e.button !== 0) return;
@@ -1624,7 +1726,7 @@ $("setTabs").onclick = (e) => {
   const b = e.target.closest("[data-tab]"); if (!b) return;
   setTab = b.dataset.tab;
   document.querySelectorAll("#setTabs [data-tab]").forEach((x) => x.classList.toggle("on", x === b));
-  const TABS = { look: "tabLook", voices: "tabVoices", storage: "tabStorage", app: "tabApp" };
+  const TABS = { look: "tabLook", play: "tabPlay", voices: "tabVoices", storage: "tabStorage", app: "tabApp" };
   for (const [k, id] of Object.entries(TABS)) $(id).classList.toggle("hidden", k !== setTab);
   animateIn($(TABS[setTab]));
   moveInk();
@@ -1750,6 +1852,7 @@ $("voiceLib").onclick = async (e) => {
   if (fv) {
     const id = fv.dataset.fav, favs = st.settings.favorites || [];
     await saveSettings({ favorites: favs.includes(id) ? favs.filter((x) => x !== id) : [...favs, id] });
+    $("voiceLib").querySelector(`[data-fav="${CSS.escape(id)}"].on`)?.classList.add("pop");   // nur beim Klick aufploppen, nicht bei jedem Neuzeichnen
     return;
   }
   const sb = e.target.closest("[data-std]");
@@ -1936,10 +2039,10 @@ function csTick() {                                     // jede Sekunde: Uhr + s
   $("csElapsed").textContent = fmtClock(now - (s.started || now));
   // Balken = aktuelle Phase (passt zu „X von Y MB“); bei Stillstand läuft er sanft weiter, aber nie bis 100 %
   const phaseTotal = (s.totals || {})[s.phase] || 1, real = Math.min(100, (s.mb || 0) / phaseTotal * 100);
-  const waiting = (s.stalled || 0) >= 4;
+  const waiting = (s.stalled || 0) >= 4 && s.step !== "finish";   // alles geladen → ruhig voll stehen, kein Schimmer
   if (s.phase !== cs.barPhase) { cs.barPhase = s.phase; cs.shown = 0; }
   if (real > cs.shown) cs.shown = real;
-  else if (waiting) cs.shown = Math.min(cs.shown + Math.max(0.05, (100 - cs.shown) * 0.006), 97);
+  else if (waiting && cs.shown < 97) cs.shown = Math.min(cs.shown + Math.max(0.05, (100 - cs.shown) * 0.006), 97);   // nie zurück
   $("csBar").style.width = `${Math.max(2, Math.min(100, cs.shown))}%`;
   $("csBarWrap").classList.toggle("waiting", waiting);
 }
@@ -1962,6 +2065,7 @@ function csRender() {
   if (step !== cs.lastStep) { $("csStep").textContent = step; animateIn($("csStep"), "swap"); cs.lastStep = step; }
   const t = (s.totals || {})[s.phase], est = s.phase === "packages" ? "ca. " : "";
   $("csSize").textContent = s.phase === "python" || !t ? "" :
+    finishing ? `${fmtNum(t)} MB geladen` :
     `${fmtNum(s.mb || 0)} MB von ${est}${fmtNum(t)} MB` + (s.speed > 0.2 ? ` · ${s.speed.toFixed(1).replace(".", ",")} MB/s` : "");
   $("csEta").textContent = finishing ? "gleich fertig" : fmtEta(s.eta);
   document.querySelectorAll("#csSteps li").forEach((li) => {

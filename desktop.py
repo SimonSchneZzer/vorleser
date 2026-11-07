@@ -66,6 +66,23 @@ class Api:
         shutil.copyfile(src, dest)
         return {"ok": True, "path": dest}
 
+    def set_icon(self, data_url: str) -> None:
+        """Mac: Dock-Icon in der Akzentfarbe (gezeichnet von der Oberfläche, wie das Logo in der App)."""
+        prefix = "data:image/png;base64,"
+        if not paths.IS_MAC or not isinstance(data_url, str) or not data_url.startswith(prefix) or len(data_url) > 2_000_000:
+            return
+        try:
+            import base64
+            from AppKit import NSApplication, NSImage
+            from Foundation import NSData
+            from PyObjCTools import AppHelper
+            raw = base64.b64decode(data_url[len(prefix):])
+            img = NSImage.alloc().initWithData_(NSData.dataWithBytes_length_(raw, len(raw)))
+            if img:
+                AppHelper.callAfter(NSApplication.sharedApplication().setApplicationIconImage_, img)
+        except Exception as e:
+            print(f"[desktop] Dock-Icon: {e}", flush=True)
+
     def reveal_data(self) -> None:
         """Datenordner im Finder/Explorer zeigen."""
         import subprocess
