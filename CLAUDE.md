@@ -47,6 +47,10 @@ Zum Ausprobieren ohne echte Daten: `VORLESER_HOME=/tmp/vh VORLESER_PORT=8790 …
 Weitere Variablen: `VORLESER_DEBUG=1` (DevTools), `VORLESER_VERSION`, `VORLESER_UPDATE_URL` (Updater testen).
 
 ## Regeln & Stolperfallen
+- **Nichts springt von einem Frame auf den nächsten.** Ein-/Ausblenden, Auf-/Zuklappen, Größen- und Positionswechsel
+  bekommen immer eine Bewegung (Höhe gleitet, Inhalt blendet mit, Pfeile drehen sich). Helfer in `app.js`:
+  `heightFrom`/`smoothHeight`, `collapseOut`, `slideBar`, `boxIn`, `animateIn`; `<details>` klappt automatisch weich.
+  Animationen laufen einmal (keine Endlosschleifen) und respektieren `prefers-reduced-motion`.
 - **Pfade nur über `paths.py`.** Nie in `APP_DIR` schreiben (in der App schreibgeschützt).
 - **Jeder `subprocess`-Aufruf bekommt `**NO_WINDOW`** (sonst blitzen unter Windows Konsolenfenster auf).
 - **Opus/WebM immer über `tts.to_opus()`** (in Datei, nicht `pipe:1`): sonst fehlt die Dauer im Header und

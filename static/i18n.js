@@ -12,7 +12,7 @@ const I18N_EN = {
   "Prüft bei jedem Start automatisch": "Checks automatically on every start", "Jetzt suchen": "Check now", "Du hast die neueste Version": "You have the latest version",
   "Kurz beschreiben, was nicht klappt": "Briefly describe what isn’t working", "Melden": "Report", "Beenden": "Quit",
   "Schließt das Fenster und stoppt alles im Hintergrund": "Closes the window and stops everything in the background",
-  "Deinstallieren": "Uninstall", "App und Daten von diesem Computer entfernen": "Remove the app and its data from this computer", "Vorab erzeugen abbrechen": "Cancel preparing", "Zum Text": "Go to text", "Zum Text springen": "Jump to text",
+  "Deinstallieren": "Uninstall", "App und Daten von diesem Computer entfernen": "Remove the app and its data from this computer", "Vorab erzeugen abbrechen": "Cancel preparing", "Zum Text": "Go to text", "Zum Text springen": "Jump to text", "Code und Projekte": "Code and projects", "Beruflich vernetzen": "Connect professionally",
   "Vorleser deinstallieren": "Uninstall Vorleser", "Vorleser deinstallieren?": "Uninstall Vorleser?", "Deinstallieren": "Uninstall",
   "Die App wird geschlossen und von diesem Computer entfernt. Dabei wird gelöscht:": "The app will close and be removed from this computer. This deletes:",
   "Die App selbst": "The app itself", "Eigene Stimmen": "Own voices", "Erzeugtes Audio und Exporte": "Generated audio and exports",

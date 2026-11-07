@@ -5,6 +5,15 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Mitlesezeile: von oben, nur ein Satzwechsel; Name → GitHub/LinkedIn; weiches `<details>`
+**Kontext:** Die Zeile kam von unten (wie der Player), wirkt über dem Player aber wie „aus dem Text heruntergereicht“
+– Simon wollte oben rein, oben raus. Nach dem Ziehen lief der Satzwechsel doppelt: `buildWords` setzte erst Wort 0
+(→ Satz 1 der Zeile), danach `highlight` das geschätzte Zielwort (→ zweiter Wechsel).
+**Entscheidung:** `slideBar(…, fromTop)`; `buildWords` setzt Wort 0 ohne Abgleich, die Zeile wird am Ende von
+`highlight()` einmal abgeglichen; beim Einblenden kein Satzwechsel obendrauf. Name: eine gemeinsame Sprechblase
+(`#byPop`, `[data-by]`), positioniert am geklickten Namen, klappt nach oben, wenn unten kein Platz ist.
+Alle `<details>` klappen über einen globalen Klick-Handler weich (Regel „nichts springt“ in CLAUDE.md).
+
 ## 2026-11-07 · Mitlesezeile über der Playbar; Dock-Icon in der Akzentfarbe
 **Kontext:** Wer außerhalb der Textseite zuhört (Einstellungen, Neuer Text), sah nicht, wo der Vorleser gerade ist.
 Das App-Icon (eckige Balken, fest Petrol) passte nicht zum Logo in der App (runde Striche, Akzentfarbe).

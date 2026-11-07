@@ -4,6 +4,15 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.7.1
+Smoother follow-along line, and Simon's name now leads to GitHub or LinkedIn.
+
+- **Follow along:** the sentence line drops in from above when you leave the text and rises away when you go back;
+  after dragging the progress bar there is no extra sentence change any more
+- **About:** clicking "Simon Schnetzer" (Settings › App, tour) opens a small bubble with GitHub and LinkedIn
+- **Expanding sections** (e.g. "What gets sent?" in "Report a problem") now open and close smoothly
+- **What's new:** nothing is pre-selected when it opens
+
 ## 2.7.0
 Follow along from anywhere: the spoken sentence now shows above the player – and a new "Playback" tab.
 

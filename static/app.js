@@ -180,6 +180,28 @@ function heightFrom(el) {
   };
 }
 function smoothHeight(el, fn) { const done = heightFrom(el); fn(); done(); }
+/** Jedes <details> klappt weich auf und zu (Höhe gleitet, Inhalt blendet mit) statt von einem Frame auf den anderen. */
+document.addEventListener("click", (e) => {
+  const sum = e.target.closest("details > summary");
+  if (!sum || reducedMotion.matches || !sum.animate) return;
+  e.preventDefault();
+  const d = sum.parentElement, body = [...d.children].filter((x) => x !== sum);
+  const opening = !d.open || d.classList.contains("closing");
+  const h0 = d.offsetHeight;
+  d._da?.cancel();
+  d.classList.toggle("closing", !opening);
+  d.open = true;
+  const h1 = opening ? d.offsetHeight : sum.offsetHeight;
+  d.style.overflow = "hidden";
+  const a = d._da = d.animate([{ height: `${h0}px` }, { height: `${h1}px` }], { duration: opening ? 420 : 300, easing: opening ? EASE_OUT : EASE });
+  const fade = [{ opacity: 0, transform: "translateY(-6px)" }, { opacity: 1, transform: "none" }];
+  body.forEach((x) => x.animate(opening ? fade : fade.slice().reverse(), { duration: opening ? 380 : 200, easing: EASE, fill: "both" }));
+  a.onfinish = () => {
+    d.style.overflow = "";
+    if (!opening) { d.open = false; d.classList.remove("closing"); }
+    body.forEach((x) => x.getAnimations().forEach((an) => an.cancel()));
+  };
+});
 /** Zeile gleitet nach links hinaus, dann klappt ihre Höhe zu (Einträge darunter rücken nach). */
 function collapseOut(el) {
   if (!el || reducedMotion.matches || !el.animate) return Promise.resolve();
@@ -217,7 +239,7 @@ function showView(name) {
 }
 /** Player-Leiste fährt von unten herein bzw. hinaus; der Inhalt darüber wächst/schrumpft mit (negativer Rand). */
 /** Leiste unten herein-/hinausschieben (Player, Mitlesezeile darüber). after: nach jeder Höhenänderung. */
-function slideBar(el, on, after) {
+function slideBar(el, on, after, fromTop = false) {
   if (el._on === on) return;
   el._on = on;
   el._pa?.cancel(); el._pa = null;
@@ -226,12 +248,12 @@ function slideBar(el, on, after) {
   if (on) {
     el.classList.remove("hidden"); after?.();
     const h = el.offsetHeight;
-    el._pa = el.animate([{ marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 },
-      { marginBottom: "0px", transform: "none", opacity: 1 }], { duration: 520, easing: EASE_OUT });
+    const hide = fromTop ? { marginTop: `${-h}px`, transform: "translateY(-60%)", opacity: 0 } : { marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 };
+    el._pa = el.animate([hide, { marginTop: "0px", marginBottom: "0px", transform: "none", opacity: 1 }], { duration: 520, easing: EASE_OUT });
   } else {
     const h = el.offsetHeight;
-    const a = el._pa = el.animate([{ marginBottom: "0px", transform: "none", opacity: 1 },
-      { marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 }], { duration: 280, easing: EASE, fill: "forwards" });
+    const hide = fromTop ? { marginTop: `${-h}px`, transform: "translateY(-60%)", opacity: 0 } : { marginBottom: `${-h}px`, transform: "translateY(100%)", opacity: 0 };
+    const a = el._pa = el.animate([{ marginTop: "0px", marginBottom: "0px", transform: "none", opacity: 1 }, hide], { duration: 320, easing: EASE, fill: "forwards" });
     a.onfinish = () => { el.classList.add("hidden"); a.cancel(); after?.(); };
   }
 }
@@ -962,7 +984,7 @@ function buildWords(i) {
     list.push({ el: w, text: tk.text, sent: tk.sent, t: 0 });
   }
   st.words = { doc: st.doc.id, idx: i, list, cur: -1, curSent: -1, timed: false };
-  setWord(0, false);
+  setWord(0, false, false);                             // Mitlesezeile gleicht highlight() ab (sonst kurz Satz 1, dann Ziel)
 }
 const wordWeight = (s) => s.length + 2 + (/[,;:–]$/.test(s) ? 4 : 0) + (/[.!?…]["'“”»«)]*$/.test(s) ? 8 : 0);
 /** Wort an einer Stelle (Anteil 0–1 am Abschnitt) schätzen – gleiche Gewichtung wie timeWords, ohne Audio. */
@@ -1009,7 +1031,7 @@ async function timeWords(i) {
   W.exact = true;
   tick(true);
 }
-function setWord(k, scroll = true) {
+function setWord(k, scroll = true, sync = true) {
   const W = st.words; if (!W || k === W.cur) return;
   const old = W.list[W.cur]; if (old) old.el.classList.remove("wc");
   const nw = W.list[k];
@@ -1023,7 +1045,7 @@ function setWord(k, scroll = true) {
   if (nw && markMode() === "word") nw.el.classList.add("wc");
   placeWordBox(nw?.el, W.cur >= 0);
   W.cur = k;
-  if (!scrub.drag) mlSync();
+  if (sync && !scrub.drag) mlSync();
   if (scroll && nw) keepVisible(nw.el);
 }
 /** Gleitende Box (Wort-Markierung, Rahmen beim Ziehen – im Text und in der Mitlesezeile) über ein Rechteck legen.
@@ -1044,19 +1066,19 @@ function boxIn(host, id, cls, r, animate = true) {
 const ml = { key: "" };
 const mlOn = () => !!(st.doc && !st.doc.demo && view !== "read" && view !== "edit" && markMode() !== "section");
 function mlSync() {
-  const W = st.words, on = mlOn() && !!W && W.idx === st.idx && W.doc === st.doc.id;
-  slideBar($("ml"), on);                                // erst sichtbar, dann messen
-  if (on && W.cur >= 0) mlShow(W.idx, W.list, W.cur, false);
+  const W = st.words, on = mlOn() && !!W && W.idx === st.idx && W.doc === st.doc.id, was = $("ml")._on;
+  slideBar($("ml"), on, null, true);                    // erst sichtbar, dann messen
+  if (on && W.cur >= 0) mlShow(W.idx, W.list, W.cur, false, was);   // gerade erst eingeblendet → kein Satzwechsel obendrauf
 }
 /** Satz von Wort k (aus toks) zeigen; ghost = beim Ziehen geschätzt (Rahmen statt Markierung). */
-function mlShow(i, toks, k, ghost) {
+function mlShow(i, toks, k, ghost, swapOk = true) {
   const tk = toks[k]; if (!tk) return;
   const win = $("mlWin"), key = `${st.doc.id}:${i}:${tk.sent}`, first = toks.findIndex((x) => x.sent === tk.sent);
   let row = win.querySelector(".ml-row:not(.gone)");
   const fresh = key !== ml.key || !row;
   if (fresh) {                                           // neuer Satz: alte Zeile hebt sich weg, neue steigt von unten nach
     ml.key = key;
-    const old = row, swap = old && !ghost && !reducedMotion.matches && !$("ml").classList.contains("hidden");
+    const old = row, swap = old && swapOk && !ghost && !reducedMotion.matches;
     row = document.createElement("div"); row.className = "ml-row";
     row.innerHTML = toks.filter((x) => x.sent === tk.sent).map((x) => `<span class="mw">${esc(x.text)}</span>`).join(" ");
     win.appendChild(row);
@@ -1129,6 +1151,7 @@ function highlight(scroll) {
   const cur = st.spans[st.idx];
   if (scroll && cur) cur.scrollIntoView({ block: "center", behavior: "smooth" });
   updateBar();
+  if (!scrub.drag) mlSync();
 }
 /** Seitenleisten-Fuß so hoch wie der Player – die Trennlinien liegen auf einer Höhe. */
 function syncPlayerHeight() {
@@ -2361,7 +2384,7 @@ function gtCardHTML(i) {
     <button class="gt-x" id="gtX" aria-label="Rundgang beenden" data-tip="Rundgang beenden · Esc">${icon("i-x")}</button>
     <div class="gt-step">
       ${step.il ? `<div class="gt-stage"><div class="il" data-noi18n>${ILL[step.il]()}</div></div>` : ""}
-      <div class="gt-body"><div class="num">${i + 1} / ${TOUR.length}</div><h3>${esc(step.t)}</h3><p>${esc(step.p)}</p>${step.by ? `<p class="gt-by">Gebaut von <a href="https://github.com/SimonSchneZzer" target="_blank" rel="noopener">Simon Schnetzer</a></p>` : ""}
+      <div class="gt-body"><div class="num">${i + 1} / ${TOUR.length}</div><h3>${esc(step.t)}</h3><p>${esc(step.p)}</p>${step.by ? `<p class="gt-by">Gebaut von ${BYNAME}</p>` : ""}
         <div class="gt-foot"><span class="spacer"></span>
           ${i > 0 ? `<button class="btn" id="gtBack">Zurück</button>` : ""}
           <button class="btn primary" id="gtNext">${i === TOUR.length - 1 ? "Los geht's" : "Weiter"}</button></div></div></div>` };
@@ -2527,6 +2550,31 @@ function updShow(on) {
   el.classList.add("leaving");
   setTimeout(() => { el.classList.add("hidden"); el.classList.remove("leaving"); }, 250);
 }
+/* ---------- Name → Sprechblase mit GitHub / LinkedIn (überall, wo der Name steht) ---------- */
+const BYNAME = $("verTxt").closest(".r").querySelector("[data-by]").outerHTML;
+function byPop(btn) {
+  const pop = $("byPop"), open = pop.classList.contains("open") && pop._for === btn;
+  document.querySelectorAll("[data-by]").forEach((b) => b.setAttribute("aria-expanded", "false"));
+  if (!btn || open) { pop.classList.remove("open"); pop._for?.classList.remove("on"); pop._for = null; return; }
+  pop._for?.classList.remove("on");
+  const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  const up = r.bottom + 14 + h > innerHeight - 8;                 // unten kein Platz → Blase über dem Namen
+  const x = Math.max(8 + w / 2, Math.min(innerWidth - 8 - w / 2, r.left + r.width / 2));
+  pop.classList.toggle("up", up);
+  pop.style.left = `${x}px`; pop.style.top = `${up ? r.top - 14 - h : r.bottom + 14}px`;
+  pop.style.setProperty("--ax", `${r.left + r.width / 2 - x}px`);   // Pfeil zeigt auf den Namen
+  if (!pop.classList.contains("open")) void pop.offsetWidth;
+  pop.classList.add("open"); pop._for = btn; btn.classList.add("on"); btn.setAttribute("aria-expanded", "true");
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-by]");
+  if (b) { e.preventDefault(); e.stopPropagation(); return byPop(b); }
+  if (e.target.closest("#byPop .opt")) return setTimeout(() => byPop(null), 150);
+  if (!e.target.closest("#byPop")) byPop(null);
+}, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("byPop").classList.contains("open")) { e.stopPropagation(); byPop(null); } }, true);
+addEventListener("resize", () => byPop(null));
+document.addEventListener("scroll", () => byPop(null), true);
 function openExternal(url) {
   const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.click();
 }
@@ -2653,7 +2701,7 @@ async function openNews() {
       ${r.items.length ? `<ul>${r.items.map((i) => `<li>${mdBold(i)}</li>`).join("")}</ul>` : ""}</section>`).join("");
   $("newsList").scrollTop = 0;
   $("newsBug").classList.toggle("hidden", !bug.info?.enabled);
-  $("newsDlg").showModal();
+  $("newsDlg").showModal(); $("newsDlg").focus();                // nichts vorausgewählt (sonst leuchtet „Fehler melden“)
 }
 $("newsBtn").onclick = openNews;
 $("betaBtn").onclick = openNews;
