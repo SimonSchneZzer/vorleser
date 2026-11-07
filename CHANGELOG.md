@@ -4,6 +4,12 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.10.1
+The word and sentence highlight now sit exactly on the text again.
+
+- **Fix:** when the reading font finished loading after the text was shown, the highlights could sit a few pixels
+  off – they now follow the font
+
 ## 2.10.0
 A new look for the logo – and a fresh start button when recording your own voice.
 

@@ -5,6 +5,13 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Markierungen nach dem Laden der Lese-Schrift neu anlegen
+**Kontext:** Wort- und Satz-Box standen ein paar Pixel neben dem Text (Wort-Box zu hoch). Ursache: Literata kommt
+asynchron von Google Fonts (`display=swap`); wechselt die Schrift nach dem Setzen der Boxen, verschieben sich die
+Wörter, der Leser bleibt aber gleich hoch (feste Zeilenhöhe 1,75) → der `ResizeObserver` meldet nichts.
+**Entscheidung:** `replaceMarks()` legt beide Boxen neu an – beim `ResizeObserver` und bei `document.fonts`
+`loadingdone`. Im Browser nachgestellt (Schriftwechsel ohne Größenänderung) und mit dem Fix geprüft.
+
 ## 2026-11-07 · Dock-Icon nicht mehr umfärben (ersetzt „Dock-Icon in der Akzentfarbe“)
 **Kontext:** Die Oberfläche setzte das Dock-Icon zur Laufzeit in der Akzentfarbe (`Api.set_icon`). Ist die App zu,
 zeigt macOS aber das Icon aus dem Paket – das Icon wechselte also beim Schließen die Farbe.

@@ -416,11 +416,15 @@ function placeSentBoxes(els, fresh = true) {
 function placeWordBox(el, animate = true) {
   boxIn($("reader"), "wbox", "wbox", markMode() === "word" ? el?.firstElementChild?.getBoundingClientRect() : null, animate);
 }
-new ResizeObserver(() => {                 // Umbruch geändert (Fenster, Seitenleiste, Schrift) → Box nachziehen
+function replaceMarks() {                  // Wort- und Satz-Box neu an den Text legen (ohne Gleiten)
   const W = st.words;
   if (W && W.cur >= 0) placeWordBox(W.list[W.cur]?.el, false);
   if (W && W.curSent >= 0) placeSentBoxes(W.list.filter((x) => x.sent === W.curSent).map((x) => x.el), false);
-}).observe($("reader"));
+}
+new ResizeObserver(replaceMarks).observe($("reader"));   // Umbruch geändert (Fenster, Seitenleiste, Schriftgröße)
+// Lese-Schrift (Literata) kommt oft erst nach dem Setzen der Boxen: Die Wörter verschieben sich, der Leser bleibt aber
+// gleich hoch (feste Zeilenhöhe) → kein ResizeObserver. Ohne das stehen Wort- und Satz-Box ein paar Pixel daneben.
+document.fonts?.addEventListener("loadingdone", replaceMarks);
 function keepVisible(el) {
   const box = $("readScroll").getBoundingClientRect(), r = el.getBoundingClientRect();
   if (r.top < box.top + box.height * 0.15 || r.bottom > box.bottom - box.height * 0.2) el.scrollIntoView({ block: "center", behavior: "smooth" });
