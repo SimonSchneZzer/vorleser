@@ -5,6 +5,24 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Einstellung „Im Voraus erzeugen“ + Stand je Stimme im Stimmen-Menü
+**Kontext:** Fest 3 Abschnitte voraus; bei der eigenen Stimme zu wenig, bei Online-Stimmen genug. Im Stimmen-Menü
+war nicht zu sehen, ob ein Text in einer Stimme schon erzeugt ist.
+**Entscheidung:** Einstellung `ahead` (low 1 · normal 3 · high 10 · all = beim Abspielen automatisch „Vorab erzeugen“).
+`prefetch()` holt aktuellen + nächsten Abschnitt parallel, den Rest nacheinander; ein Aufruf während eines laufenden
+Vorladens wird danach nachgeholt (`prefetchAgain`) – vorher ging er verloren (z. B. Textwechsel während des Vorladens).
+`GET /api/docs/{id}/prepared?voices=…` zählt fertige Abschnitte je Stimme; das Menü holt das vor dem Öffnen (max. 300 ms),
+damit seine Höhe nicht springt; die aktuelle Stimme nimmt dieselbe Quelle wie die Playbar (`readySet`).
+
+## 2026-11-07 · Fortschrittsleiste: genau landen, ziehen, einrasten, gleiten
+**Kontext:** Ein Klick sprang immer an den Anfang des getroffenen Abschnitts – bei wenigen, langen Abschnitten
+landete der Knopf weit links vom Klick („unkontrolliertes Snapping“). Ziehen ging nicht.
+**Entscheidung:** Ziel = Abschnitt + Anteil darin (`jumpTo(i, 0, autoplay, frac)`; `playFrom(i, {frac})` rechnet den
+Anteil nach dem Laden in Sekunden um; pausiert merkt sich `st.pendingFrac` den Anteil). Ziehen ab 3 px (Sprung erst beim
+Loslassen), Vorschau-Blase + Geisterstrich beim Hovern, Einrasten nur an Kapitelstrichen (8 px), beim Sprung gleiten
+Balken und Knopf (Klasse `glide`, nur kurz – beim Abspielen und Ziehen nicht, sonst hinkt der Knopf hinterher).
+Gespeicherter Stand ohne Sekunden (`offset` 0, `frac` > 0) wird beim Öffnen über `pendingFrac` wiederhergestellt.
+
 ## 2026-11-07 · Beta-Kennzeichen, Karte „aktualisiert“ und „Was ist neu“
 **Kontext:** Nutzer sollen sehen, dass der Vorleser noch nicht fertig ist, und nach einem Update erfahren, was neu ist.
 **Entscheidung:** „BETA“-Plakette (Seitenleiste, Einstellungen › App, Webseite) statt anderer Versionsnummern –

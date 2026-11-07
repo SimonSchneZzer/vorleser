@@ -72,3 +72,10 @@ def test_fehlerbericht_wiederholungen_zusammengefasst():
     out = bugreport.collapse(lines)
     assert out == ["[edge] 57 Online-Stimmen geladen", "[edge] 56 Zeichen in 1.09s  (×10)",
                    "[piper] lade Stimme x", "[edge] 55 Zeichen in 1.1s  (×2)"]
+
+
+def test_vorladen_einstellung():
+    assert settings.load()["ahead"] == "normal"
+    assert settings.update({"ahead": "all"})["ahead"] == "all"
+    assert settings.update({"ahead": "unendlich"})["ahead"] == "all"   # ungültig → bleibt
+    settings.update({"ahead": "normal"})

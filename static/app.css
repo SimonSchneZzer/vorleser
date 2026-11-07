@@ -990,3 +990,30 @@ dialog.news[open] { display: flex; }
   40% { background: color-mix(in srgb, var(--acc) 14%, transparent); box-shadow: inset 3px 0 0 var(--acc); }
 }
 .vl-row.warming .nm small { color: var(--acc-text); }
+
+/* ---------- Fortschrittsleiste: Gleiten, Ziehen, Vorschau, Einrasten ---------- */
+.prog { touch-action: none; }
+.prog.glide .fill { transition: width .38s var(--ease-out); }
+.prog.glide .knob { transition: left .38s var(--ease-out), transform .15s var(--ease); }
+.prog .ghost { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); opacity: 0; pointer-events: none; transition: opacity .15s; }
+.prog.hovering .ghost { opacity: .35; }
+.prog.dragging { cursor: grabbing; }
+.prog.dragging .knob { transform: scale(1.35); box-shadow: 0 0 0 6px color-mix(in srgb, var(--acc) 22%, transparent); }
+.prog-tip { position: absolute; bottom: calc(100% + 12px); left: 0; transform: translate(-50%, 4px); white-space: nowrap; pointer-events: none;
+  font-size: 12px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18); opacity: 0; transition: opacity .15s var(--ease), transform .2s var(--ease-out); z-index: 3; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.prog-tip.on { opacity: 1; transform: translate(-50%, 0); }
+.prog .tick { transition: transform .2s var(--spring), background .2s; }
+.prog .tick.near { transform: scaleY(1.5); background: var(--acc-text); }
+.prog .tick.hit { animation: tickHit .45s var(--spring); }
+@keyframes tickHit { 40% { transform: scaleY(1.9) scaleX(1.6); background: var(--acc-text); } }
+.chunk.peek { background: var(--subtle); }
+
+/* Stimmen-Menü: wie viel dieses Texts in der Stimme schon erzeugt ist */
+.vprep { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.vprep .vbar { width: 56px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; flex-shrink: 0; }
+.vprep .vbar i { display: block; height: 100%; border-radius: 2px; background: var(--acc-text); transition: width .4s var(--ease); }
+.vprep em { font-style: normal; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vprep.full em { color: var(--acc-text); }
+#voicePanel:not(.leaving) .vprep .vbar i { animation: vpGrow .6s var(--ease-out) .12s both; }   /* wächst beim Öffnen einmal */
+@keyframes vpGrow { from { width: 0; } }

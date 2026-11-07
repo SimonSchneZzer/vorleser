@@ -18,9 +18,11 @@ DEFAULTS = {
     "onboarded": False,        # Einrichtung + Tutorial beim ersten Öffnen erledigt?
     "defaultVoices": {},       # {"de": "edge:…", "en": "…"}
     "favorites": None,         # Voice-IDs fürs Player-Menü (None = noch nie gesetzt → Vorschlag)
+    "ahead": "normal",         # wie viel im Voraus erzeugt wird: low (1) | normal (3) | high (10) | all (ganzer Text)
     "cacheMB": int(os.environ.get("VORLESER_CACHE_MB", "500")),
 }
-CHOICES = {"theme": ("light", "dark", "system"), "mark": ("section", "sentence", "word"), "uiLang": ("de", "en")}
+CHOICES = {"theme": ("light", "dark", "system"), "mark": ("section", "sentence", "word"), "uiLang": ("de", "en"),
+           "ahead": ("low", "normal", "high", "all")}
 DEFAULT_FAVORITES = ["edge:de-DE-SeraphinaMultilingualNeural", "edge:de-DE-ConradNeural", "edge:de-DE-KatjaNeural",
                      "edge:en-US-AvaMultilingualNeural", "edge:en-US-AndrewMultilingualNeural", "edge:en-GB-SoniaNeural"]
 

@@ -207,6 +207,13 @@
             <p class="note" id="markHint"></p>
           </div>
           <div class="set-sec">
+            <h2>Im Voraus erzeugen</h2>
+            <div class="seg" id="aheadSeg">
+              <button data-ahead="low">Knapp</button><button data-ahead="normal">Normal</button><button data-ahead="high">Viel</button><button data-ahead="all">Ganzer Text</button>
+            </div>
+            <p class="note" id="aheadHint"></p>
+          </div>
+          <div class="set-sec">
             <h2>Vorschau</h2>
             <div class="preview">
               <p>Der alte Wärter stieg die Treppe hinauf. <span class="pv-sec" id="pvSec"><span class="w" id="pvS"><span class="wt">Es war kalt, so </span><span class="wt" id="pvW">kalt</span><span class="wt"> wie nie zuvor.</span></span> <span>Unten schlugen die Wellen an den Fels.</span></span></p>
@@ -309,7 +316,7 @@
       <div class="prog-row">
         <span id="posL"></span>
         <div class="prog" id="prog" role="slider" tabindex="0" aria-label="Position im Text">
-          <div class="buf" id="buf"></div><div class="fill" id="fill"></div><div id="ticks"></div><div class="knob" id="knob"></div>
+          <div class="buf" id="buf"></div><div class="fill" id="fill"></div><div id="ticks"></div><div class="ghost" id="progGhost"></div><div class="knob" id="knob"></div><div class="prog-tip" id="progTip" aria-hidden="true"></div>
         </div>
         <span id="posR"></span>
       </div>

@@ -405,6 +405,15 @@ class Handler(BaseHTTPRequestHandler):
         status = "running" if job.get("status") == "running" else "ready" if done == total else job.get("status", "none")
         self.json({**job, "status": status, "done": done, "total": total, "cached": cached})
 
+    def prepared_by_voice(self, doc_id):
+        """Wie viele Abschnitte dieses Texts liegen in welcher Stimme schon fertig vor? (Stimmen-Menü)"""
+        q = parse_qs(urlparse(self.path).query)
+        voices = [v for v in (q.get("voices") or [""])[0].split(",") if v][:40]
+        with _doc_lock:
+            doc = load_doc(doc_id)
+        texts = [c["text"] for c in doc["chunks"]]
+        self.json({"total": len(texts), "voices": {v: sum(tts.is_cached(t, v) for t in texts) for v in voices}})
+
     def jobs(self):
         self.json({"jobs": exporter.running()})
 
@@ -537,6 +546,7 @@ ROUTES = [
     (rf"/api/docs/{D}/export/file", "GET", Handler.export_file),
     (r"/api/jobs", "GET", Handler.jobs),
     (rf"/api/docs/{D}/prepare", "GET", Handler.prepare_status),
+    (rf"/api/docs/{D}/prepared", "GET", Handler.prepared_by_voice),
     (rf"/api/docs/{D}/prepare", "POST", Handler.prepare_start),
     (rf"/api/docs/{D}/prepare", "DELETE", Handler.prepare_cancel),
     (r"/api/transcribe", "POST", Handler.transcribe),

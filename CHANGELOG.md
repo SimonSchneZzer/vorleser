@@ -4,6 +4,21 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.6.0
+A smoother progress bar, a "What's new" overview after every update – and Vorleser is now marked as beta.
+
+- **Progress bar:** lands exactly where you click, can be dragged, snaps to chapter starts, shows chapter and
+  section before you click, and glides to its new position instead of jumping
+- **Generate ahead:** new setting (Settings › Appearance) for how much is generated in advance – minimal, normal,
+  more (10 sections) or the whole text in the background; playback still starts as soon as the current section is ready
+- **Voice menu:** shows for each voice how much of the current text is already generated
+- **What's new:** after an update, a card shows what changed; all versions are listed under Settings › App ›
+  What's new (or click "BETA")
+- **Beta:** Vorleser is marked as beta in the app and on the website
+- **Own voice:** a newly recorded voice briefly pulses in the list and shows "getting ready" until it can be used;
+  the record dialog no longer shifts while the timer runs
+- **Sidebar:** "Report a problem" now sits above "Settings"
+
 ## 2.5.4
 Storage and library now always show the same state – and you can see who makes Vorleser.
 

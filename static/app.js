@@ -2,7 +2,8 @@
 /* Vorleser – Oberfläche */
 
 const $ = (id) => document.getElementById(id);
-const AHEAD = 3;                 // so viele Abschnitte im Voraus erzeugen
+const AHEAD_N = { low: 1, normal: 3, high: 10, all: 10 };   // so viele Abschnitte im Voraus erzeugen (Einstellung „ahead“)
+const ahead = () => AHEAD_N[st.settings?.ahead] ?? 3;
 const SAVE_EVERY_MS = 4000;
 const audio = $("audio");
 const pvAudio = $("previewAudio");
@@ -411,10 +412,16 @@ async function reloadVoices() {
 }
 
 /* ---------- Stimmen-Panel ---------- */
-const vp = { lang: "de", langs: [], current: null, onPick: null, showAll: false, anchor: null };
-function openVoicePanel(anchor, { langs, lang, current, onPick }) {
+const vp = { lang: "de", langs: [], current: null, onPick: null, showAll: false, anchor: null, doc: null, prep: null };
+async function openVoicePanel(anchor, { langs, lang, current, onPick, doc = null }) {
   closePops(true);
-  Object.assign(vp, { langs, lang, current, onPick, showAll: false, anchor });
+  Object.assign(vp, { langs, lang, current, onPick, showAll: false, anchor, doc, prep: null });
+  if (doc) {          // Stand je Stimme vorher holen (lokal, Millisekunden) – sonst springt die Höhe des Menüs
+    const ids = langVoices(lang).map((v) => v.id);
+    const got = api(`/api/docs/${doc}/prepared?voices=${encodeURIComponent(ids.join(","))}`).then((r) => { if (vp.doc === doc) vp.prep = r; }).catch(() => {});
+    await Promise.race([got, sleep(300)]);
+    if (vp.anchor !== anchor) return;
+  }
   const p = $("voicePanel");
   openPop(p);
   renderVoicePanel();
@@ -437,7 +444,7 @@ function renderVoicePanel() {
     const on = v.id === vp.current;
     return `<div class="vrow${on ? " on" : ""}">
       <button class="pick" data-id="${esc(v.id)}"><span class="avl">${esc(v.name.slice(0, 1).toUpperCase())}</span>
-        <span class="nm"><b data-noi18n>${esc(v.name)}</b><small>${esc(v.meta || "")}</small></span>
+        <span class="nm"><b data-noi18n>${esc(v.name)}</b><small>${esc(v.meta || "")}</small>${vp.doc ? vpPrepHTML(v) : ""}</span>
         ${on ? icon("i-check", "i check") : ""}</button>
       <button class="prev${v.warming ? " loading" : ""}" data-prev="${esc(v.id)}" aria-label="Hörprobe ${esc(v.name)}">${icon("i-play", "i fill", "width:14px;height:14px")}</button></div>`;
   };
@@ -451,6 +458,19 @@ function renderVoicePanel() {
   if (own.length) html += `<div class="grp"><span>Eigene Stimme</span><span>lokal</span></div>${own.map(row).join("")}`;
   $("vpBody").innerHTML = html;
   segThumbs($("voicePanel"));
+}
+/* „Für diesen Text schon erzeugt“ je Stimme (nur im Stimmen-Menü des Players) */
+function vpPrepCount(id) {
+  if (st.doc?.id === vp.doc && id === st.doc.voice) return st.readySet?.size ?? 0;   // aktuelle Stimme: dieselbe Quelle wie die Playbar
+  return vp.prep?.voices[id];
+}
+function vpPrepHTML(v) {
+  const total = vp.prep?.total || st.doc?.chunks.length || 0, n = vpPrepCount(v.id);
+  if (n == null || !total) return "";
+  if (!n && v.engine !== "clone") return "";                            // Online-Stimmen sind ohnehin schnell
+  const pct = Math.round((n / total) * 100);
+  const txt = n >= total ? "Für diesen Text fertig erzeugt" : n ? `Für diesen Text ${pct} % erzeugt` : "Für diesen Text noch nicht erzeugt";
+  return `<span class="vprep${n >= total ? " full" : ""}" data-vprep="${esc(v.id)}"><span class="vbar"><i style="width:${pct}%"></i></span><em>${txt}</em></span>`;
 }
 $("vpLang").onclick = (e) => { const b = e.target.closest("[data-lang]"); if (b) { vp.lang = b.dataset.lang; vp.showAll = false; renderVoicePanel(); } };
 $("vpBody").onclick = (e) => {
@@ -662,7 +682,8 @@ async function openDoc(id) {
 }
 /** Text anzeigen (vom Server geladen oder der Beispieltext des Rundgangs). */
 function showDoc(doc) {
-  st.doc = doc; st.idx = doc.progress.chunk; st.pendingOffset = doc.progress.offset || 0; st.words = null; st.srvCached = new Set();
+  st.doc = doc; st.idx = doc.progress.chunk; st.pendingOffset = doc.progress.offset || 0;
+  st.pendingFrac = !doc.progress.offset && doc.progress.frac > 0 && doc.progress.frac < 1 ? doc.progress.frac : null; st.words = null; st.srvCached = new Set();
   showView("read");
   $("docTitle").textContent = doc.title;
   $("nowTitle").textContent = doc.title;
@@ -731,18 +752,26 @@ function getAudio(i) {
   }
   return st.cache.get(i).promise;
 }
-let prefetching = false;
+let prefetching = false, prefetchAgain = false;
 async function prefetch() {
-  if (!st.doc || st.doc.demo || prefetching) return;
-  prefetching = true;
+  if (!st.doc || st.doc.demo) return;
+  if (prefetching) { prefetchAgain = true; return; }       // läuft schon (evtl. für alte Stelle/Text) → danach nochmal
+  prefetching = true; prefetchAgain = false;
   try {
-    const jobs = [];
-    for (let i = st.idx; i <= Math.min(st.idx + AHEAD, st.doc.chunks.length - 1); i++) jobs.push(getAudio(i).catch(() => {}));
-    await Promise.all(jobs);
+    // Aktueller + nächster Abschnitt gleichzeitig, der Rest nacheinander (bei „Viel“ nicht 10 Anfragen auf einmal)
+    const doc = st.doc, from = st.idx, last = Math.min(from + ahead(), doc.chunks.length - 1);
+    await Promise.all([from, from + 1].filter((i) => i <= last).map((i) => getAudio(i).catch(() => {})));
+    for (let i = from + 2; i <= last && st.doc === doc && st.idx === from; i++) await getAudio(i).catch(() => {});
+    // „Ganzer Text“: Rest im Hintergrund vorab erzeugen (eigener Auftrag, lässt dem Vorlesen den Vortritt)
+    if (st.settings?.ahead === "all" && st.wantPlay && st.doc === doc && st.autoPrep !== doc.id && st.readySet.size < doc.chunks.length) {
+      st.autoPrep = doc.id;
+      api(`/api/docs/${doc.id}/prepare`, { method: "POST" }).then(() => { updatePrep(true); jobsPoll(); }).catch(() => {});
+    }
   } finally { prefetching = false; }
   for (const [i, e] of st.cache) {
-    if (i < st.idx - 1 || i > st.idx + AHEAD + 1) { if (e.url) URL.revokeObjectURL(e.url); st.cache.delete(i); }
+    if (i < st.idx - 1 || i > st.idx + ahead() + 1) { if (e.url) URL.revokeObjectURL(e.url); st.cache.delete(i); }
   }
+  if (prefetchAgain) return prefetch();
   markReady();
 }
 function clearCache() {
@@ -753,6 +782,8 @@ function clearCache() {
 
 async function playFrom(i, offset = 0) {
   const my = ++st.token;
+  const frac = offset && typeof offset === "object" ? offset.frac : null;   // {frac}: Stelle als Anteil am Abschnitt
+  st.pendingFrac = frac;
   st.idx = i; st.wantPlay = true; st.lastError = null; st.buffering = false;
   highlight(true); renderPlay(); updateStatus();
   let url;
@@ -769,6 +800,8 @@ async function playFrom(i, offset = 0) {
   });
   if (my !== st.token) return;
   if (!ok) { st.cache.delete(i); st.loadedIdx = -1; return failPlay("Audio konnte nicht geladen werden", () => playFrom(i, offset)); }
+  if (frac != null) offset = frac * audio.duration;
+  st.pendingFrac = null;
   if (offset > 0 && offset < audio.duration - 0.3) audio.currentTime = offset;
   timeWords(i);
   try { await audio.play(); }
@@ -785,7 +818,7 @@ function play() {
     audio.play().then(renderPlay, () => { st.wantPlay = false; renderPlay(); updateStatus(); });
     updateStatus();
   } else {
-    const off = st.pendingOffset; st.pendingOffset = 0;
+    const off = st.pendingFrac != null ? { frac: st.pendingFrac } : st.pendingOffset; st.pendingOffset = 0;
     playFrom(st.idx, off);
   }
 }
@@ -795,18 +828,25 @@ function stop() {
   clearCache(); setPlayIcon(false);
 }
 const toggle = () => (st.wantPlay ? pause() : play());
-function jumpTo(i, offset = 0, autoplay = st.wantPlay) {
+function jumpTo(i, offset = 0, autoplay = st.wantPlay, frac = null) {
   if (!st.doc) return;
   i = Math.max(0, Math.min(i, st.doc.chunks.length - 1));
   st.lastError = null;
-  if (autoplay) playFrom(i, offset);
+  glideBar();
+  if (frac != null && st.loadedIdx === i && st.idx === i && audio.duration) {   // im selben, geladenen Abschnitt: nur spulen
+    audio.currentTime = Math.min(frac * audio.duration, audio.duration - 0.3);
+    updateBar(); saveProgress(true);
+    return;
+  }
+  if (autoplay) playFrom(i, frac != null ? { frac } : offset);
   else {
-    st.token++; st.switching = false; audio.pause(); st.idx = i; st.pendingOffset = offset; st.loadedIdx = -1;
+    st.token++; st.switching = false; audio.pause(); st.idx = i; st.pendingOffset = offset; st.pendingFrac = frac; st.loadedIdx = -1;
     highlight(true); updateStatus(); saveProgress(true); prefetch(); updateMediaSession();
   }
 }
 function seekBy(sec) {
   if (st.loadedIdx !== st.idx) return;
+  glideBar();
   const t = audio.currentTime + sec;
   if (t < 0 && st.idx > 0) return jumpTo(st.idx - 1, 0);
   if (t > audio.duration) return jumpTo(st.idx + 1, 0);
@@ -841,6 +881,7 @@ audio.addEventListener("pause", () => {
 /* ---------- Lesezeichen ---------- */
 function curFrac() {
   if (st.loadedIdx === st.idx && audio.duration) return Math.min(1, audio.currentTime / audio.duration);
+  if (st.pendingFrac != null) return st.pendingFrac;
   const p = st.doc?.progress;
   return p && p.chunk === st.idx ? p.frac || 0 : 0;             // noch nicht geladen: gespeicherten Stand zeigen
 }
@@ -1040,6 +1081,17 @@ function markReady() {
 }
 /** Seitenleiste zeigt für den offenen Text denselben „vorbereitet“-Stand wie die Playbar (eine Quelle). */
 function syncLibPrepared(id, n) {
+  if (vp.doc === id && vp.prep && !$("voicePanel").classList.contains("hidden")) {
+    // nur Breite + Text ändern (Element bleibt → Balken gleitet per Transition, statt neu von 0 zu wachsen)
+    const el = $("vpBody").querySelector(`[data-vprep="${CSS.escape(st.doc.voice)}"]`);
+    const v = st.voices.find((x) => x.id === st.doc.voice), tmp = document.createElement("div");
+    tmp.innerHTML = v ? vpPrepHTML(v) : "";
+    const nu = tmp.firstElementChild;
+    if (el && nu) {
+      el.className = nu.className; el.querySelector("em").textContent = nu.querySelector("em").textContent;
+      const i = el.querySelector(".vbar i"); i.style.animation = "none"; i.style.width = nu.querySelector(".vbar i").style.width;
+    }
+  }
   const d = st.docs.find((x) => x.id === id);
   if (!d || d.prepared === n) return;
   const bar = $("library").querySelector(`[data-id="${id}"] .pre`);
@@ -1053,7 +1105,7 @@ function syncLibPrepared(id, n) {
 function updateBar() {
   if (!st.doc) return;
   const pct = docPct({ count: st.doc.chunks.length, progress: { chunk: st.idx, frac: curFrac() } });
-  $("fill").style.width = `${pct}%`; $("knob").style.left = `${pct}%`;
+  if (!scrub.drag) { $("fill").style.width = `${pct}%`; $("knob").style.left = `${pct}%`; }
   $("prog").setAttribute("aria-valuenow", Math.round(pct));
   if (!st.doc.demo && st.doc.progress) {                       // Bibliothek läuft live mit
     st.doc.progress = { ...st.doc.progress, chunk: st.idx, frac: curFrac() };
@@ -1145,10 +1197,75 @@ $("prevBtn").onclick = () => (st.loadedIdx === st.idx && audio.currentTime > 3 ?
 $("nextBtn").onclick = () => jumpTo(st.idx + 1);
 $("backBtn").onclick = () => seekBy(-10);
 $("fwdBtn").onclick = () => seekBy(10);
-$("prog").onclick = (e) => {
-  const r = e.currentTarget.getBoundingClientRect();
-  jumpTo(Math.floor(((e.clientX - r.left) / r.width) * st.doc.chunks.length));
-};
+/* ---------- Fortschrittsleiste: Klicken, Ziehen, Vorschau, Einrasten an Kapiteln, Gleiten ---------- */
+const scrub = { drag: false, down: null, target: null };
+const SNAP_PX = 8;
+/** Leiste gleitet beim nächsten Sprung zum neuen Punkt, statt umzuspringen (nicht beim Abspielen/Ziehen). */
+function glideBar() {
+  if (reducedMotion.matches) return;
+  const p = $("prog");
+  p.classList.add("glide");
+  clearTimeout(scrub.glideT);
+  scrub.glideT = setTimeout(() => p.classList.remove("glide"), 420);
+}
+/** Mausposition → Ziel {p (0–1), i (Abschnitt), frac (Anteil im Abschnitt), tick (eingerastet)} */
+function scrubTarget(e) {
+  const r = $("prog").getBoundingClientRect(), n = st.doc.chunks.length;
+  let p = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), tick = null;
+  for (const t of $("ticks").children) {                 // in der Nähe eines Kapitelstrichs: dort einrasten
+    const tp = parseFloat(t.style.left) / 100;
+    if (Math.abs((tp - p) * r.width) <= SNAP_PX) { p = tp; tick = t; break; }
+  }
+  if (!tick && p * r.width <= SNAP_PX) p = 0;             // ganz links = Anfang
+  const x = Math.min(p * n, n - 1e-6), i = Math.floor(x);
+  return { p, i, frac: tick || p === 0 ? 0 : x - i, tick };
+}
+function scrubShow(t, drag) {
+  const tip = $("progTip"), ch = (st.doc.chapters || []).filter((c) => c.chunk <= t.i).pop();
+  tip.textContent = (ch && st.doc.chapters.length > 1 ? `${ch.title} · ` : "") + `Abschn. ${t.i + 1}`;
+  const W = $("prog").offsetWidth, half = tip.offsetWidth / 2;   // Blase nicht über den Rand hinausschieben
+  tip.style.left = `${Math.max(half - 40, Math.min(W - half + 40, t.p * W))}px`;
+  tip.classList.add("on");
+  $("progGhost").style.left = `${t.p * 100}%`;
+  $("prog").classList.toggle("hovering", !drag);
+  if (drag) { $("fill").style.width = `${t.p * 100}%`; $("knob").style.left = `${t.p * 100}%`; }
+  for (const el of $("ticks").children) el.classList.toggle("near", el === t.tick);
+  // Zielabschnitt im Text leicht hinterlegen (nicht den aktuellen: dort liegt die Wort-Markierung)
+  const peek = drag && t.i !== st.idx ? st.spans[t.i] : null;
+  if (scrub.peek !== peek) { scrub.peek?.classList.remove("peek"); peek?.classList.add("peek"); scrub.peek = peek; }
+}
+function scrubHide() {
+  $("progTip").classList.remove("on");
+  $("prog").classList.remove("hovering", "dragging");
+  for (const el of $("ticks").children) el.classList.remove("near");
+  scrub.peek?.classList.remove("peek"); scrub.peek = null;
+}
+$("prog").addEventListener("pointerdown", (e) => {
+  if (!st.doc || e.button !== 0) return;
+  e.currentTarget.setPointerCapture(e.pointerId);
+  scrub.down = { x: e.clientX }; scrub.target = scrubTarget(e);
+  scrubShow(scrub.target, false);
+});
+$("prog").addEventListener("pointermove", (e) => {
+  if (!st.doc) return;
+  const t = scrubTarget(e);
+  if (scrub.down && !scrub.drag && Math.abs(e.clientX - scrub.down.x) > 3) {   // ab 3 px ist es Ziehen statt Klicken
+    scrub.drag = true; $("prog").classList.add("dragging"); $("prog").classList.remove("glide");
+  }
+  if (scrub.down) scrub.target = t;
+  scrubShow(t, scrub.drag);
+});
+$("prog").addEventListener("pointerup", (e) => {
+  if (!scrub.down) return;
+  const t = scrub.target, dragged = scrub.drag;
+  scrub.down = null; scrub.drag = false;
+  if (t.tick) { t.tick.classList.remove("hit"); void t.tick.offsetWidth; t.tick.classList.add("hit"); }
+  if (!dragged) glideBar();
+  jumpTo(t.i, 0, st.wantPlay, t.frac);
+  if (e.pointerType !== "mouse") scrubHide(); else { $("prog").classList.remove("dragging"); scrubShow(scrubTarget(e), false); }
+});
+$("prog").addEventListener("pointercancel", () => { scrub.down = null; scrub.drag = false; scrubHide(); updateBar(); });
+$("prog").addEventListener("pointerleave", () => { if (!scrub.down) scrubHide(); });
 $("prog").onkeydown = (e) => { if (e.key === "ArrowRight") { e.preventDefault(); jumpTo(st.idx + 1); } else if (e.key === "ArrowLeft") { e.preventDefault(); jumpTo(st.idx - 1); } };
 $("rate").onchange = () => {
   audio.playbackRate = audio.defaultPlaybackRate = +$("rate").value;
@@ -1157,14 +1274,14 @@ $("rate").onchange = () => {
 $("voiceBtn").onclick = (e) => {
   e.stopPropagation();
   if (!$("voicePanel").classList.contains("hidden") && !$("voicePanel").classList.contains("leaving")) return closePops();
-  openVoicePanel($("voiceBtn"), { langs: [st.doc.lang], lang: st.doc.lang, current: st.doc.voice, onPick: changeDocVoice });
+  openVoicePanel($("voiceBtn"), { langs: [st.doc.lang], lang: st.doc.lang, current: st.doc.voice, onPick: changeDocVoice, doc: st.doc.demo ? null : st.doc.id });
 };
 async function changeDocVoice(v) {
   if (!st.doc || v === st.doc.voice) return;
   const wasPlaying = st.wantPlay;
   stop();
   await api(`/api/docs/${st.doc.id}`, { method: "PATCH", body: JSON.stringify({ voice: v }) });
-  st.doc.voice = v; st.pendingOffset = 0; st.srvCached = new Set();
+  st.doc.voice = v; st.pendingOffset = 0; st.pendingFrac = null; st.srvCached = new Set();
   setVoicePill($("voiceAv"), $("voiceLbl"), v);
   updatePrep();
   wasPlaying ? playFrom(st.idx, 0) : (highlight(false), prefetch());
@@ -1544,6 +1661,8 @@ function renderSettings() {
   $("accPick").onchange = (e) => saveSettings({ accent: e.target.value.toUpperCase() });
   document.querySelectorAll("#markSeg [data-mark]").forEach((b) => b.classList.toggle("on", b.dataset.mark === s.mark));
   $("markHint").textContent = MARK_HINT[s.mark];
+  document.querySelectorAll("#aheadSeg [data-ahead]").forEach((b) => b.classList.toggle("on", b.dataset.ahead === (s.ahead || "normal")));
+  $("aheadHint").textContent = AHEAD_HINT[s.ahead || "normal"];
   requestAnimationFrame(() => segThumbs($("viewSettings")));
   // Vorschau: Abschnitt = beide Sätze, Satz = nur der gesprochene Satz, Wort = Satz + Wort
   $("pvSec").classList.toggle("on", s.mark === "section");
@@ -1557,6 +1676,16 @@ function renderSettings() {
 $("uiSeg").onclick = (e) => { const b = e.target.closest("[data-ui]"); if (b && b.dataset.ui !== st.settings.uiLang) saveSettings({ uiLang: b.dataset.ui }); };
 $("modeSeg").onclick = (e) => { const b = e.target.closest("[data-mode]"); if (b) saveSettings({ theme: b.dataset.mode }); };
 $("swatches").onclick = (e) => { const b = e.target.closest("[data-acc]"); if (b) saveSettings({ accent: b.dataset.acc }); };
+const AHEAD_HINT = {
+  low: "Nur der nächste Abschnitt. Spart Rechenzeit – bei der eigenen Stimme kann es zwischen Abschnitten kurz stocken.",
+  normal: "Die nächsten 3 Abschnitte (etwa eine Minute). Reicht für Online-Stimmen fast immer.",
+  high: "Die nächsten 10 Abschnitte (einige Minuten). Gut für die eigene Stimme – weniger Pausen.",
+  all: "Beim Abspielen wird der ganze Text im Hintergrund erzeugt – wie „Vorab erzeugen“, nur automatisch.",
+};
+$("aheadSeg").onclick = (e) => {
+  const b = e.target.closest("[data-ahead]"); if (!b) return;
+  saveSettings({ ahead: b.dataset.ahead }).then(() => { st.autoPrep = null; if (st.doc && st.wantPlay) prefetch(); });
+};
 $("markSeg").onclick = (e) => {
   const b = e.target.closest("[data-mark]"); if (!b) return;
   clearWords();

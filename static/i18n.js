@@ -245,6 +245,12 @@ const I18N_EN = {
   "Nimm 15–30 Sekunden auf – danach liest der Vorleser mit deiner Stimme. Mit ★ machst du Stimmen zu Favoriten.": "Record 15–30 seconds – afterwards Vorleser reads in your voice. Use ★ to make voices favorites.",
   "Ganz nach deinem Geschmack": "Make it yours",
   "Hell oder Dunkel, Akzentfarbe, Sprache und wie genau mitgelesen wird – alles hier in den Einstellungen.": "Light or dark, accent color, language and how precisely to follow along – all here in Settings.",
+  "Für diesen Text fertig erzeugt": "Fully generated for this text", "Für diesen Text noch nicht erzeugt": "Not generated for this text yet",
+  "Im Voraus erzeugen": "Generate ahead", "Knapp": "Minimal", "Normal": "Normal", "Viel": "More", "Ganzer Text": "Whole text",
+  "Nur der nächste Abschnitt. Spart Rechenzeit – bei der eigenen Stimme kann es zwischen Abschnitten kurz stocken.": "Only the next section. Saves processing time – with your own voice there may be short pauses between sections.",
+  "Die nächsten 3 Abschnitte (etwa eine Minute). Reicht für Online-Stimmen fast immer.": "The next 3 sections (about a minute). Almost always enough for online voices.",
+  "Die nächsten 10 Abschnitte (einige Minuten). Gut für die eigene Stimme – weniger Pausen.": "The next 10 sections (a few minutes). Good for your own voice – fewer pauses.",
+  "Beim Abspielen wird der ganze Text im Hintergrund erzeugt – wie „Vorab erzeugen“, nur automatisch.": "While playing, the whole text is generated in the background – like “Prepare in advance”, just automatic.",
   "von": "by", "Was ist neu": "What's new", "Was in welcher Version dazugekommen ist": "What each version added", "Anzeigen": "Show",
   "Noch in Entwicklung – Fehler gern melden": "Still in development – please report bugs",
   "Der Vorleser ist noch in der Beta: Er läuft im Alltag, aber hier und da kann noch etwas haken.": "Vorleser is still in beta: it works for everyday use, but things may still go wrong here and there.",
@@ -263,6 +269,7 @@ const I18N_EN = {
 const DUR = (s) => s.replace(/(\d+) Std\./g, "$1 h").replace(/(\d+) Min\./g, "$1 min");
 const plural = (n, one, many) => `${n} ${+n === 1 ? one : many}`;
 const I18N_PATTERNS = [
+  [/^Für diesen Text (\d+) % erzeugt$/, (m, n) => `${n}% generated for this text`],
   [/^Auf Version ([\d.]+) aktualisiert$/, (m, v) => `Updated to version ${v}`],
   [/^Du hast Version ([\d.]+)$/, (m, v) => `You have version ${v}`],
   [/^Abschn\. (\d+)$/, (m, n) => `Sect. ${n}`],
