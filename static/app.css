@@ -110,10 +110,10 @@ svg.i.fill { fill: currentColor; stroke: none; }
 .mark-section .chunk.current { background: var(--tint); padding: 3px 4px; margin: 0 -4px; }
 .chunk.ready:not(.current) { text-decoration: underline dotted var(--line); text-underline-offset: 6px; }
 .w { box-decoration-break: slice; -webkit-box-decoration-break: slice; padding: 3px 0; }
-.w.ws { background: var(--tint); }
-.w.ws.wf { border-radius: 6px 0 0 6px; padding-left: 4px; margin-left: -4px; }
-.w.ws.wl { border-radius: 0 6px 6px 0; padding-right: 4px; margin-right: -4px; }
-.w.ws.wf.wl { border-radius: 6px; }
+/* Satz: eine runde Fläche je Zeile (placeSentBoxes), unter der Wort-Box */
+.sboxes { position: absolute; inset: 0; z-index: -2; pointer-events: none; }
+.sboxes i { position: absolute; left: 0; top: 0; border-radius: 6px; background: var(--tint); }
+.sboxes.fresh i { animation: fadeIn .22s var(--ease) both; }
 .wt { border-radius: 4px; transition: background-color .08s; }
 .w.wc .wt { color: var(--on-acc); }
 /* Wortmarkierung: eine Box, die von Wort zu Wort gleitet und ihre Größe anpasst */
@@ -1169,3 +1169,6 @@ dialog, .gt-card, .onb-card { border-radius: 12px; }
 body.scrubbing, body.scrubbing * { -webkit-user-select: none; user-select: none; cursor: grabbing; }
 .player .prog-row, .player .transport, .player .now .s { -webkit-user-select: none; user-select: none; }
 .prog:focus:not(:focus-visible) { outline: none; }
+/* Fußleiste der Seitenleiste so hoch wie der Player – Trennlinien auf gleicher Höhe (wächst mit der Mitlesezeile) */
+.has-player .side-foot { height: var(--player-h); padding-top: 0; padding-bottom: 0; transition: height .3s var(--ease-out); }
+.has-player .side-foot .navlink { flex: 0 0 36px; }

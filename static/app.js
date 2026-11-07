@@ -1029,7 +1029,7 @@ function isSentenceEnd(tok) {
 }
 function clearWords() {
   const W = st.words; st.words = null;
-  placeWordBox(null);
+  placeWordBox(null); placeSentBoxes([]);
   if (!W || W.doc !== st.doc?.id) return;
   const span = st.spans[W.idx];
   if (span) span.textContent = st.doc.chunks[W.idx].text;
@@ -1116,6 +1116,7 @@ function setWord(k, scroll = true, sync = true) {
     for (const x of W.list) { x.el.classList.toggle("ws", x.sent === s); x.el.classList.remove("wf", "wl"); }
     inS[0]?.el.classList.add("wf"); inS.at(-1)?.el.classList.add("wl");
     W.curSent = s;
+    placeSentBoxes(inS.map((x) => x.el));
   }
   if (nw && markMode() === "word") nw.el.classList.add("wc");
   placeWordBox(nw?.el, W.cur >= 0);
@@ -1175,6 +1176,23 @@ function mlShow(i, toks, k, ghost, swapOk = true) {
   boxIn(row, "mlBox", "wbox", !ghost && word ? el.getBoundingClientRect() : null, !fresh);
   boxIn(row, "mlGhost", "wghost", ghost && word ? el.getBoundingClientRect() : null);
 }
+/** Satz-Markierung: je Zeile EINE runde Fläche hinter dem Satz (statt Hintergrund je Wort) – jede Zeile hat runde
+ *  Ecken, und zwischen den Zeilen bleibt Luft statt Überlappung. */
+function placeSentBoxes(els, fresh = true) {
+  const reader = $("reader");
+  let layer = $("sboxes");
+  if (!layer || !layer.isConnected) { layer = document.createElement("span"); layer.id = "sboxes"; layer.className = "sboxes"; layer.setAttribute("aria-hidden", "true"); reader.appendChild(layer); }
+  if (!els.length || markMode() === "section") { layer.innerHTML = ""; return; }
+  const R = reader.getBoundingClientRect(), lines = [];
+  for (const el of els) {
+    const r = (el.firstElementChild || el).getBoundingClientRect();
+    const ln = lines.find((l) => Math.abs(l.top - r.top) < r.height / 2);
+    if (ln) { ln.left = Math.min(ln.left, r.left); ln.right = Math.max(ln.right, r.right); ln.bottom = Math.max(ln.bottom, r.bottom); }
+    else lines.push({ top: r.top, left: r.left, right: r.right, bottom: r.bottom });
+  }
+  layer.innerHTML = lines.map((l) => `<i style="transform:translate(${l.left - R.left - 4}px,${l.top - R.top - 1}px);width:${l.right - l.left + 8}px;height:${l.bottom - l.top + 2}px"></i>`).join("");
+  layer.classList.toggle("fresh", fresh && !reducedMotion.matches);
+}
 /** Markierungs-Box hinter das aktuelle Wort im Text. */
 function placeWordBox(el, animate = true) {
   boxIn($("reader"), "wbox", "wbox", markMode() === "word" ? el?.firstElementChild?.getBoundingClientRect() : null, animate);
@@ -1182,6 +1200,7 @@ function placeWordBox(el, animate = true) {
 new ResizeObserver(() => {                 // Umbruch geändert (Fenster, Seitenleiste, Schrift) → Box nachziehen
   const W = st.words;
   if (W && W.cur >= 0) placeWordBox(W.list[W.cur]?.el, false);
+  if (W && W.curSent >= 0) placeSentBoxes(W.list.filter((x) => x.sent === W.curSent).map((x) => x.el), false);
 }).observe($("reader"));
 function keepVisible(el) {
   const box = $("readScroll").getBoundingClientRect(), r = el.getBoundingClientRect();
