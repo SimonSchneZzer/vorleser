@@ -239,6 +239,7 @@ function renderLibrary() {
   // hinweg weiter: negative Verzögerung = bereits vergangene Zeit.
   const ago = st.libLand ? performance.now() - st.libLand.t : Infinity;
   const land = ago < 1800 ? st.libLand.id : null;
+  const prevPre = new Map([...ul.querySelectorAll("a[data-id]")].map((a) => [a.dataset.id, a.querySelector(".pre")?.style.width]));
   ul.innerHTML = docs.map((d, n) => {
     const pct = docPct(d), state = docState(d, pct);
     const active = view === "read" && st.doc?.id === d.id ? " active" : "";
@@ -253,6 +254,12 @@ function renderLibrary() {
   }).join("");
   const li = ul.querySelector("li.landed");
   if (li) li.style.setProperty("--lh", `${li.firstElementChild.offsetHeight}px`);
+  // „Vorbereitet“-Balken gleitet vom alten zum neuen Stand (z. B. nach dem Löschen des Audios), statt zu springen
+  for (const d of docs) {
+    const from = prevPre.get(d.id), bar = ul.querySelector(`[data-id="${d.id}"] .pre`);
+    if (from != null && bar && from !== bar.style.width && bar.animate && !reducedMotion.matches)
+      bar.animate([{ width: from }, { width: bar.style.width }], { duration: 520, easing: EASE });
+  }
 }
 /** Unterscheiden sich die Listen um genau einen Eintrag (einer dazu oder einer weg)? */
 function oneChanged(a, b) {
@@ -735,6 +742,7 @@ async function prefetch() {
 function clearCache() {
   for (const e of st.cache.values()) if (e.url) URL.revokeObjectURL(e.url);
   st.cache.clear(); st.loadedIdx = -1;
+  st.srvCached = new Set();             // Audio auf dem Server ist weg/ungültig → nicht weiter als „vorbereitet“ zeigen
 }
 
 async function playFrom(i, offset = 0) {
@@ -1019,9 +1027,22 @@ function markReady() {
   for (const i of now) st.spans[i]?.classList.add("ready");
   st.readySet = now;
   if (!st.doc) return;
+  syncLibPrepared(st.doc.id, now.size);
   let n = st.idx; while (n < st.doc.chunks.length && isReady(n)) n++;
   $("buf").style.width = `${(n / st.doc.chunks.length) * 100}%`;
   updateStatus();
+}
+/** Seitenleiste zeigt für den offenen Text denselben „vorbereitet“-Stand wie die Playbar (eine Quelle). */
+function syncLibPrepared(id, n) {
+  const d = st.docs.find((x) => x.id === id);
+  if (!d || d.prepared === n) return;
+  const bar = $("library").querySelector(`[data-id="${id}"] .pre`);
+  const to = `${d.count ? Math.round(n / d.count * 100) : 0}%`;
+  d.prepared = n;
+  if (!bar) return;
+  const from = bar.style.width; bar.style.width = to;
+  if (from && from !== to && bar.animate && !reducedMotion.matches)
+    bar.animate([{ width: from }, { width: to }], { duration: 520, easing: EASE });
 }
 function updateBar() {
   if (!st.doc) return;
@@ -1283,8 +1304,11 @@ async function jobsPoll() {
       if (st.doc?.id === j.doc) updatePrep();
     }).catch(() => {});
   }
+  // Laufende Aufträge erzeugen Audio → „vorbereitet“-Balken der Bibliothek vom Server nachziehen
+  const moved = r.jobs.some((j) => jobs.prev.get(`${j.doc}#${j.kind}`)?.done !== j.done) || [...jobs.prev.keys()].some((k) => !cur.has(k));
   jobs.prev = cur; jobs.list = r.jobs;
-  renderLibrary();
+  if (moved) await refreshLibrary().catch(() => renderLibrary());
+  else renderLibrary();
   if (r.jobs.length) jobs.t = setTimeout(jobsPoll, 2000);
 }
 function jobRing(docId) {
@@ -1683,10 +1707,13 @@ $("tabStorage").addEventListener("click", async (e) => {
   b.disabled = true;
   try {
     const r = await api(`/api/storage/${what}`, { method: "DELETE" });
-    const row = b.closest(".sto-row"); row?.classList.add("gone");
-    if (what.startsWith("docs/") && st.doc && what.endsWith(st.doc.id)) clearCache();   // Player soll neu laden
+    if (what.startsWith("docs/") && st.doc && what.endsWith(st.doc.id)) { clearCache(); markReady(); }   // Player soll neu laden
+    if (what.startsWith("docs/")) refreshLibrary().catch(() => {});      // Vorbereitet-Balken in der Seitenleiste
     toast(`${fmtMB(r.freed)} freigegeben`);
-    setTimeout(renderStorage, 350);
+    // Antwort enthält schon den neuen Stand: direkt übernehmen, nicht erst die alten Werte nochmal zeigen
+    stoLast = r;
+    await collapseOut(b.closest(".sto-row"));
+    fillStorage(r, false);
   } catch (err) { b.disabled = false; toastErr(err); }
 });
 $("whisperRemove").onclick = async () => {
@@ -1867,7 +1894,7 @@ $("cacheLimit").onchange = () => saveSettings({ cacheMB: +$("cacheLimit").value 
 $("cacheClear").onclick = async () => {
   if (!(await ask({ title: "Speicher leeren?", text: "Erzeugtes Audio wird gelöscht und beim nächsten Abspielen neu erzeugt. Mit eigener Stimme kann das dauern.", ok: "Leeren", danger: true }))) return;
   if (st.doc) { const keep = { i: st.idx, off: st.loadedIdx === st.idx ? audio.currentTime : st.pendingOffset }; if (st.wantPlay) pause(); clearCache(); st.idx = keep.i; st.pendingOffset = keep.off; }
-  await api("/api/cache", { method: "DELETE" }); renderStorage(); markReady();
+  await api("/api/cache", { method: "DELETE" }); renderStorage(); markReady(); refreshLibrary().catch(() => {});
 };
 
 /* ===================================================================== */
