@@ -1069,10 +1069,10 @@ dialog.news[open] { display: flex; }
    Nur, was ÜBER Inhalt schwebt: Player + Mitlesezeile, Pillen oben im Text, Menüs, Sprechblase, Tooltips, Dialoge,
    Update-Karte. Seitenleiste, Karten und Lesetext bleiben deckend (dahinter liegt nichts – Glas wäre nur grau). */
 :root { --glass: rgba(255, 255, 255, .62); --glass-line: rgba(24, 24, 27, .08); --glass-hi: rgba(255, 255, 255, .9);
-  --glass-shade: 0 18px 50px rgba(24, 24, 27, .16); --glass-sheen: rgba(255, 255, 255, .55); }
+  --glass-shade: 0 10px 28px rgba(24, 24, 27, .10); --glass-sheen: rgba(255, 255, 255, .45); }
 :root[data-theme="anthrazit"] { --glass: rgba(37, 41, 45, .55); --glass-line: rgba(255, 255, 255, .09); --glass-hi: rgba(255, 255, 255, .14);
-  --glass-shade: 0 18px 50px rgba(0, 0, 0, .38); --glass-sheen: rgba(255, 255, 255, .09); }
-.player, .pop, .bypop, .tip, .upd, dialog, #viewRead .topbar .pill, #viewRead .topbar .ib, .gt-card, .onb-card {
+  --glass-shade: 0 10px 28px rgba(0, 0, 0, .30); --glass-sheen: rgba(255, 255, 255, .06); }
+.player, .pop, .bypop, .tip, .upd, dialog, #viewRead .topbar, .gt-card, .onb-card {
   background: var(--glass); -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
   border: 1px solid var(--glass-line);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shade);
@@ -1082,21 +1082,48 @@ dialog.news[open] { display: flex; }
 .tip { color: var(--ink); }
 dialog::backdrop { background: rgba(0, 0, 0, .32); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 
-/* Player schwebt über dem Inhalt; der Inhalt läuft dahinter weiter */
+/* Player liegt als Glas-Leiste über die ganze Breite am unteren Rand; der Inhalt läuft dahinter weiter
+   (bewusst kein frei schwebendes, rundes Panel – nicht alles soll nach Apple aussehen) */
 .main { position: relative; }
-.player { position: absolute; z-index: 20; left: 16px; right: 16px; bottom: 14px; border-radius: 22px; }
+.player { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; border-radius: 0; border-width: 1px 0 0; box-shadow: inset 0 1px 0 var(--glass-hi); }
 .has-player .scroll { padding-bottom: calc(var(--player-h) + 28px); }
 .player .ml { padding: 2px 0 0; }
 .upd { bottom: calc(var(--player-h, 100px) + 30px); }
 
-/* Pillen oben im Text: schweben, der Text scrollt darunter durch */
+/* Leiste oben im Text: Glas über die ganze Breite, der Text scrollt darunter durch */
 #viewRead { position: relative; }
-#viewRead .topbar { position: absolute; z-index: 15; top: 0; left: 0; right: 0; border-bottom: 0; pointer-events: none; }
-#viewRead .topbar > * { pointer-events: auto; }
-#viewRead .topbar .ib { border-radius: 999px; width: 38px; height: 38px; }
+#viewRead .topbar { position: absolute; z-index: 15; top: 0; left: 0; right: 0; border-width: 0 0 1px; box-shadow: none; }
+#viewRead .topbar .pill { background: transparent; }
 #readScroll { padding-top: 64px; }
-@media (max-width: 760px) { .player { left: 8px; right: 8px; bottom: 8px; border-radius: 18px; } }
 .player .pill { background: color-mix(in srgb, var(--surface) 35%, transparent); border-color: var(--glass-line); }
 /* Rundgang/Einführung: Bühne oben durchscheinend statt deckend */
 .gt-stage { background: linear-gradient(160deg, var(--tint), transparent 75%), color-mix(in srgb, var(--bg) 35%, transparent); border-bottom-color: var(--glass-line); }
 .gt-x { background: transparent; }
+/* Formen: weniger rund (kein „alles Squircle“) – Knöpfe als leicht abgerundete Rechtecke, Play bleibt rund */
+.pill { border-radius: 8px; }
+.pop, .bypop, .upd { border-radius: 10px; }
+dialog, .gt-card, .onb-card { border-radius: 12px; }
+.tip { border-radius: 6px; }
+.vrow, .vrow > button.pick, .menu button, .bypop .opt { border-radius: 6px; }
+.bypop .ico { border-radius: 8px; }
+
+/* Seitenleiste: Einträge über die ganze Breite; eine Glas-Markierung gleitet (glideList in app.js) */
+:root { --side-hl: rgba(24, 24, 27, .055); --side-hov: rgba(24, 24, 27, .035); }
+:root[data-theme="anthrazit"] { --side-hl: rgba(255, 255, 255, .075); --side-hov: rgba(255, 255, 255, .045); }
+.lib, .side-foot { position: relative; isolation: isolate; }
+.lib { margin: 0 -14px; }
+.lib a { padding-left: 26px; padding-right: 26px; border-radius: 0; }
+.lib a:hover, .lib a.active { background: transparent; }
+.side-foot { padding: 8px 0; }
+.navlink { padding: 0 24px; border-radius: 0; }
+.navlink:hover, .navlink.active { background: transparent; }
+.side-hl { position: absolute; z-index: -1; left: 0; right: 0; top: 0; pointer-events: none; opacity: 0;
+  background: var(--side-hl); background-image: linear-gradient(180deg, var(--glass-sheen), transparent 60%);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-line);
+  transition: transform .42s cubic-bezier(.34, 1.3, .64, 1), height .3s var(--ease-out), opacity .25s var(--ease), background-color .2s var(--ease), scale .15s var(--ease); }
+.side-hl.on { opacity: 1; }
+.side-hl.hov { background-color: var(--side-hov); }
+.side-hl.snap { transition: opacity .25s var(--ease); }
+.side-hl.press { scale: .985; }
+@media (prefers-reduced-motion: reduce) { .side-hl { transition: opacity .2s; } }
+.side-foot .navlink { flex: 0 0 44px; }

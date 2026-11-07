@@ -8,6 +8,9 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 ## 2026-11-07 · Glas-Look (Liquid Glass) für alles, was über Inhalt schwebt
 **Kontext:** Simon wollte die Mitlesezeile mit „glossy blur“ und den Look überall, wo er Sinn macht (Entwurf im
 Design-Artifact freigegeben).
+**Nachtrag (gleicher Tag):** Simon: frei schwebende, runde Flächen wirken zu sehr nach Apple. Player und obere
+Leiste liegen deshalb über die ganze Breite am Rand (Linie statt Ecken), Knöpfe 8 px statt Pille (Play bleibt rund),
+Menüs/Dialoge 6–12 px. Seitenleiste: eine Glas-Markierung gleitet über die ganze Breite (`glideList`).
 **Entscheidung:** Glas = halbtransparente Fläche + `backdrop-filter: blur(26px) saturate(1.7)`, dünner Rand,
 Lichtkante oben, weicher Schatten (Variablen `--glass*`, hell/dunkel). Nur für schwebende Teile: Player (jetzt
 schwebend, mit Mitlesezeile darin; Inhalt scrollt dahinter, `.scroll` bekommt unten `--player-h` Platz), Pillen oben im

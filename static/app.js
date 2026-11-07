@@ -229,6 +229,7 @@ function showView(name) {
   hideTip();
   requestAnimationFrame(() => { segThumbs(); moveInk(); });
   $("settingsBtn").classList.toggle("active", name === "settings");
+  syncNavHl();
   setPlayer(!!st.doc && name !== "edit");
   const t = $("nowTitle"); t.disabled = name === "read";                 // auf der Textseite kein Link
   if (name === "read") delete t.dataset.tip; else t.dataset.tip = "Zum Text springen";
@@ -266,6 +267,31 @@ async function refreshLibrary() {
   st.docs = docs; renderLibrary();
   return docs;
 }
+/* ---------- Seitenleiste: eine Glas-Markierung gleitet zum Eintrag unter der Maus, bleibt auf dem aktiven,
+   drückt sich beim Klick kurz ein (über die ganze Breite der Leiste) ---------- */
+function glideList(box, itemSel, activeSel) {
+  const hl = document.createElement("span"); hl.className = "side-hl"; hl.setAttribute("aria-hidden", "true");
+  let hover = null;
+  const place = (el) => {
+    if (!hl.isConnected) box.prepend(hl);                        // Liste neu gezeichnet → Markierung wieder einhängen
+    if (!el || !el.isConnected || !box.contains(el)) { hl.classList.remove("on"); return; }
+    const first = !hl.classList.contains("on");
+    hl.classList.toggle("snap", first);
+    if (first) void hl.offsetWidth;
+    const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    hl.style.transform = `translateY(${top}px)`; hl.style.height = `${el.offsetHeight}px`;
+    hl.classList.add("on");
+    hl.classList.toggle("hov", el !== box.querySelector(activeSel));
+    if (first) requestAnimationFrame(() => hl.classList.remove("snap"));
+  };
+  box.addEventListener("mouseover", (e) => { const el = e.target.closest(itemSel); if (el && el !== hover) { hover = el; place(el); } });
+  box.addEventListener("mouseleave", () => { hover = null; place(box.querySelector(activeSel)); });
+  box.addEventListener("pointerdown", (e) => { if (e.target.closest(itemSel)) hl.classList.add("press"); });
+  addEventListener("pointerup", () => hl.classList.remove("press"));
+  return () => place(hover?.isConnected ? hover : box.querySelector(activeSel));
+}
+const syncLibHl = glideList($("library"), "a", "a.active");
+const syncNavHl = glideList($("sideFoot"), ".navlink:not(.hidden)", ".navlink.active");
 function renderLibrary() {
   const showSearch = st.docs.length >= 7;                 // Suche erst, wenn es etwas zu suchen gibt
   $("libSearchBox").classList.toggle("hidden", !showSearch);
@@ -302,6 +328,7 @@ function renderLibrary() {
     if (from != null && bar && from !== bar.style.width && bar.animate && !reducedMotion.matches)
       bar.animate([{ width: from }, { width: bar.style.width }], { duration: 520, easing: EASE });
   }
+  syncLibHl();
 }
 /** Unterscheiden sich die Listen um genau einen Eintrag (einer dazu oder einer weg)? */
 function oneChanged(a, b) {

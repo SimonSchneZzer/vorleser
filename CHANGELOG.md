@@ -4,12 +4,14 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
-## 2.8.1
+## 2.8.2
 A new glass look – and from now on, updates download only what changed.
 
-- **Glass look:** the player floats as a frosted glass panel with the follow-along line inside; text and settings
-  scroll behind it. The buttons at the top of the text, menus, tooltips, dialogs, the tour and the update card share
-  the same glass
+- **Glass look:** the player and the bar at the top of the text are frosted glass across the full width; text and
+  settings scroll behind them. Menus, tooltips, dialogs, the tour and the update card share the same glass – with
+  calmer, less rounded shapes
+- **Sidebar:** a glass highlight glides to the entry under the mouse, stays on the open text and presses in briefly
+  when you click – edge to edge
 - **Smaller updates:** instead of the whole app (~260 MB), updates now load only the changed files (usually around
   15 MB). Every other file is checked first; if anything doesn't match, the full update is downloaded as before.
   Takes effect from the next update on
