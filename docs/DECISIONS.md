@@ -5,6 +5,17 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Stimmklon auf Apple-Chip: T3 auf der CPU, S3Gen auf MPS
+**Kontext:** Eigene Stimme brauchte auf einem M4 ~54 s pro Abschnitt (~8 s Audio). Messung: T3 (autoregressive
+Token-Schleife, CFG-Batch 2) ~80 %, S3Gen ~18 %, Aufbereitung der Sprachprobe ~5 %, Wasserzeichen <1 %.
+**Entscheidung:** Auf MPS läuft nur T3 auf der CPU (Wrapper um `t3.inference`, Ein-/Ausgabe werden umkopiert),
+S3Gen bleibt auf MPS → ~22 s pro Abschnitt (≈2,5×). Gleiche Gewichte, fp32 → gleiche Qualität (Hörvergleich +
+Whisper-Transkript gleichwertig). Die Sprachprobe wird nur neu aufbereitet, wenn sich Pfad/Änderungszeit/Größe
+ändern (`prepare_conditionals` ist deterministisch). CUDA und reine CPU bleiben unverändert.
+**Verworfen:** alles auf CPU (S3Gen dort ~100× langsamer, >30 min pro Abschnitt); zwei Worker parallel (T3 nutzt
+schon mehrere Kerne, doppelter Speicher ~3 GB).
+**Folgen:** Während eine eigene Stimme vorliest, ist die CPU stärker ausgelastet.
+
 ## 2026-11-07 · Update-Prüfung minütlich über latest.json
 **Kontext:** Updates erschienen erst nach bis zu 6 h. Die GitHub-API erlaubt ohne Anmeldung nur 60 Anfragen/h
 pro öffentlicher IP – mehrere Apps im selben Netz teilen sich das.
