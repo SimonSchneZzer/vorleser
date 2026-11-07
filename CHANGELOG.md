@@ -4,7 +4,7 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
-## 2.8.0
+## 2.8.1
 A new glass look – and from now on, updates download only what changed.
 
 - **Glass look:** the player floats as a frosted glass panel with the follow-along line inside; text and settings

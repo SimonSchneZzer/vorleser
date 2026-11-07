@@ -19,7 +19,7 @@ def _app(d: Path, files: dict[str, bytes], links: dict[str, str] | None = None) 
         p = d / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
-    for rel, target in (links or {}).items():
+    for rel, target in (links or {}).items() if os.name != "nt" else ():   # Verknüpfungen brauchen unter Windows Sonderrechte
         (d / rel).parent.mkdir(parents=True, exist_ok=True)
         os.symlink(target, d / rel)
     return d
@@ -61,7 +61,8 @@ def test_mac_einspielen_ergibt_genau_die_neue_version(apps, monkeypatch):
     assert (staged / "Contents/b.txt").read_bytes() == b"neu"
     assert (staged / "Contents/d/e.txt").read_bytes() == b"dazu"
     assert not (staged / "Contents/c.txt").exists()
-    assert os.readlink(staged / "Contents/link") == "a.bin"
+    if os.name != "nt":
+        assert os.readlink(staged / "Contents/link") == "a.bin"
     assert (old / "Contents/b.txt").read_bytes() == b"alt"            # Original bleibt unangetastet
 
 
@@ -70,7 +71,9 @@ def test_windows_bereitet_nur_neue_dateien_vor(apps, monkeypatch):
     monkeypatch.setattr(updater.paths, "IS_MAC", False)
     monkeypatch.setattr(updater.paths, "IS_WIN", True)
     (old / "unins000.exe").write_bytes(b"inno")                      # Deinstallationsprogramm bleibt
-    os.remove(old / "Contents/link"); os.remove(new / "Contents/link")   # Windows kennt keine Verknüpfungen im Paket
+    for d in (old, new):                                             # Windows kennt keine Verknüpfungen im Paket
+        if os.path.lexists(d / "Contents/link"):
+            os.remove(d / "Contents/link")
     o = _build(tmp, "1.0.0", old); n = _build(tmp, "1.1.0", new, [str(o / "Vorleser-mac-manifest.json")])
     staged = tmp / "win-staged"; staged.mkdir()
     gone = updater._apply_patch(n / "Vorleser-mac-patch.zip", old, staged, "1.1.0")

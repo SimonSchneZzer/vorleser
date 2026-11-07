@@ -69,6 +69,8 @@ def previous(plat: str, versions: list[str]) -> dict[str, dict]:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # Windows-Konsole (cp1252) kennt „→“ nicht
     plat, root, version, out = sys.argv[1], Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4])
     out.mkdir(parents=True, exist_ok=True)
     files = manifest(root)
