@@ -219,17 +219,71 @@ function collapseOut(el) {
 /* ===================================================================== */
 /* Ansichten & Seitenleiste                                               */
 /* ===================================================================== */
+/* ===================== Bewegungsmodell (Navigation) =====================
+   senkrecht = Seitenleiste: der neue Inhalt kommt aus der Richtung, in der sein Eintrag liegt (Neuer Text oben,
+   Texte in Reihenfolge, Einstellungen unten); waagrecht = Tabs; Tiefe = Unterseite (Text bearbeiten).
+   Alter und neuer Inhalt bewegen sich beide (der alte als Abbild darüber) – kein Schnitt. */
+const NAV_MOVE = { down: ["translateY(26px)", "translateY(-26px)"], up: ["translateY(-26px)", "translateY(26px)"],
+  right: ["translateX(32px)", "translateX(-32px)"], left: ["translateX(-32px)", "translateX(32px)"],
+  deeper: ["scale(.965)", "scale(1.03)"], back: ["scale(1.03)", "scale(.965)"] };
+function navIn(el, how) {
+  if (!el?.animate || !how) return;
+  const rm = reducedMotion.matches;
+  el.animate([{ opacity: 0, transform: rm ? "none" : NAV_MOVE[how][0], filter: rm ? "none" : "blur(4px)" },
+    { opacity: 1, transform: "none", filter: "blur(0)" }], { duration: 360, easing: EASE_OUT, fill: "backwards" });
+}
+/** Abbild von el (an gleicher Stelle, gleicher Scroll-Stand) – damit der alte Inhalt hinausgleiten kann. */
+function ghostOf(el) {
+  if (!el || el.classList.contains("hidden") || !el.offsetParent || !el.animate) return null;
+  const all = el.querySelectorAll("*"), pos = [];
+  all.forEach((n, i) => { if (n.scrollTop) pos.push([i, n.scrollTop]); });
+  const g = el.cloneNode(true);
+  g.removeAttribute("id"); g.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+  g.classList.add("nav-ghost"); g.setAttribute("aria-hidden", "true"); g.inert = true;
+  Object.assign(g.style, { position: "absolute", top: `${el.offsetTop}px`, left: `${el.offsetLeft}px`,
+    width: `${el.offsetWidth}px`, height: `${el.offsetHeight}px`, margin: "0" });
+  const par = el.parentElement;
+  if (getComputedStyle(par).position === "static") par.style.position = "relative";
+  par.appendChild(g);
+  const gall = g.querySelectorAll("*");
+  pos.forEach(([i, t]) => { if (gall[i]) gall[i].scrollTop = t; });
+  if (el.scrollTop) g.scrollTop = el.scrollTop;
+  return g;
+}
+function navOut(g, how) {
+  if (!g) return;
+  if (!how || reducedMotion.matches) {
+    const a = g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: EASE, fill: "forwards" });
+    return void (a.onfinish = () => g.remove());
+  }
+  const a = g.animate([{ opacity: 1, transform: "none", filter: "blur(0)" }, { opacity: 0, transform: NAV_MOVE[how][1], filter: "blur(4px)" }],
+    { duration: 300, easing: EASE, fill: "forwards" });
+  a.onfinish = () => g.remove();
+}
+/** Lage in der Seitenleiste: Neuer Text oben, dann die Texte in ihrer Reihenfolge, Einstellungen unten. */
+function viewRank(name) {
+  if (name === "new") return -1;
+  if (name === "settings") return 1e6;
+  const i = st.docs.findIndex((d) => d.id === st.doc?.id);
+  return i < 0 ? 0 : i;
+}
+let navRank = 0;
 let view = "read";
 const VIEWS = { read: "viewRead", new: "viewNew", settings: "viewSettings", edit: "viewEdit" };
 function showView(name) {
-  const changed = view !== name;
+  const prev = view, changed = prev !== name;
+  let how = null, ghost = null;
+  if (changed) {
+    how = name === "edit" ? "deeper" : prev === "edit" && name === "read" ? "back" : viewRank(name) >= navRank ? "down" : "up";
+    ghost = ghostOf($(VIEWS[prev]));
+  }
   view = name;
   for (const [k, id] of Object.entries(VIEWS)) $(id).classList.toggle("hidden", k !== name);
-  if (changed) animateIn($(VIEWS[name]));
+  if (changed) { navIn($(VIEWS[name]), how); navOut(ghost, how); }
+  navRank = viewRank(name);
   hideTip();
   requestAnimationFrame(() => { segThumbs(); moveInk(); });
   $("settingsBtn").classList.toggle("active", name === "settings");
-  syncNavHl();
   setPlayer(!!st.doc && name !== "edit");
   const t = $("nowTitle"); t.disabled = name === "read";                 // auf der Textseite kein Link
   if (name === "read") delete t.dataset.tip; else t.dataset.tip = "Zum Text springen";
@@ -259,6 +313,9 @@ function slideBar(el, on, after, fromTop = false) {
   }
 }
 const setPlayer = (on) => slideBar($("player"), on, syncPlayerHeight);
+// Glas-Kopf der Einstellungen liegt über dem Inhalt → Inhalt beginnt darunter (Höhe gemessen)
+new ResizeObserver(() => document.documentElement.style.setProperty("--sethead-h", `${document.querySelector("#viewSettings .set-head").offsetHeight}px`))
+  .observe(document.querySelector("#viewSettings .set-head"));
 document.querySelectorAll("[data-menu]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); $("side").classList.toggle("open"); }));
 document.addEventListener("click", (e) => { if (!$("side").contains(e.target)) $("side").classList.remove("open"); });
 
@@ -267,31 +324,6 @@ async function refreshLibrary() {
   st.docs = docs; renderLibrary();
   return docs;
 }
-/* ---------- Seitenleiste: eine Glas-Markierung gleitet zum Eintrag unter der Maus, bleibt auf dem aktiven,
-   drückt sich beim Klick kurz ein (über die ganze Breite der Leiste) ---------- */
-function glideList(box, itemSel, activeSel) {
-  const hl = document.createElement("span"); hl.className = "side-hl"; hl.setAttribute("aria-hidden", "true");
-  let hover = null;
-  const place = (el) => {
-    if (!hl.isConnected) box.prepend(hl);                        // Liste neu gezeichnet → Markierung wieder einhängen
-    if (!el || !el.isConnected || !box.contains(el)) { hl.classList.remove("on"); return; }
-    const first = !hl.classList.contains("on");
-    hl.classList.toggle("snap", first);
-    if (first) void hl.offsetWidth;
-    const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
-    hl.style.transform = `translateY(${top}px)`; hl.style.height = `${el.offsetHeight}px`;
-    hl.classList.add("on");
-    hl.classList.toggle("hov", el !== box.querySelector(activeSel));
-    if (first) requestAnimationFrame(() => hl.classList.remove("snap"));
-  };
-  box.addEventListener("mouseover", (e) => { const el = e.target.closest(itemSel); if (el && el !== hover) { hover = el; place(el); } });
-  box.addEventListener("mouseleave", () => { hover = null; place(box.querySelector(activeSel)); });
-  box.addEventListener("pointerdown", (e) => { if (e.target.closest(itemSel)) hl.classList.add("press"); });
-  addEventListener("pointerup", () => hl.classList.remove("press"));
-  return () => place(hover?.isConnected ? hover : box.querySelector(activeSel));
-}
-const syncLibHl = glideList($("library"), "a", "a.active");
-const syncNavHl = glideList($("sideFoot"), ".navlink:not(.hidden)", ".navlink.active");
 function renderLibrary() {
   const showSearch = st.docs.length >= 7;                 // Suche erst, wenn es etwas zu suchen gibt
   $("libSearchBox").classList.toggle("hidden", !showSearch);
@@ -328,7 +360,6 @@ function renderLibrary() {
     if (from != null && bar && from !== bar.style.width && bar.animate && !reducedMotion.matches)
       bar.animate([{ width: from }, { width: bar.style.width }], { duration: 520, easing: EASE });
   }
-  syncLibHl();
 }
 /** Unterscheiden sich die Listen um genau einen Eintrag (einer dazu oder einer weg)? */
 function oneChanged(a, b) {
@@ -419,11 +450,17 @@ function segThumbs(root = document) {
     if (first) requestAnimationFrame(() => (th.style.transition = ""));
   });
 }
+/** Strich unter dem Tab wie ein Gummiband: die vordere Kante zieht zuerst, die hintere folgt. */
 function moveInk() {
   const on = document.querySelector("#setTabs button.on"), ink = $("tabInk");
   if (!on || !on.offsetWidth) return;
-  ink.style.width = `${on.offsetWidth}px`;
-  ink.style.transform = `translateX(${on.offsetLeft}px)`;
+  const W = ink.parentElement.clientWidth, left = on.offsetLeft, right = W - left - on.offsetWidth;
+  const was = parseFloat(ink.style.left);
+  const toRight = Number.isFinite(was) && left > was;
+  const lead = ".32s cubic-bezier(.3, 1.25, .5, 1)", lag = ".4s cubic-bezier(.3, 1.1, .5, 1) .08s";
+  ink.style.transition = Number.isFinite(was) && !reducedMotion.matches
+    ? `left ${toRight ? lag : lead}, right ${toRight ? lead : lag}` : "none";
+  Object.assign(ink.style, { transform: "none", width: "auto", left: `${left}px`, right: `${right}px` });
 }
 window.addEventListener("resize", () => { segThumbs(); moveInk(); });
 
@@ -601,12 +638,16 @@ function fillLangSelect() {
   if (cur && [...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 function setSrc(src) {
+  const ids = { paste: "srcPaste", file: "srcFile", dict: "srcDict" }, order = Object.keys(ids);
+  const prev = order.find((k) => !$(ids[k]).classList.contains("hidden"));
+  const how = prev && prev !== src ? (order.indexOf(src) > order.indexOf(prev) ? "right" : "left") : null;
+  const ghost = how && view === "new" ? ghostOf($(ids[prev])) : null;
   document.querySelectorAll("[data-src]").forEach((b) => b.classList.toggle("on", b.dataset.src === src));
   $("srcPaste").classList.toggle("hidden", src !== "paste");
   $("srcFile").classList.toggle("hidden", src !== "file");
   $("srcDict").classList.toggle("hidden", src !== "dict");
   segThumbs($("viewNew"));
-  animateIn($({ paste: "srcPaste", file: "srcFile", dict: "srcDict" }[src]), "enter");
+  if (ghost) { navIn($(ids[src]), how); navOut(ghost, how); } else animateIn($(ids[src]), "enter");
 }
 document.querySelectorAll("[data-src]").forEach((b) => (b.onclick = () => setSrc(b.dataset.src)));
 
@@ -750,6 +791,8 @@ async function openDoc(id) {
 }
 /** Text anzeigen (vom Server geladen oder der Beispieltext des Rundgangs). */
 function showDoc(doc) {
+  const switching = view === "read" && st.doc && st.doc.id !== doc.id && !$("viewRead").classList.contains("hidden");
+  const prevRank = navRank, ghost = switching ? ghostOf($("readScroll")) : null;
   st.doc = doc; st.idx = doc.progress.chunk; st.pendingOffset = doc.progress.offset || 0;
   st.pendingFrac = !doc.progress.offset && doc.progress.frac > 0 && doc.progress.frac < 1 ? doc.progress.frac : null; st.words = null; st.srvCached = new Set();
   showView("read");
@@ -778,9 +821,14 @@ function showDoc(doc) {
   box.appendChild(frag);
   st.readySet = new Set();
   st.lastError = null;
-  animateIn($("reader"));
+  if (switching) {
+    const how = viewRank("read") >= prevRank ? "down" : "up";
+    navIn($("readScroll"), how); navOut(ghost, how);
+    navRank = viewRank("read");
+  }
   renderLibrary();
-  highlight(true);
+  highlight(false);
+  st.spans[st.idx]?.scrollIntoView({ block: "center" });      // gleich an der richtigen Stelle (gleitet nicht nach)
   prefetch();
   updateStatus(); updatePrep(); updateMediaSession();
 }
@@ -1774,11 +1822,14 @@ $("cloneDlg").addEventListener("close", resetCloneRec);
 let setTab = "look";
 $("setTabs").onclick = (e) => {
   const b = e.target.closest("[data-tab]"); if (!b) return;
-  setTab = b.dataset.tab;
-  document.querySelectorAll("#setTabs [data-tab]").forEach((x) => x.classList.toggle("on", x === b));
   const TABS = { look: "tabLook", play: "tabPlay", voices: "tabVoices", storage: "tabStorage", app: "tabApp" };
+  const prev = setTab, order = Object.keys(TABS);
+  setTab = b.dataset.tab;
+  const how = setTab === prev ? null : order.indexOf(setTab) > order.indexOf(prev) ? "right" : "left";
+  const ghost = how && view === "settings" ? ghostOf($(TABS[prev])) : null;
+  document.querySelectorAll("#setTabs [data-tab]").forEach((x) => x.classList.toggle("on", x === b));
   for (const [k, id] of Object.entries(TABS)) $(id).classList.toggle("hidden", k !== setTab);
-  animateIn($(TABS[setTab]));
+  if (ghost) { navIn($(TABS[setTab]), how); navOut(ghost, how); }
   moveInk();
   renderSettings();
 };

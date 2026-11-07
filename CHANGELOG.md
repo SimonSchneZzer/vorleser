@@ -4,6 +4,18 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.9.0
+Every move has a direction now – and a live preview of your colors.
+
+- **Navigation:** content moves the way the sidebar is laid out: a text further down slides in from below, Settings
+  from below, New text from above; tabs slide sideways and their underline stretches; editing a text zooms in and
+  back out. The old content glides away instead of vanishing
+- **Settings › Appearance:** a small preview of the whole app that changes with mode and accent color
+- **More room:** the player and the follow-along line are more compact; the Settings header is frosted glass and
+  the content scrolls beneath it
+- **Calmer sidebar:** hovering and the open text are simply shaded, like in all menus; in the voice menu the
+  shading covers the whole row
+
 ## 2.8.2
 A new glass look – and from now on, updates download only what changed.
 

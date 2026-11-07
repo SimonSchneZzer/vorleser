@@ -5,6 +5,17 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Ein Bewegungsmodell für die Navigation
+**Kontext:** Jeder Wechsel (Text A → B, Ansicht, Tab) nutzte dasselbe „einblenden und 10 px hoch“ – der alte Inhalt
+verschwand ohne Übergang (harter Schnitt).
+**Entscheidung:** Richtung hat Bedeutung. Senkrecht = Seitenleiste (`viewRank`: Neuer Text oben, Texte in ihrer
+Reihenfolge, Einstellungen unten – der neue Inhalt kommt aus der Richtung seines Eintrags); waagrecht = Tabs
+(Einstellungen, Einfügen/Datei/Diktieren; Strich als Gummiband über `left`/`right`); Tiefe = Unterseite (Bearbeiten
+zoomt hinein, Zurück heraus). Der alte Inhalt wird als Abbild (`ghostOf`, gleicher Scroll-Stand) darübergelegt und
+gleitet hinaus (`navOut`), der neue kommt herein (`navIn`) – ~0,36 s, 26 px, leichte Unschärfe.
+**Verworfen:** Text A → B waagrecht – die Texte stehen untereinander; waagrecht bleibt den Tabs.
+Außerdem: Seitenleiste wieder grau hinterlegt wie die Menüs (gleitende Glas-Markierung war „zu viel“).
+
 ## 2026-11-07 · Glas-Look (Liquid Glass) für alles, was über Inhalt schwebt
 **Kontext:** Simon wollte die Mitlesezeile mit „glossy blur“ und den Look überall, wo er Sinn macht (Entwurf im
 Design-Artifact freigegeben).
