@@ -92,12 +92,14 @@ def sine_wav(seconds: float = 1.0) -> bytes:
 class Api:
     """Kleiner HTTP-Client für den Test-Server."""
 
-    def __init__(self, base: str):
+    def __init__(self, base: str, token: str = ""):
         self.base = base
+        self.token = token
 
-    def call(self, method: str, path: str, body=None, raw: bytes | None = None, headers: dict | None = None):
+    def call(self, method: str, path: str, body=None, raw: bytes | None = None, headers: dict | None = None,
+             auth: bool = True):
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
-        h = {"Content-Type": "application/json", **(headers or {})}
+        h = {"Content-Type": "application/json", **({"X-Vorleser-Token": self.token} if auth else {}), **(headers or {})}
         req = urllib.request.Request(self.base + path, data=data, method=method, headers=h)
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
@@ -120,7 +122,7 @@ def api():
     server.ON_QUIT = lambda: quit_calls.append(True)
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
-    client = Api(f"http://127.0.0.1:{srv.server_address[1]}")
+    client = Api(f"http://127.0.0.1:{srv.server_address[1]}", server.TOKEN)
     client.quit_calls = quit_calls
     yield client
     srv.shutdown()

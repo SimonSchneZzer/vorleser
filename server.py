@@ -6,13 +6,16 @@ Start:   .venv/bin/python server.py   →  http://127.0.0.1:8765
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import re
+import secrets
 import shutil
 import threading
 import time
 import uuid
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
@@ -34,6 +37,13 @@ DOCS_DIR = paths.DATA_DIR / "docs"
 STATIC_DIR = paths.STATIC_DIR
 HOST, PORT = "127.0.0.1", int(os.environ.get("VORLESER_PORT", "8765"))
 MAX_UPLOAD = 300 * 1024 * 1024
+
+# Zugriffsschutz: Jede Webseite im Browser kann Anfragen an 127.0.0.1 schicken. Deshalb verlangt /api/* einen
+# Zufallsschlüssel pro Start – die eigene Oberfläche bekommt ihn als Cookie (SameSite=Strict, fremde Seiten
+# senden ihn nicht mit), ein zweiter App-Start liest ihn aus TOKEN_FILE. Host/Origin-Prüfung gegen DNS-Rebinding.
+TOKEN = secrets.token_urlsafe(32)
+TOKEN_HEADER = "X-Vorleser-Token"
+TOKEN_FILE = paths.DATA_DIR / "api-token"
 
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -160,8 +170,30 @@ class Handler(BaseHTTPRequestHandler):
     def body(self) -> dict:
         return json.loads(self.raw_body() or b"{}")
 
+    def _port(self) -> int:
+        return self.server.server_address[1]
+
+    def _allowed_origin(self) -> bool:
+        """Nur Anfragen an 127.0.0.1/localhost auf unserem Port, von unserer eigenen Seite."""
+        own = {f"127.0.0.1:{self._port()}", f"localhost:{self._port()}"}
+        if (self.headers.get("Host") or "").lower() not in own:
+            return False
+        origin = self.headers.get("Origin")
+        return origin is None or origin.lower() in {f"http://{h}" for h in own}
+
+    def _has_token(self) -> bool:
+        if _same(self.headers.get(TOKEN_HEADER, ""), TOKEN):
+            return True
+        try:
+            morsel = SimpleCookie(self.headers.get("Cookie") or "").get(cookie_name(self._port()))
+        except CookieError:
+            return False
+        return bool(morsel) and _same(morsel.value, TOKEN)
+
     def route(self, method: str):
         path = urlparse(self.path).path
+        if not self._allowed_origin() or (path.startswith("/api/") and not self._has_token()):
+            return self.error(403, "Nicht erlaubt")
         try:
             for pattern, m_, fn in ROUTES:
                 if m_ == method and (m := re.fullmatch(pattern, path)):
@@ -188,7 +220,9 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- Seite & Stammdaten --
     def index(self):
-        self.send(200, (STATIC_DIR / "index.html").read_bytes(), "text/html; charset=utf-8", {"Cache-Control": "no-cache"})
+        cookie = f"{cookie_name(self._port())}={TOKEN}; Path=/; HttpOnly; SameSite=Strict"
+        self.send(200, (STATIC_DIR / "index.html").read_bytes(), "text/html; charset=utf-8",
+                  {"Cache-Control": "no-store", "Set-Cookie": cookie})
 
     def static(self, name):
         ctype = {"css": "text/css", "js": "text/javascript"}[name.rsplit(".", 1)[1]] + "; charset=utf-8"
@@ -520,7 +554,7 @@ class Handler(BaseHTTPRequestHandler):
 D = r"([0-9a-f]{32})"
 ROUTES = [
     (r"/|/index\.html", "GET", Handler.index),
-    (r"/(app\.(?:css|js)|i18n\.js)", "GET", Handler.static),
+    (r"/(app\.css|i18n\.js|js/[a-z0-9-]+\.js)", "GET", Handler.static),
     (r"/api/settings", "GET", Handler.settings_get),
     (r"/api/settings", "PATCH", Handler.settings_patch),
     (r"/api/voices/preview", "GET", Handler.preview),
@@ -582,10 +616,31 @@ ON_QUIT = _shutdown_server         # desktop.py ersetzt das durch „Fenster sch
 ON_FOCUS = lambda: None            # desktop.py: Fenster nach vorne holen
 
 
+def _same(a: str, b: str) -> bool:
+    """Vergleich in konstanter Zeit (Bytes: compare_digest lehnt Nicht-ASCII-Strings mit TypeError ab)."""
+    return hmac.compare_digest(a.encode("utf-8", "surrogateescape"), b.encode("utf-8"))
+
+
+def cookie_name(port: int) -> str:
+    return f"vorleser_{port}"     # Cookies gelten für alle Ports eines Hosts → Port im Namen
+
+
+def write_token_file() -> None:
+    """Schlüssel für einen zweiten App-Start ablegen (nur für den eigenen Benutzer lesbar)."""
+    try:
+        TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(TOKEN)
+    except OSError as e:
+        print(f"[server] Schlüsseldatei nicht geschrieben: {e!r}", flush=True)
+
+
 def bind(port: int = PORT) -> ThreadingHTTPServer:
     """Server-Socket öffnen (OSError, wenn der Port belegt ist)."""
     global SERVER
     SERVER = ThreadingHTTPServer((HOST, port), Handler)
+    write_token_file()
     return SERVER
 
 

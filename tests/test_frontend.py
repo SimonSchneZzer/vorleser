@@ -17,11 +17,28 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static"
 
 
+JS_FILES = sorted((STATIC / "js").glob("*.js"))
+
+
+def app_js() -> str:
+    """Alle Teile der Oberfläche in Ladereihenfolge (wie index.html sie einbindet)."""
+    html = (STATIC / "index.html").read_text("utf-8")
+    return "\n".join((STATIC / src.lstrip("/")).read_text("utf-8") for src in re.findall(r'<script src="(/js/[^"]+)"', html))
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js fehlt")
-@pytest.mark.parametrize("name", ["app.js", "i18n.js"])
-def test_js_syntax(name):
-    r = subprocess.run(["node", "--check", str(STATIC / name)], capture_output=True, text=True)
+@pytest.mark.parametrize("path", [STATIC / "i18n.js", *JS_FILES], ids=lambda p: p.name)
+def test_js_syntax(path):
+    r = subprocess.run(["node", "--check", str(path)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_alle_js_teile_eingebunden():
+    """Jede Datei in static/js/ steht genau einmal in index.html (sonst fehlt Code oder läuft doppelt)."""
+    html = (STATIC / "index.html").read_text("utf-8")
+    eingebunden = re.findall(r'<script src="/js/([^"]+)"', html)
+    assert sorted(eingebunden) == [p.name for p in JS_FILES]
+    assert len(set(eingebunden)) == len(eingebunden)
 
 
 def _i18n_keys() -> set[str]:
@@ -48,9 +65,9 @@ def test_html_ids_eindeutig():
 
 
 def test_js_nutzt_nur_vorhandene_ids():
-    """$("…")-Aufrufe in app.js müssen auf IDs in index.html (oder per JS erzeugte) zeigen."""
+    """$("…")-Aufrufe in static/js/ müssen auf IDs in index.html (oder per JS erzeugte) zeigen."""
     html = (STATIC / "index.html").read_text("utf-8")
-    js = (STATIC / "app.js").read_text("utf-8")
+    js = app_js()
     ids = set(re.findall(r'\sid="([^"]+)"', html)) | set(re.findall(r'id="([^"$]+)"', js)) | set(re.findall(r'\.id = "([^"]+)"', js))
     used = set(re.findall(r'\$\("([A-Za-z][\w-]*)"\)', js))
     fehlt = sorted(used - ids)

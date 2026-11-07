@@ -5,6 +5,85 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-07 · Dock-Icon nicht mehr umfärben (ersetzt „Dock-Icon in der Akzentfarbe“)
+**Kontext:** Die Oberfläche setzte das Dock-Icon zur Laufzeit in der Akzentfarbe (`Api.set_icon`). Ist die App zu,
+zeigt macOS aber das Icon aus dem Paket – das Icon wechselte also beim Schließen die Farbe.
+**Entscheidung:** Kein Umfärben mehr; das Dock zeigt immer `packaging/icon.png` (Petrol). `set_icon`/`syncDockIcon` entfernt.
+**Verworfen:** Icon dauerhaft ins App-Paket schreiben (`NSWorkspace setIcon:forFile:`) – braucht Schreibrechte in
+`/Applications`, fügt dem unsignierten Paket eine Datei hinzu (Teil-Updates prüfen das Paket per Prüfsumme), macOS
+cached solche Icons hartnäckig. In der App selbst folgen die Logo-Balken weiter der Akzentfarbe.
+
+## 2026-11-07 · Fußleiste der Seitenleiste folgt der Playbar Bild für Bild
+**Kontext:** Gleitet die Mitlesezeile in die Playbar, wächst diese animiert; die Fußleiste (Höhe `--player-h`) lief
+jedem Zwischenwert mit eigenem 0,3-s-Übergang hinterher – ihre Grenzlinie hing bis zu 22 px nach.
+**Entscheidung:** Der `ResizeObserver` meldet jede Zwischenhöhe ohnehin; solange die Playbar schon sichtbar ist
+(Klasse `foot-follow`), hat die Fußleiste keinen eigenen Übergang mehr → 0 px Abweichung (im Browser je Bild gemessen,
+direkt nach dem Observer). Nur beim Erscheinen der Playbar (Höhe springt auf einmal) gleitet sie wie bisher.
+
+## 2026-11-07 · Eigene Stimme: „Neu beginnen“ während der Aufnahme
+**Kontext:** Ein Versprecher bedeutete bisher: abbrechen, Dialog neu öffnen, neu starten – oder eine schlechte
+Aufnahme hochladen (Stoppen lädt sofort hoch).
+**Entscheidung:** Während der Aufnahme gleitet links von „Fertig · 0:12“ der Knopf **Neu beginnen** (Pfeil-Icon) herein;
+„Datei …“ gleitet dafür hinaus (während einer Aufnahme sinnlos, und alles bleibt in einer Zeile). Klick verwirft die
+bisherige Aufnahme, das Mikrofon bleibt offen, die Zeit startet bei 0:00, Text springt nach oben, Hinweis „Von vorne –
+lies den Text noch einmal“. Ausgeblendete Knöpfe sind `inert` (nicht per Tab erreichbar).
+**Verworfen:** Prüfschritt nach dem Stoppen (Anhören → Behalten/Neu) – ein Klick mehr für den Normalfall.
+
+## 2026-11-07 · Export: Dialog schließt nach dem Speichern
+**Kontext:** Nach „Sichern unter …“ blieb der Dialog „Fertig“ offen; der Hinweis „Gespeichert“ lag darunter
+(modale `<dialog>` liegen in der obersten Ebene, über jedem Toast).
+**Entscheidung:** Erfolgreich gespeichert → Dialog zu, dann Toast. Abbruch im Sichern-Dialog oder Fehler → Dialog bleibt.
+
+## 2026-11-07 · Neues Logo: dunkle Kachel, helle Akzent-Balken, statisch
+**Kontext:** Bisher Kachel in der Akzentfarbe mit weißen Balken; Willkommen-Logo mit wippenden Balken.
+Wunsch des Nutzers: das dunkle Zeichen der Webseite („Mit deiner eigenen Stimme“) überall.
+**Entscheidung:** Kachel immer #25292D (Anthrazit der App), Balken mittel/hoch/mittel/kurz, statisch. In der App folgen
+die Balken der Akzentfarbe (`--logo-bar` = helle Variante, lesbar auf der Kachel); feste Dateien
+(`packaging/icon.png` → .icns/.ico, Webseite `icon.png`/`favicon.png`) nutzen Petrol #5FB7CB, erzeugt von
+`packaging/make_icon.py`. Feiner heller Innenrand, weil die Kachel im Dunkelmodus sonst mit der Seitenleiste verschmilzt.
+
+## 2026-11-07 · Lokale API nur mit Schlüssel (Cookie) und eigener Herkunft
+**Kontext:** Der Server auf `127.0.0.1:8765` nahm jede Anfrage an. Jede Webseite im Browser kann dorthin
+schicken; `body()` liest JSON unabhängig vom Content-Type, ein einfaches `fetch(…, {mode:"no-cors"})` hätte z. B.
+`/api/uninstall` oder `/api/quit` auslösen können. DNS-Rebinding hätte sogar Antworten lesbar gemacht.
+**Entscheidung:** Zufallsschlüssel pro Start (`server.TOKEN`). `/api/*` verlangt ihn als Cookie `vorleser_<port>`
+(von `/` gesetzt, `HttpOnly; SameSite=Strict` → fremde Seiten senden ihn nicht) oder als Header `X-Vorleser-Token`.
+Zusätzlich muss `Host` 127.0.0.1/localhost:<port> sein und ein `Origin` (falls vorhanden) die eigene Seite.
+Ein zweiter App-Start liest den Schlüssel aus `data/api-token` (0600) für `/api/focus`; erkannt wird ein laufender
+Vorleser jetzt am `Server`-Header der Startseite (braucht keinen Schlüssel).
+**Warum Cookie statt Header im Frontend:** `<audio src>`, Hörproben und der Export-Download können keine eigenen
+Header senden; das Cookie gilt für alle gleichermaßen, `app.js` musste nicht angefasst werden.
+**Folgen:** Tests schicken den Header (`conftest.Api`). Port im Cookie-Namen, weil Cookies für alle Ports eines
+Hosts gelten (Test- und Dev-Server stören sich sonst).
+
+## 2026-11-07 · Gebaut wird aus `requirements.lock`
+**Kontext:** `requirements*.txt` hatten nur `>=`. Zwei Builds derselben Version konnten andere Pakete enthalten
+(beim Erzeugen wäre z. B. `pypdf` von 6 auf 7 gesprungen); jede unnötige Änderung vergrößert auch die Teil-Updates.
+**Entscheidung:** `uv pip compile … --universal --python-version 3.12 -o requirements.lock` (Mac + Windows in
+einer Datei); CI und lokale Umgebung installieren daraus. Die `.txt`-Dateien bleiben die Wünsche;
+`tests/test_lockfile.py` prüft, dass das Lockfile sie erfüllt. Startversionen = die zuletzt getesteten.
+**Nicht gelockt:** `requirements-clone.txt` / `clone_setup.PACKAGES` – Torch wird je Rechner (CUDA/CPU) gewählt.
+
+## 2026-11-07 · Oberfläche in Teilen: `static/js/*.js` statt einer `app.js`
+**Kontext:** `app.js` hatte ~3.000 Zeilen. ES-Module hätten Verhalten geändert: Variablen wie `view`, `navRank`
+werden quer durch die Datei neu zugewiesen (Import-Bindungen sind schreibgeschützt), und Tests rufen globale
+Funktionen (`openDoc`, `st`, `setWord`) direkt auf.
+**Entscheidung:** An den bestehenden Abschnittsgrenzen in zehn **normale** Skripte geteilt, ohne Build. Normale
+Skripte teilen sich die globalen Namen; die Dateien in der Reihenfolge von `index.html` hintereinander ergeben
+exakt die alte `app.js` (+ je ein `"use strict"`).
+**Stolperfalle:** Funktionsdeklarationen werden nur innerhalb ihrer Datei vorgezogen. Code, der **beim Laden**
+läuft (Handler verdrahten, `x.onclick = fn`), darf nur Namen aus derselben oder früheren Dateien nutzen – sonst
+ReferenceError. Die Browser-Tests schlagen bei JS-Fehlern beim Laden an; `test_alle_js_teile_eingebunden` prüft
+die Liste in `index.html`.
+**Verworfen:** ES-Module (siehe Kontext), Bundler (widerspricht „kein Build“).
+
+## 2026-11-07 · Test: fremde Texte nur über `esc()` ins HTML
+**Kontext:** 40+ Stellen bauen HTML aus Template-Strings; Titel/Kapitel kommen aus importierten Büchern.
+Bei der Prüfung war alles korrekt escaped – das soll so bleiben.
+**Entscheidung:** `tests/test_html_escape.py` liest jeden HTML-Template-String in `static/js/` (kleiner Tokenizer)
+und verlangt für Felder wie `.title`, `.name`, `.text`, `.message` ein `esc()`/`mdBold()`. Geprüfte Ausnahmen mit
+Grund in `REVIEWED`. Bedingungen eines `a ? b : c` zählen nicht (geben nichts aus).
+
 ## 2026-11-07 · Ein Bewegungsmodell für die Navigation
 **Kontext:** Jeder Wechsel (Text A → B, Ansicht, Tab) nutzte dasselbe „einblenden und 10 px hoch“ – der alte Inhalt
 verschwand ohne Übergang (harter Schnitt).

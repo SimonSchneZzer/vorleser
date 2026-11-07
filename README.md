@@ -34,7 +34,7 @@ Voraussetzungen: Python 3.12 und [uv](https://docs.astral.sh/uv/) (ffmpeg kommt 
 
 ```bash
 uv venv --python 3.12 .venv-build
-uv pip install --python .venv-build/bin/python -r requirements.txt -r requirements-desktop.txt -r requirements-dev.txt
+uv pip install --python .venv-build/bin/python -r requirements.lock
 .venv-build/bin/python -m piper.download_voices --download-dir voices de_DE-thorsten-medium en_US-lessac-medium
 .venv-build/bin/python desktop.py          # App-Fenster
 ./start.sh                                 # oder nur der Server → http://127.0.0.1:8765 im Browser

@@ -37,7 +37,7 @@ jobs:
           activate-environment: true
 
       - name: Abhängigkeiten
-        run: uv pip install -r requirements.txt -r requirements-desktop.txt -r requirements-dev.txt
+        run: uv pip install -r requirements.lock      # feste Versionen (aus den requirements*.txt erzeugt)
 
       - name: Piper-Stimmen (Offline-Ersatz) laden
         run: python -m piper.download_voices --download-dir voices de_DE-thorsten-medium en_US-lessac-medium

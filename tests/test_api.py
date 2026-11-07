@@ -14,8 +14,40 @@ TEXT = "# Anfang\n\nDer alte Wärter stieg die Treppe hinauf. Es war kalt.\n\n# 
 def test_startseite_und_dateien(api):
     status, headers, body = api.call("GET", "/")
     assert status == 200 and b"<html" in body.lower()
-    for name in ("app.js", "app.css", "i18n.js"):
+    for name in ("app.css", "i18n.js", "js/basis.js", "js/verwaltung.js"):
         assert api.call("GET", f"/{name}")[0] == 200
+    for name in ("app.js", "js/../server.py", "js/basis.py"):
+        assert api.call("GET", f"/{name}")[0] == 404
+
+
+def test_api_ohne_schluessel_gesperrt(api):
+    """Fremde Webseiten können 127.0.0.1 erreichen – ohne Schlüssel darf /api/* nichts tun."""
+    assert api.call("GET", "/api/settings", auth=False)[0] == 403
+    assert api.call("POST", "/api/quit", raw=b"{}", auth=False, headers={"Content-Type": "text/plain"})[0] == 403
+    assert api.call("POST", "/api/uninstall", {"keepData": True}, auth=False)[0] == 403
+    assert api.call("GET", "/api/settings", headers={"X-Vorleser-Token": "falsch"}, auth=False)[0] == 403
+    assert api.call("GET", "/api/settings", headers={"X-Vorleser-Token": "ä"}, auth=False)[0] == 403
+    assert not api.quit_calls
+
+
+def test_api_fremde_herkunft_gesperrt(api):
+    port = api.base.rsplit(":", 1)[1]
+    assert api.call("POST", "/api/quit", {}, headers={"Origin": "https://evil.example"})[0] == 403
+    assert api.call("GET", "/api/settings", headers={"Origin": "null"})[0] == 403
+    assert api.call("GET", "/", headers={"Host": f"evil.example:{port}"})[0] == 403   # DNS-Rebinding
+    assert api.call("GET", "/api/settings", headers={"Origin": f"http://localhost:{port}"})[0] == 200
+    assert not api.quit_calls
+
+
+def test_startseite_setzt_schluessel_als_cookie(api):
+    import server
+    status, headers, _ = api.call("GET", "/", auth=False)
+    cookie = headers["Set-Cookie"]
+    assert status == 200 and server.TOKEN in cookie and "SameSite=Strict" in cookie and "HttpOnly" in cookie
+    pair = cookie.split(";", 1)[0]
+    assert api.call("GET", "/api/settings", headers={"Cookie": pair}, auth=False)[0] == 200
+    assert api.call("GET", "/api/settings", headers={"Cookie": pair.split("=")[0] + "=x"}, auth=False)[0] == 403
+    assert server.TOKEN_FILE.read_text("utf-8") == server.TOKEN
 
 
 def test_unbekannte_route_404(api):

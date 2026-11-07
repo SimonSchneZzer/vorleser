@@ -4,6 +4,17 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.10.0
+A new look for the logo – and a fresh start button when recording your own voice.
+
+- **New logo:** a dark tile with light bars – in the Dock, in the sidebar and on the welcome screen (in the app the
+  bars follow your accent color). It no longer moves, and the Dock icon stays the same whether the app is open or not
+- **Your own voice:** while recording, **Start over** discards the take and begins again right away
+- **Export:** after saving, the dialog closes so you can see the confirmation
+- **Player:** when the follow-along line appears, the sidebar footer grows exactly with the player
+- **Safer:** only the Vorleser window can control the app – other websites can no longer reach it
+- **Under the hood:** the interface is split into smaller files, and every build uses the same tested package versions
+
 ## 2.9.1
 Cleaner highlighting and steadier dragging.
 

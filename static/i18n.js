@@ -201,7 +201,8 @@ const I18N_EN = {
   // Eigene Stimme anlegen
   "Lies den Text 15–30 Sekunden ruhig und deutlich vor (leiser Raum, normaler Abstand). Danach kann jeder Text mit deiner Stimme vorgelesen werden – lokal und kostenlos, aber deutlich langsamer als die Online-Stimmen.":
     "Read the text calmly and clearly for 15–30 seconds (quiet room, normal distance). Afterwards any text can be read in your voice – locally and free, but much slower than the online voices.",
-  "Name": "Name", "Datei …": "File …", "Aufnehmen": "Record", "Weiterlesen …": "Keep reading …", "Reicht – stoppen, wenn du magst": "That's enough – stop whenever you like",
+  "Name": "Name", "Datei …": "File …", "Aufnehmen": "Record", "Weiterlesen …": "Keep reading …", "Neu beginnen": "Start over", "Von vorne – lies den Text noch einmal": "From the top – read the text once more",
+  "Bisherige Aufnahme verwerfen und von vorne lesen": "Discard this take and start reading again", "Reicht – stoppen, wenn du magst": "That's enough – stop whenever you like",
   "Stimme wird angelegt …": "Creating voice …", "Meine Stimme": "My voice",
 
   // Erster Start & Tutorial

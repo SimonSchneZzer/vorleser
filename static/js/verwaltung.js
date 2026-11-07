@@ -1,0 +1,323 @@
+"use strict";
+// Vorleser – Updates, Was ist neu, Fehler melden, Deinstallieren. Teil der Oberfläche; Reihenfolge der Dateien: index.html
+/* ===================================================================== */
+/* Updates (Desktop-App)                                                  */
+/* ===================================================================== */
+const upd = { s: null, timer: 0 };
+const updLaterKey = "vorleser.updLater";
+function updDismissed(v) {
+  try { const d = JSON.parse(localStorage.getItem(updLaterKey) || "null"); return d && d.v === v && Date.now() < d.until; } catch { return false; }
+}
+function updShow(on) {
+  const el = $("upd");
+  if (on) { el.classList.remove("hidden", "leaving"); return; }
+  if (el.classList.contains("hidden") || el.classList.contains("leaving")) return;
+  el.classList.add("leaving");
+  setTimeout(() => { el.classList.add("hidden"); el.classList.remove("leaving"); }, 250);
+}
+/* ---------- Name → Sprechblase mit GitHub / LinkedIn (überall, wo der Name steht) ---------- */
+const BYNAME = $("verTxt").closest(".r").querySelector("[data-by]").outerHTML;
+function byPop(btn) {
+  const pop = $("byPop"), open = pop.classList.contains("open") && pop._for === btn;
+  document.querySelectorAll("[data-by]").forEach((b) => b.setAttribute("aria-expanded", "false"));
+  if (!btn || open) { pop.classList.remove("open"); pop._for?.classList.remove("on"); pop._for = null; return; }
+  pop._for?.classList.remove("on");
+  const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  const up = r.bottom + 14 + h > innerHeight - 8;                 // unten kein Platz → Blase über dem Namen
+  const x = Math.max(8 + w / 2, Math.min(innerWidth - 8 - w / 2, r.left + r.width / 2));
+  pop.classList.toggle("up", up);
+  pop.style.left = `${x}px`; pop.style.top = `${up ? r.top - 14 - h : r.bottom + 14}px`;
+  pop.style.setProperty("--ax", `${r.left + r.width / 2 - x}px`);   // Pfeil zeigt auf den Namen
+  if (!pop.classList.contains("open")) void pop.offsetWidth;
+  pop.classList.add("open"); pop._for = btn; btn.classList.add("on"); btn.setAttribute("aria-expanded", "true");
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-by]");
+  if (b) { e.preventDefault(); e.stopPropagation(); return byPop(b); }
+  if (e.target.closest("#byPop .opt")) return setTimeout(() => byPop(null), 150);
+  if (!e.target.closest("#byPop")) byPop(null);
+}, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("byPop").classList.contains("open")) { e.stopPropagation(); byPop(null); } }, true);
+addEventListener("resize", () => byPop(null));
+document.addEventListener("scroll", () => byPop(null), true);
+function openExternal(url) {
+  const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.click();
+}
+function updRender() {
+  const s = upd.s; if (!s || !s.enabled) return;
+  // Wechsel Knöpfe ↔ Ladebalken (z. B. nach „Aktualisieren“): Karte ändert ihre Höhe weich, Balken bzw.
+  // Knöpfe und Texte gleiten einmal herein.
+  const card = $("upd"), busy = ["downloading", "preparing", "installing"].includes(s.state);
+  const flip = !card.classList.contains("hidden") && !card.classList.contains("leaving") && card.classList.contains("busy") !== busy;
+  const done = flip ? heightFrom(card) : null;
+  updRenderCard();
+  if (flip) { done(480); animateIn(busy ? $("updBar") : $("updBtns")); animateIn(card.querySelector(".upd-body"), "swap"); }
+}
+function updRenderCard() {
+  const s = upd.s, card = $("upd");
+  card.classList.remove("news"); updIcon("i-dl"); $("updLater").textContent = "Später";
+  $("updRow").classList.remove("hidden");
+  $("verTxt").textContent = `Version ${s.current}`;
+  $("updNote").textContent = s.available ? `Version ${s.latest} ist verfügbar` : s.latest ? "Du hast die neueste Version" : "Prüft bei jedem Start automatisch";
+  const busy = s.state === "downloading" || s.state === "preparing" || s.state === "installing";
+  $("upd").classList.toggle("busy", busy);
+  $("updBar").classList.toggle("hidden", !busy);
+  $("updBtns").classList.toggle("hidden", busy);
+  if (s.state === "downloading") {
+    const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+    $("updTitle").textContent = "Update wird geladen";
+    $("updText").textContent = s.total ? `${fmtMB(s.done)} von ${fmtMB(s.total)}` : "";
+    $("updFill").style.width = `${pct}%`;
+    return updShow(true);
+  }
+  if (s.state === "preparing") {
+    $("updTitle").textContent = "Update wird vorbereitet";
+    $("updText").textContent = "Einen Moment – du kannst weiter vorlesen.";
+    $("updFill").style.width = "100%";
+    return updShow(true);
+  }
+  if (s.state === "ready") {
+    $("updTitle").textContent = "Update bereit";
+    $("updText").textContent = `Version ${s.readyVersion} startet beim nächsten Öffnen von Vorleser – oder gleich jetzt.`;
+    $("updGo").textContent = "Jetzt neu starten";
+    return upd.later ? updShow(false) : updShow(true);
+  }
+  if (s.state === "installing") {
+    $("updTitle").textContent = "Startet neu …";
+    $("updText").textContent = "Vorleser ist gleich in der neuen Version zurück.";
+    $("updFill").style.width = "100%";
+    return updShow(true);
+  }
+  if (s.state === "error") {
+    $("updTitle").textContent = "Update fehlgeschlagen";
+    $("updText").textContent = `${s.error || ""} – du kannst die neue Version auch von der Webseite laden.`;
+    $("updGo").textContent = "Download-Seite";
+    return updShow(true);
+  }
+  if (newsPending()) {                                  // gerade aktualisiert → einmal zeigen, was neu ist
+    card.classList.add("news"); updIcon("i-check");
+    $("updTitle").textContent = `Auf Version ${s.current} aktualisiert`;
+    $("updText").textContent = news.data?.releases.find((r) => r.version === s.current)?.lead || "";
+    $("updLater").textContent = "Schließen";
+    $("updGo").textContent = "Was ist neu";
+    if (!news.data) newsLoad().then(() => newsPending() && updRender()).catch(() => {});
+    return updShow(true);
+  }
+  if (s.available && !updDismissed(s.latest)) {
+    $("updTitle").textContent = `Vorleser ${s.latest} ist da`;
+    const first = (s.notes || "").split("\n").map((x) => x.trim()).find((x) => x && !/^https?:/.test(x)) || "";
+    $("updText").textContent = s.canInstall
+      ? [first, "Wird im Hintergrund geladen, du kannst weiter vorlesen."].filter(Boolean).join(" ")
+      : s.reason;
+    $("updGo").textContent = s.canInstall ? "Aktualisieren" : "Download-Seite";
+    return updShow(true);
+  }
+  updShow(false);
+}
+async function updRefresh(force = false) {
+  clearTimeout(upd.timer);
+  try { upd.s = await api(force ? "/api/update/check" : "/api/update", force ? { method: "POST" } : {}); } catch { return null; }
+  if (upd.s.justUpdated) {
+    try { if (localStorage.getItem(NEWS_SEEN) !== upd.s.justUpdated) localStorage.setItem(NEWS_PENDING, upd.s.justUpdated); } catch {}
+  }
+  updRender();
+  if (["downloading", "preparing", "installing"].includes(upd.s.state)) upd.timer = setTimeout(updRefresh, 600);
+  else if (upd.s.enabled && !upd.s.checked && (upd.polls = (upd.polls || 0) + 1) < 60) upd.timer = setTimeout(updRefresh, 2000);   // erste Prüfung nach dem Start abwarten
+  return upd.s;
+}
+$("updLater").onclick = () => {
+  if ($("upd").classList.contains("news")) { newsSeen(); return updShow(false); }
+  if (upd.s?.state === "ready") { upd.later = true; return updShow(false); }   // wird beim Beenden eingespielt
+  try { localStorage.setItem(updLaterKey, JSON.stringify({ v: upd.s?.latest, until: Date.now() + 24 * 3600e3 })); } catch {}
+  updShow(false);
+};
+$("updGo").onclick = async () => {
+  const s = upd.s; if (!s) return;
+  if ($("upd").classList.contains("news")) { newsSeen(); updShow(false); return openNews(); }
+  if (s.state === "ready") {
+    try { upd.s = await api("/api/update/restart", { method: "POST" }); } catch (e) { return toastErr(e); }
+    return updRender();
+  }
+  if (!s.canInstall || s.state === "error") return openExternal(s.page);
+  try { upd.s = await api("/api/update/install", { method: "POST" }); } catch (e) { return toastErr(e); }
+  updRender();
+  upd.timer = setTimeout(updRefresh, 400);
+};
+function updIcon(id) { $("updIc").querySelector("use")?.setAttribute("href", `#${id}`); }
+
+/* ---------- Was ist neu (Versionsverlauf aus CHANGELOG.md) ---------- */
+const NEWS_PENDING = "vorleser.newsPending", NEWS_SEEN = "vorleser.newsSeen";
+const news = { data: null };
+function newsPending() {
+  try { const v = localStorage.getItem(NEWS_PENDING); return !!v && v === upd.s?.current && localStorage.getItem(NEWS_SEEN) !== v; } catch { return false; }
+}
+function newsSeen() {
+  try { localStorage.setItem(NEWS_SEEN, upd.s?.current || ""); localStorage.removeItem(NEWS_PENDING); } catch {}
+}
+async function newsLoad() { return (news.data ||= await api("/api/changelog")); }
+const mdBold = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+async function openNews() {
+  let d; try { d = await newsLoad(); } catch (e) { return toastErr(e); }
+  const cur = d.current;
+  $("newsSub").textContent = d.releases.some((r) => r.version === cur) ? `Du hast Version ${cur} · alle Versionen, neueste zuerst` : "Alle Versionen, neueste zuerst";
+  $("newsList").innerHTML = d.releases.map((r) => `<section class="rel${r.version === cur ? " now" : ""}">
+      <div class="rel-h"><b>${esc(r.version)}</b>${r.version === cur ? `<span class="rel-chip">${UI_LANG === "en" ? "Installed" : "Installiert"}</span>` : ""}</div>
+      ${r.lead ? `<p class="lead">${mdBold(r.lead)}</p>` : ""}
+      ${r.items.length ? `<ul>${r.items.map((i) => `<li>${mdBold(i)}</li>`).join("")}</ul>` : ""}</section>`).join("");
+  $("newsList").scrollTop = 0;
+  $("newsBug").classList.toggle("hidden", !bug.info?.enabled);
+  $("newsDlg").showModal(); $("newsDlg").focus();                // nichts vorausgewählt (sonst leuchtet „Fehler melden“)
+}
+$("newsBtn").onclick = openNews;
+$("betaBtn").onclick = openNews;
+$("newsClose").onclick = () => $("newsDlg").close();
+$("newsBug").onclick = (e) => { e.preventDefault(); $("newsDlg").close(); openBug(); };
+
+$("srcBtn").onclick = () => openExternal("https://github.com/SimonSchneZzer/vorleser");
+$("updCheck").onclick = async () => {
+  const b = $("updCheck"); b.disabled = true;
+  const s = await updRefresh(true);
+  b.disabled = false;
+  if (!s) return toast("Prüfen fehlgeschlagen – bist du online?", true);
+  if (s.available) { try { localStorage.removeItem(updLaterKey); } catch {} updRender(); }
+  else toast(s.latest ? `Du hast die neueste Version (${s.current})` : "Keine Update-Information gefunden");
+};
+/* ===================================================================== */
+/* Fehler melden (über Web3Forms; Empfängeradresse steht nicht in der App) */
+/* ===================================================================== */
+const bug = { info: null };
+const BUG_LIMIT = 3;                                    // Meldungen pro Stunde (Schutz vor Doppelklicks/Spam)
+function bugRecent() {
+  try { return JSON.parse(localStorage.getItem("vorleser.bugs") || "[]").filter((t) => Date.now() - t < 3600e3); } catch { return []; }
+}
+function bugTechText() {
+  const i = bug.info; if (!i) return "";
+  return [`Version: ${i.version} (${i.mode})`, `System: ${i.system}`, `Oberfläche: ${UI_LANG}`,
+          `Ansicht: ${view}${st.doc ? ` · Text-Sprache ${st.doc.lang} · Stimme ${st.doc.voice}` : ""}`,
+          "", "Letzte Log-Zeilen:", i.log || "(leer)"].join("\n");
+}
+async function bugInit() {
+  try { bug.info = await api("/api/bugreport"); } catch { return; }
+  $("bugRow").classList.toggle("hidden", !bug.info.enabled);
+  $("bugSideBtn").classList.toggle("hidden", !bug.info.enabled);
+}
+function openBug() {
+  if (!bug.info?.enabled) return;
+  $("bugForm").classList.remove("hidden", "sending");
+  $("bugOk").classList.add("hidden");
+  $("bugMsgInfo").textContent = "";
+  $("bugMsg").classList.remove("bad");
+  api("/api/bugreport").then((i) => { bug.info = i; $("bugTechText").textContent = bugTechText(); }).catch(() => {});
+  $("bugTechText").textContent = bugTechText();
+  $("bugDlg").showModal();
+  setTimeout(() => $("bugMsg").focus(), 50);
+}
+$("bugBtn").onclick = openBug;
+$("bugSideBtn").onclick = openBug;
+for (const id of ["bugMsg", "bugMail"]) $(id).addEventListener("input", () => { $(id).classList.remove("bad"); $("bugMsgInfo").textContent = ""; });
+$("bugCancel").onclick = () => $("bugDlg").close();
+$("bugDone").onclick = () => $("bugDlg").close();
+$("bugForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const msg = $("bugMsg").value.trim(), mail = $("bugMail").value.trim();
+  if (msg.length < 5) {
+    $("bugMsg").classList.remove("bad"); void $("bugMsg").offsetWidth; $("bugMsg").classList.add("bad");
+    $("bugMsgInfo").textContent = "Bitte kurz beschreiben, was passiert ist.";
+    return $("bugMsg").focus();
+  }
+  if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+    $("bugMsgInfo").textContent = "Die E-Mail-Adresse sieht nicht richtig aus.";
+    return $("bugMail").focus();
+  }
+  const recent = bugRecent();
+  if (recent.length >= BUG_LIMIT) { $("bugMsgInfo").textContent = "Bitte warte etwas, bevor du noch eine Meldung schickst."; return; }
+  const i = bug.info;
+  const payload = {
+    access_key: i.key, botcheck: $("bugBot").checked,
+    subject: `Vorleser ${i.version} – Fehlermeldung (${i.system.split(",")[0]})`,
+    from_name: "Vorleser Fehlermelder",
+    Beschreibung: msg,
+    "Antwort an": mail || "(keine Angabe)",
+    ...(mail ? { email: mail, replyto: mail } : {}),
+    ...($("bugTech").checked ? { "Technische Infos": bugTechText() } : { "Technische Infos": "(nicht mitgeschickt)" }),
+  };
+  $("bugForm").classList.add("sending");
+  $("bugMsgInfo").textContent = "Wird gesendet …";
+  try {
+    // Als klassische Formulardaten (kein JSON): „einfache“ CORS-Anfrage ohne Preflight – den blockt Web3Forms
+    const form = new FormData();
+    for (const [k, v] of Object.entries(payload)) form.append(k, typeof v === "boolean" ? (v ? "true" : "") : v);
+    const r = await fetch(i.endpoint, { method: "POST", headers: { Accept: "application/json" }, body: form });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok || !res.success) throw new Error(res.message || `HTTP ${r.status}`);
+    try { localStorage.setItem("vorleser.bugs", JSON.stringify([...recent, Date.now()])); } catch {}
+    $("bugMsg").value = "";
+    $("bugOkText").textContent = mail ? "Sie ist bei Simon angekommen. Bei Rückfragen meldet er sich per E-Mail." : "Sie ist bei Simon angekommen.";
+    $("bugForm").classList.add("hidden");
+    $("bugOk").classList.remove("hidden");
+  } catch (err) {
+    $("bugForm").classList.remove("sending");
+    $("bugMsgInfo").textContent = /Failed to fetch|NetworkError|Load failed/i.test(err.message)
+      ? "Senden fehlgeschlagen – bist du online?" : `Senden fehlgeschlagen: ${err.message}`;
+  }
+};
+bugInit();
+
+/* ===================================================================== */
+/* Deinstallieren (Desktop-App) – mit Warnung und zweitem Bestätigungsklick */
+/* ===================================================================== */
+const unin = { info: null, sure: false, t: 0 };
+api("/api/uninstall").then((i) => { unin.info = i; $("uninRow").classList.toggle("hidden", !i.possible); }).catch(() => {});
+function uninList(r) {
+  const keep = $("uninKeep").checked;
+  const own = new Set(st.voices.filter((v) => v.engine === "clone").map((v) => v.id)).size;
+  const n = st.docs.length;
+  const rows = [
+    ["Die App selbst", ""],
+    [`Deine Texte und Lesezeichen (${n})`, r ? fmtMB(r.texts) : "", "keep"],
+    [own ? `Eigene Stimmen (${own})` : "Eigene Stimmen", "", "keep"],
+    ["Einstellungen", "", "keep"],
+    ["Erzeugtes Audio und Exporte", r ? fmtMB(r.audio + r.exports) : ""],
+    ["Modelle (Diktat, eigene Stimme)", r ? fmtMB(r.whisper.bytes + r.clone.bytes) : ""],
+  ];
+  $("uninList").innerHTML = rows.map(([t, size, k]) => {
+    const kept = keep && k === "keep";
+    return `<li class="${kept ? "kept" : ""}"><span>${esc(t)}</span><span>${kept ? "bleibt" : esc(size)}</span></li>`;
+  }).join("");
+}
+function uninReset() {
+  unin.sure = false; clearTimeout(unin.t);
+  $("uninGo").classList.remove("sure");
+  $("uninGo").textContent = "Deinstallieren";
+  $("uninWarn").textContent = $("uninKeep").checked ? "Texte und eigene Stimmen bleiben im Datenordner erhalten." : "Das lässt sich nicht rückgängig machen.";
+  $("uninWarn").classList.toggle("ok", $("uninKeep").checked);
+}
+$("uninBtn").onclick = async () => {
+  $("uninAsk").classList.remove("hidden"); $("uninBye").classList.add("hidden");
+  $("uninKeep").checked = false;
+  uninReset(); uninList(null);
+  $("uninDlg").showModal();
+  $("uninCancel").focus();                                // sicherer Standard: Abbrechen
+  try { uninList(await api("/api/storage")); } catch {}
+};
+$("uninKeep").onchange = () => { uninReset(); api("/api/storage").then(uninList).catch(() => uninList(null)); };
+$("uninCancel").onclick = () => $("uninDlg").close();
+$("uninDlg").addEventListener("close", uninReset);
+$("uninGo").onclick = async () => {
+  if (!unin.sure) {                                       // erster Klick: nochmal ausdrücklich fragen
+    unin.sure = true;
+    $("uninGo").textContent = $("uninKeep").checked ? "Wirklich deinstallieren?" : "Wirklich alles löschen?";
+    $("uninGo").classList.remove("sure"); void $("uninGo").offsetWidth; $("uninGo").classList.add("sure");
+    unin.t = setTimeout(uninReset, 5000);                 // ohne zweiten Klick zurücksetzen
+    return;
+  }
+  clearTimeout(unin.t);
+  try {
+    if (st.wantPlay) pause();
+    await api("/api/uninstall", { method: "POST", body: JSON.stringify({ keepData: $("uninKeep").checked }) });
+    $("uninAsk").classList.add("hidden"); $("uninBye").classList.remove("hidden");
+  } catch (e) { uninReset(); toastErr(e); }
+};
+
+setInterval(() => { if (!upd.s || upd.s.state === "idle") updRefresh(); }, 60000);   // Server prüft minütlich (latest.json)
+updRefresh();                                     // Version, „aktualisiert“-Hinweis; fragt nach, bis die erste Prüfung durch ist   // „Gestern“/Uhrzeit aktuell halten

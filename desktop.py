@@ -7,7 +7,6 @@ Entwicklung:  .venv/bin/python desktop.py   (braucht `pywebview`)
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
@@ -32,10 +31,10 @@ window: webview.Window | None = None
 
 
 def _existing_instance(port: int) -> bool:
-    """Läuft schon ein Vorleser auf diesem Port?"""
+    """Läuft schon ein Vorleser auf diesem Port? (Startseite braucht keinen Schlüssel; Kennung im Server-Header)"""
     try:
-        with urllib.request.urlopen(f"http://{server.HOST}:{port}/api/settings", timeout=2) as r:
-            return "theme" in json.loads(r.read())
+        with urllib.request.urlopen(f"http://{server.HOST}:{port}/", timeout=2) as r:
+            return (r.headers.get("Server") or "").startswith("Vorleser/")
     except Exception:
         return False
 
@@ -65,23 +64,6 @@ class Api:
             dest += f".{fmt}"
         shutil.copyfile(src, dest)
         return {"ok": True, "path": dest}
-
-    def set_icon(self, data_url: str) -> None:
-        """Mac: Dock-Icon in der Akzentfarbe (gezeichnet von der Oberfläche, wie das Logo in der App)."""
-        prefix = "data:image/png;base64,"
-        if not paths.IS_MAC or not isinstance(data_url, str) or not data_url.startswith(prefix) or len(data_url) > 2_000_000:
-            return
-        try:
-            import base64
-            from AppKit import NSApplication, NSImage
-            from Foundation import NSData
-            from PyObjCTools import AppHelper
-            raw = base64.b64decode(data_url[len(prefix):])
-            img = NSImage.alloc().initWithData_(NSData.dataWithBytes_length_(raw, len(raw)))
-            if img:
-                AppHelper.callAfter(NSApplication.sharedApplication().setApplicationIconImage_, img)
-        except Exception as e:
-            print(f"[desktop] Dock-Icon: {e}", flush=True)
 
     def reveal_data(self) -> None:
         """Datenordner im Finder/Explorer zeigen."""
@@ -175,7 +157,9 @@ def _focus() -> None:
 
 def _ask_running_to_focus(port: int) -> bool:
     try:
-        req = urllib.request.Request(f"http://{server.HOST}:{port}/api/focus", method="POST", data=b"")
+        token = server.TOKEN_FILE.read_text("utf-8").strip()      # vom laufenden Vorleser abgelegt
+        req = urllib.request.Request(f"http://{server.HOST}:{port}/api/focus", method="POST", data=b"",
+                                     headers={server.TOKEN_HEADER: token})
         with urllib.request.urlopen(req, timeout=3) as r:
             return r.status == 200
     except Exception:

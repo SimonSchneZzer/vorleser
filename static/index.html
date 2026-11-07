@@ -458,8 +458,10 @@
   <div class="readme" id="cText" data-noi18n></div>
   <div class="dlg-actions">
     <span class="msg" id="cMsg"></span>
-    <label class="btn sm" style="cursor:pointer">Datei …<input type="file" id="cFile" accept="audio/*" hidden></label>
+    <label class="btn sm" id="cFileBtn" style="cursor:pointer">Datei …<input type="file" id="cFile" accept="audio/*" hidden></label>
     <button class="btn" id="cClose">Abbrechen</button>
+    <!-- Nur während der Aufnahme: verwirft das Bisherige und beginnt sofort von vorne (gleitet herein/hinaus) -->
+    <button class="btn redo" id="cRedo" inert data-tip="Bisherige Aufnahme verwerfen und von vorne lesen"><svg class="i" style="width:16px;height:16px"><use href="#i-retry"/></svg>Neu beginnen</button>
     <button class="btn recbtn" id="cRec"><svg class="i" style="width:16px;height:16px"><use href="#i-mic"/></svg>Aufnehmen</button>
   </div>
 </dialog>
@@ -540,6 +542,17 @@
 <audio id="audio" preload="auto"></audio>
 <audio id="previewAudio"></audio>
 <script src="/i18n.js"></script>
-<script src="/app.js"></script>
+<!-- Oberfläche in Teilen, ohne Build: normale Skripte (kein type="module"), sie teilen sich die globalen Namen.
+     Reihenfolge = Ausführungsreihenfolge – nicht umsortieren (siehe docs/DECISIONS.md). -->
+<script src="/js/basis.js"></script>
+<script src="/js/ansichten.js"></script>
+<script src="/js/stimmen.js"></script>
+<script src="/js/neuer-text.js"></script>
+<script src="/js/dokument.js"></script>
+<script src="/js/player.js"></script>
+<script src="/js/einstellungen.js"></script>
+<script src="/js/einfuehrung.js"></script>
+<script src="/js/start.js"></script>
+<script src="/js/verwaltung.js"></script>
 </body>
 </html>
