@@ -1164,3 +1164,8 @@ dialog, .gt-card, .onb-card { border-radius: 12px; }
 .sh-play { width: 26px; height: 26px; border-radius: 50%; background: var(--acc); color: var(--on-acc); display: grid; place-items: center; }
 .sh-pill { height: 18px; border: 1px solid var(--line); border-radius: 6px; padding: 0 7px 0 3px; display: inline-flex; align-items: center; gap: 5px; }
 .sh-pill .av { width: 12px; height: 12px; border-radius: 50%; background: var(--tint); }
+
+/* Ziehen an der Leiste markiert keinen Text; die Leiste zeigt den Fokusrahmen nur bei Tastatur */
+body.scrubbing, body.scrubbing * { -webkit-user-select: none; user-select: none; cursor: grabbing; }
+.player .prog-row, .player .transport, .player .now .s { -webkit-user-select: none; user-select: none; }
+.prog:focus:not(:focus-visible) { outline: none; }

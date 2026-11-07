@@ -1442,6 +1442,8 @@ function scrubHide() {
 }
 $("prog").addEventListener("pointerdown", (e) => {
   if (!st.doc || e.button !== 0) return;
+  e.preventDefault();                                     // beim Ziehen keinen Text markieren (und kein Fokusrahmen per Maus)
+  document.body.classList.add("scrubbing");
   e.currentTarget.setPointerCapture(e.pointerId);
   scrub.down = { x: e.clientX }; scrub.target = scrubTarget(e);
   scrubShow(scrub.target, false);
@@ -1456,6 +1458,7 @@ $("prog").addEventListener("pointermove", (e) => {
   scrubShow(t, scrub.drag);
 });
 $("prog").addEventListener("pointerup", (e) => {
+  document.body.classList.remove("scrubbing");
   if (!scrub.down) return;
   const t = scrub.target, dragged = scrub.drag;
   scrub.down = null; scrub.drag = false;
@@ -1464,7 +1467,7 @@ $("prog").addEventListener("pointerup", (e) => {
   jumpTo(t.i, 0, st.wantPlay, t.frac);
   if (e.pointerType !== "mouse") scrubHide(); else { $("prog").classList.remove("dragging"); scrubShow(scrubTarget(e), false); }
 });
-$("prog").addEventListener("pointercancel", () => { scrub.down = null; scrub.drag = false; scrubHide(); updateBar(); });
+$("prog").addEventListener("pointercancel", () => { document.body.classList.remove("scrubbing"); scrub.down = null; scrub.drag = false; scrubHide(); updateBar(); });
 $("prog").addEventListener("pointerleave", () => { if (!scrub.down) scrubHide(); });
 $("prog").onkeydown = (e) => { if (e.key === "ArrowRight") { e.preventDefault(); jumpTo(st.idx + 1); } else if (e.key === "ArrowLeft") { e.preventDefault(); jumpTo(st.idx - 1); } };
 $("rate").onchange = () => {
