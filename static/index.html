@@ -529,7 +529,21 @@
 <div class="onb hidden" id="onb" role="dialog" aria-modal="true" aria-label="Willkommen"></div>
 <div class="gt hidden" id="gt" role="dialog" aria-modal="true" aria-label="Rundgang"><div class="gt-spot" id="gtSpot"></div><div class="gt-card" id="gtCard"></div><span class="gt-ripple" id="gtRipple"></span><span class="gt-cursor" id="gtCursor"><svg viewBox="0 0 24 24"><path d="M4 2.5 19.5 12l-6.6 1.6L9.6 20z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg></span></div>
 <div class="tip" id="tip" role="tooltip"></div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="boot hidden" id="boot" role="status" aria-live="polite">
+  <div class="boot-wait" id="bootWait">
+    <div class="boot-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9v6M10 5v14M14 8v8M18 10v4"/></svg></div>
+    <b>Vorleser startet …</b>
+    <div class="boot-bar"><i></i></div>
+  </div>
+  <div class="boot-card hidden" id="bootCard">
+    <div class="boot-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg></div>
+    <b>Der Vorleser antwortet gerade nicht</b>
+    <p>Das kommt manchmal direkt nach einem Update vor oder wenn der Computer sehr beschäftigt ist. Vorleser versucht es im Hintergrund weiter.</p>
+    <div class="boot-btns"><button class="btn" id="bootQuit">Beenden</button><button class="btn primary boot-pri" id="bootRetry">Erneut versuchen</button></div>
+    <small>Hilft das nicht: Vorleser beenden und neu öffnen.</small>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
 <div class="upd hidden" id="upd" role="status" aria-live="polite">
   <div class="upd-ic" id="updIc"><svg class="i" style="width:18px;height:18px"><use href="#i-dl"/></svg></div>
   <div class="upd-body">

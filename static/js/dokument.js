@@ -3,13 +3,20 @@
 /* ===================================================================== */
 /* Dokument öffnen & darstellen                                           */
 /* ===================================================================== */
+let openTok = 0;
 async function openDoc(id) {
+  const my = ++openTok;                                  // schnell A, dann B geklickt → nur die letzte Antwort zählt
+  let doc;
+  try { doc = await api(`/api/docs/${id}`); }
+  catch (e) { if (my === openTok) toastErr(e); return; }   // Laden gescheitert → alter Text spielt weiter
+  if (my !== openTok) return;
   if (st.doc && st.doc.id !== id) { if (st.wantPlay) pause(); else saveProgress(true); }
   stop();
-  showDoc(await api(`/api/docs/${id}`));
+  showDoc(doc);
 }
 /** Text anzeigen (vom Server geladen oder der Beispieltext des Rundgangs). */
 function showDoc(doc) {
+  openTok++;                                             // ein noch laufendes openDoc (z. B. vom Start) darf das nicht überschreiben
   const switching = view === "read" && st.doc && st.doc.id !== doc.id && !$("viewRead").classList.contains("hidden");
   const prevRank = navRank, ghost = switching ? ghostOf($("readScroll")) : null;
   st.doc = doc; st.idx = doc.progress.chunk; st.pendingOffset = doc.progress.offset || 0;

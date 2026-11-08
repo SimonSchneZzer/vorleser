@@ -146,7 +146,7 @@ function updateStatus(loading = false) {
   if (st.doc.demo) return setStatus(`<span class="dot"></span><span>Beispieltext</span>`);
   if (st.lastError && !st.wantPlay) {
     statusSt.html = "";                       // Knopf braucht frische Elemente + Handler
-    setStatus(`<span class="status-err">${icon("i-x", "i", "width:14px;height:14px")}${esc(st.lastError.msg)} · <button class="linkbtn" id="retryBtn">Erneut versuchen</button></span>`);
+    setStatus(`<span class="status-err">${icon("i-x", "i", "width:14px;height:14px")}<span>${esc(st.lastError.msg)}</span> · <button class="linkbtn" id="retryBtn">Erneut versuchen</button></span>`);
     $("retryBtn").onclick = () => { const r = st.lastError?.retry; st.lastError = null; r ? r() : play(); };
     return;
   }
@@ -287,8 +287,9 @@ $("voiceBtn").onclick = (e) => {
 async function changeDocVoice(v) {
   if (!st.doc || v === st.doc.voice) return;
   const wasPlaying = st.wantPlay;
+  try { await api(`/api/docs/${st.doc.id}`, { method: "PATCH", body: JSON.stringify({ voice: v }) }); }
+  catch (e) { return toastErr(e); }                     // erst speichern, dann stoppen: bei Fehler läuft alles weiter
   stop();
-  await api(`/api/docs/${st.doc.id}`, { method: "PATCH", body: JSON.stringify({ voice: v }) });
   st.doc.voice = v; st.pendingOffset = 0; st.pendingFrac = null; st.srvCached = new Set();
   setVoicePill($("voiceAv"), $("voiceLbl"), v);
   updatePrep();
@@ -319,7 +320,11 @@ $("moreBtn").onclick = (e) => {
   const r = $("moreBtn").getBoundingClientRect();
   m.style.left = `${r.right - m.offsetWidth}px`; m.style.top = `${r.bottom + 6}px`;
 };
-$("mPrep").onclick = async () => { closePops(); await api(`/api/docs/${st.doc.id}/prepare`, { method: "POST" }); updatePrep(true); jobsPoll(); };
+$("mPrep").onclick = async () => {
+  closePops();
+  try { await api(`/api/docs/${st.doc.id}/prepare`, { method: "POST" }); } catch (e) { return toastErr(e); }
+  updatePrep(true); jobsPoll();
+};
 $("mEdit").onclick = () => { closePops(); openEditor(); };
 
 /* ---------- Text bearbeiten ---------- */
@@ -375,13 +380,19 @@ $("nowTitle").onclick = () => { if (st.doc && view !== "read") { showView("read"
 
 /* ---------- Vorab erzeugen (v. a. für die eigene Stimme) ---------- */
 let prepTimer = null;
+const prepRetry = {};
 async function updatePrep(force) {
   clearTimeout(prepTimer);
   if (!st.doc) return;
   if (st.doc.demo) { $("prepBtn").classList.add("hidden"); $("prepX").classList.add("hidden"); return; }
   const id = st.doc.id;
   const j = await api(`/api/docs/${id}/prepare`).catch(() => null);
-  if (!j || st.doc?.id !== id) return;
+  if (st.doc?.id !== id) return;
+  if (!j) {                                              // kurz keine Antwort → weiter fragen, Anzeige nicht einfrieren
+    if (force || $("prepBtn").classList.contains("running")) prepTimer = retryLater(prepRetry, () => updatePrep(force));
+    return;
+  }
+  prepRetry.fails = 0;
   st.srvCached = new Set((j.cached || []).flatMap((c, i) => (c ? [i] : [])));
   markReady();
   const isClone = st.doc.voice.startsWith("clone:");
@@ -401,12 +412,15 @@ async function updatePrep(force) {
   if (running || force) prepTimer = setTimeout(() => updatePrep(), 2000);
 }
 $("prepBtn").onclick = async () => {
-  if ($("prepBtn").disabled) return;
-  await api(`/api/docs/${st.doc.id}/prepare`, { method: "POST" });
+  const b = $("prepBtn");
+  if (b.disabled) return;
+  b.disabled = true;                                     // Doppelklick → nur ein Auftrag
+  try { await api(`/api/docs/${st.doc.id}/prepare`, { method: "POST" }); }
+  catch (e) { b.disabled = false; return toastErr(e); }
   updatePrep(true); jobsPoll();
 };
 $("prepX").onclick = async () => {
-  await api(`/api/docs/${st.doc.id}/prepare`, { method: "DELETE" });
+  try { await api(`/api/docs/${st.doc.id}/prepare`, { method: "DELETE" }); } catch (e) { return toastErr(e); }
   setTimeout(() => updatePrep(true), 300);
 };
 
@@ -414,13 +428,16 @@ $("prepX").onclick = async () => {
 const jobs = { list: [], prev: new Map(), t: 0 };
 async function jobsPoll() {
   clearTimeout(jobs.t);
-  let r; try { r = await api("/api/jobs"); } catch { return; }
+  let r; try { r = await api("/api/jobs"); jobs.retry = {}; }
+  catch { if (jobs.list.length) jobs.t = retryLater(jobs.retry ||= {}, jobsPoll); return; }
   const cur = new Map(r.jobs.map((j) => [`${j.doc}#${j.kind}`, j]));
   for (const [k, j] of jobs.prev) {
     if (cur.has(k)) continue;
     if (j.kind === "export") {                            // Export fertig → melden (außer der Dialog zeigt es gerade)
       api(`/api/docs/${j.doc}/export`).then((x) => {
-        if (x.status !== "ready" || ($("exportDlg").open && st.doc?.id === j.doc)) return;
+        if ($("exportDlg").open && st.doc?.id === j.doc) return;
+        if (x.status === "error") return toast(x.error || "Export fehlgeschlagen", true);
+        if (x.status !== "ready") return;
         const d = st.docs.find((y) => y.id === j.doc);
         toast(`„${d?.title || "Text"}“ ist als Hörbuch fertig`);
       }).catch(() => {});
@@ -428,6 +445,7 @@ async function jobsPoll() {
     }
     if (j.kind !== "prepare") continue;                   // beendet → war es vollständig?
     api(`/api/docs/${j.doc}/prepare`).then((p) => {
+      if (p.status === "error") { if (st.doc?.id === j.doc) updatePrep(); return toast(p.error || "Vorab erzeugen fehlgeschlagen", true); }
       if (p.status !== "ready") return;
       const d = st.docs.find((x) => x.id === j.doc);
       toast(`„${d?.title || "Text"}“ ist vollständig vorbereitet`);
@@ -504,10 +522,13 @@ function xRunRender(j) {
   const elapsed = j.started ? Date.now() / 1000 - j.started : 0;
   $("xLeft").textContent = coding ? "gleich fertig" : fmtEta(j.done > 0 && elapsed > 3 ? (elapsed / j.done) * (j.total - j.done) : null);
 }
+const xRetry = {};
 async function exportPoll() {
   clearTimeout(xTimer);
   if (!st.doc || !$("exportDlg").open) return;
-  const j = await api(`/api/docs/${st.doc.id}/export`);
+  let j;
+  try { j = await api(`/api/docs/${st.doc.id}/export`); xRetry.fails = 0; }
+  catch { xTimer = retryLater(xRetry, exportPoll); return; }   // Dialog nicht bei „43 %“ einfrieren
   if (!$("exportDlg").open) return;
   const animate = xPrev !== null && xPrev !== j.status; xPrev = j.status;
   if (j.format) $("xChip").textContent = j.format.toUpperCase();
@@ -533,7 +554,7 @@ async function exportPoll() {
     xSetView("done", animate);
   } else {
     xSetView("pick", animate);
-    xMsg(j.status === "error" ? `Fehler: ${j.error}` : j.status === "cancelled" ? "Abgebrochen" : "");
+    xMsg(j.status === "error" ? j.error || "Export fehlgeschlagen" : j.status === "cancelled" ? "Abgebrochen" : "");
   }
 }
 $("exportBtn").onclick = () => {
@@ -553,7 +574,10 @@ $("xStart").onclick = async () => {
   } catch (err) { xMsg(`Fehler: ${err.message}`); }
   $("xStart").disabled = false;
 };
-$("xCancel").onclick = async () => { await api(`/api/docs/${st.doc.id}/export`, { method: "DELETE" }); setTimeout(exportPoll, 300); };
+$("xCancel").onclick = async () => {
+  try { await api(`/api/docs/${st.doc.id}/export`, { method: "DELETE" }); } catch (e) { return xMsg(friendlyError(e)); }   // im Dialog sichtbar
+  setTimeout(exportPoll, 300);
+};
 $("xOther").onclick = () => { xMsg(""); xSetView("pick", true); };
 $("xClose").onclick = $("xBg").onclick = $("xDoneBtn").onclick = () => $("exportDlg").close();
 

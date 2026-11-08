@@ -120,7 +120,11 @@ function updRenderCard() {
 }
 async function updRefresh(force = false) {
   clearTimeout(upd.timer);
-  try { upd.s = await api(force ? "/api/update/check" : "/api/update", force ? { method: "POST" } : {}); } catch { return null; }
+  try { upd.s = await api(force ? "/api/update/check" : "/api/update", force ? { method: "POST" } : {}); upd.retry = {}; }
+  catch {                                                // während des Ladens nicht stehen bleiben (Balken friert sonst ein)
+    if (["downloading", "preparing", "installing"].includes(upd.s?.state)) upd.timer = retryLater(upd.retry ||= {}, updRefresh, 1000);
+    return null;
+  }
   if (upd.s.justUpdated) {
     try { if (localStorage.getItem(NEWS_SEEN) !== upd.s.justUpdated) localStorage.setItem(NEWS_PENDING, upd.s.justUpdated); } catch {}
   }
@@ -266,7 +270,8 @@ $("bugForm").onsubmit = async (e) => {
   } catch (err) {
     $("bugForm").classList.remove("sending");
     $("bugMsgInfo").textContent = /Failed to fetch|NetworkError|Load failed/i.test(err.message)
-      ? "Senden fehlgeschlagen – bist du online?" : `Senden fehlgeschlagen: ${err.message}`;
+      ? "Senden fehlgeschlagen – bist du online?" : "Senden fehlgeschlagen – bitte später noch einmal versuchen.";
+    reportClientError(`Fehler melden: ${err.message}`);
   }
 };
 bugInit();

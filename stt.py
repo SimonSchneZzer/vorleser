@@ -5,6 +5,7 @@ import os
 import threading
 import time
 
+import meldungen
 import tts
 
 WHISPER_MODEL = os.environ.get("VORLESER_WHISPER", "small")   # tiny/base/small/medium/large-v3
@@ -22,19 +23,33 @@ def stt_available() -> bool:
         return False
 
 
+DIKTAT_LADEN = "Die Spracherkennung wird beim ersten Diktat einmalig geladen – dafür ist eine Internetverbindung nötig."
+
+
+_model_failed = 0.0
+
+
 def _get_model():
     global _model
     with _model_lock:
         if _model is None:
             from faster_whisper import WhisperModel
             print(f"[whisper] lade Modell '{WHISPER_MODEL}' (beim ersten Mal Download) …", flush=True)
-            _model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
+            global _model_failed
+            if time.time() - _model_failed < 300:  # offline: nicht bei jedem Abschnitt neu versuchen und loggen
+                raise meldungen.Meldung(DIKTAT_LADEN)
+            try:
+                _model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
+            except Exception as e:                # erster Start offline: Modell fehlt noch
+                _model_failed = time.time()
+                meldungen.loggen("whisper", e)
+                raise meldungen.Meldung(DIKTAT_LADEN) from e
         return _model
 
 
 def transcribe(data: bytes, lang: str | None = None) -> dict:
     if not stt_available():
-        raise RuntimeError("Diktat nicht installiert: uv pip install --python .venv/bin/python faster-whisper")
+        raise meldungen.Meldung("Diktat ist in dieser Version nicht verfügbar")
     model = _get_model()
     t0 = time.time()
     with _stt_lock:

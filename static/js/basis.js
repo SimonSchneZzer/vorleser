@@ -17,9 +17,17 @@ const icon = (id, cls = "i", style = "") => `<svg class="${cls}" ${style ? `styl
 
 const api = async (path, opts = {}) => {
   const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText || `Fehler ${r.status}`);
   return r.json();
 };
+
+/** Antwort eines fetch() lesen: erst den Status prüfen, dann JSON (Fehlerseiten sind nicht immer JSON). */
+async function readJson(r) {
+  const d = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(d?.error || r.statusText || `Fehler ${r.status}`);
+  if (d === null) throw new Error(UI_INTERN);          // 200, aber keine lesbare Antwort
+  return d;
+}
 
 const st = {
   doc: null, idx: 0, pendingOffset: 0,
@@ -102,14 +110,42 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let toastT = null;
 function toast(msg, err = false) {
   const t = $("toast");
+  // Über offenen Dialogen (Top-Layer) sichtbar: als Popover neu öffnen – ältere WebViews ohne Popover: wie bisher
+  if (t.showPopover && document.querySelector("dialog[open]")) {
+    try { if (t.matches(":popover-open")) t.hidePopover(); t.showPopover(); } catch {}
+  }
   t.textContent = msg; t.classList.toggle("err", err);
   t.classList.add("show");
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), err ? 4500 : 2200);
 }
 function toastErr(e) { console.error(e); toast(friendlyError(e), true); }
+const UI_INTERN = "Etwas ist schiefgelaufen – die Details stehen im Log. Über „Fehler melden“ kannst du sie mitschicken.";
 function friendlyError(e) {
+  if (e == null) return UI_INTERN;
   const m = e?.message || String(e);
-  return /Failed to fetch|NetworkError|Load failed/i.test(m) ? "Der Vorleser-Server antwortet nicht – läuft er noch?" : m;
+  if (/Failed to fetch|NetworkError|Load failed|did not match the expected pattern/i.test(m)) return "Der Vorleser-Server antwortet nicht – läuft er noch?";
+  if (e instanceof TypeError || e instanceof ReferenceError || e instanceof SyntaxError || e instanceof RangeError) return UI_INTERN;   // Programmierfehler → kein JS-Rohtext
+  return m;
+}
+/* ---------- Unerwartete Fehler: ins Log (pywebview hat keine sichtbare Konsole) + kurze Meldung ---------- */
+let clientErrors = 0;
+function reportClientError(msg, stack) {
+  if (++clientErrors > 20) return;                           // keine Flut bei Fehlern in Schleifen
+  fetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ msg: String(msg || ""), stack: String(stack || "") }) }).catch(() => {});
+}
+window.addEventListener("error", (e) => reportClientError(e.message, e.error?.stack));
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason;
+  if (r?.name === "AbortError" || r?.name === "NotAllowedError") return;   // abgebrochenes Audio, Autoplay-Sperre
+  reportClientError(r?.message || r, r?.stack);
+  if (clientErrors <= 5) toast(friendlyError(r), true);    // wiederkehrender Fehler: nur ins Log, keine Toast-Flut
+});
+/** Abfrage-Schleife nach einem Fehler weiterführen: 2 s → 4 s → … max. 30 s; ab dem 3. Fehler ein Hinweis. */
+function retryLater(state, fn, base = 2000, quiet = false) {
+  state.fails = (state.fails || 0) + 1;
+  if (state.fails === 3 && !quiet) toast("Keine Verbindung zum Vorleser – es wird weiter versucht …", true);
+  return setTimeout(fn, Math.min(30000, base * 2 ** (state.fails - 1)));
 }
 /** Eigener Rückfrage-Dialog statt confirm(). Liefert Promise<boolean>. */
 function ask({ title, text = "", ok = "OK", cancel = "Abbrechen", danger = false, icon: ico = danger ? "i-trash" : "i-check" }) {

@@ -206,7 +206,7 @@ async function deleteDoc(id) {
   const ok = await ask({ title: `„${d?.title || "Text"}“ löschen?`, ok: "Löschen", danger: true,
     text: "Der Text wird mit Lesezeichen und Hörbuch-Export endgültig entfernt. Das lässt sich nicht rückgängig machen." });
   if (!ok) return;
-  await api(`/api/docs/${id}`, { method: "DELETE" });
+  try { await api(`/api/docs/${id}`, { method: "DELETE" }); } catch (e) { return toastErr(e); }
   const cur = st.doc?.id === id;
   if (cur) stop();
   const li = $("library").querySelector(`a[data-id="${id}"]`)?.closest("li");

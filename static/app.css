@@ -564,6 +564,8 @@ dialog[open]::backdrop { animation: fadeIn .3s var(--ease) both; }
 .toast { position: fixed; z-index: 110; left: 50%; bottom: 120px; transform: translate(-50%, 16px); padding: 10px 16px; border-radius: 12px; background: var(--strong); color: var(--on-strong); font-size: 14px; font-weight: 500; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .2s var(--ease), transform .35s var(--ease-out); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.err { background: var(--danger); color: #fff; }
+.toast[popover] { inset: auto; left: 50%; bottom: 120px; margin: 0; border: 0; overflow: visible; }
+.toast[popover]:not(:popover-open) { display: block; }   /* ohne Dialog: normal im Seitenfluss wie bisher */
 /* ===================== Eigene Stimme installieren: Fortschrittskarte ===================== */
 .cs { display: grid; grid-template-columns: 128px 1fr; gap: 22px; align-items: center; padding: 20px 22px; margin-bottom: 18px;
   border: 1px solid var(--line); border-radius: 18px; background: var(--surface); animation: updIn .55s var(--spring) both;
@@ -1186,3 +1188,41 @@ body.scrubbing, body.scrubbing * { -webkit-user-select: none; user-select: none;
 .has-player .side-foot { height: var(--player-h); padding-top: 0; padding-bottom: 0; transition: height .3s var(--ease-out); }
 .has-player.foot-follow .side-foot { transition: none; }   /* folgt der Playbar Bild für Bild (syncPlayerHeight) */
 .has-player .side-foot .navlink { flex: 0 0 36px; }
+
+/* ===================== Start ohne Server (Board 18) =====================
+   Erscheint nur, wenn der Server nach 1,5 s noch nicht antwortet (sonst flackert es bei jedem Start);
+   nach ~7 s gleitet die Glas-Karte herein. Antwortet er, blendet alles aus. */
+.boot { position: fixed; inset: 0 0 0 280px; z-index: 104; display: grid; place-items: center; overflow: hidden;
+  background: var(--bg); transition: opacity .3s var(--ease), filter .3s var(--ease); }
+.boot.leaving { opacity: 0; filter: blur(3px); pointer-events: none; }
+.boot.stuck::before { content: ""; position: absolute; inset: 72px 96px; opacity: .55;     /* angedeuteter Lesetext hinter dem Glas */
+  background: linear-gradient(var(--line) 0 0) 0 0 / 46% 34px no-repeat,
+    repeating-linear-gradient(180deg, var(--subtle) 0 12px, transparent 12px 30px) 0 58px / 90% 100% no-repeat;
+  border-radius: 8px; animation: fadeUp .4s var(--ease-out) both;
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent 92%); mask-image: linear-gradient(180deg, #000 30%, transparent 92%); }
+.boot.stuck::after { content: ""; position: absolute; width: 760px; height: 560px; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--acc) 22%, transparent), transparent); pointer-events: none; }
+.boot-wait { display: flex; flex-direction: column; align-items: center; gap: 16px; animation: bootIn .6s var(--spring) both; }
+.boot-wait b { font-size: 20px; color: var(--ink); }
+.boot-logo { width: 64px; height: 64px; border-radius: 16px; background: var(--logo-bg, #25292D); border: 1px solid var(--line); display: grid; place-items: center; }
+.boot-logo svg { width: 30px; height: 30px; fill: none; stroke: var(--logo-bar, var(--acc)); stroke-width: 2.2; stroke-linecap: round; }
+.boot-bar { width: 220px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.boot-bar i { display: block; height: 100%; width: 0; background: var(--acc); animation: bootBar 6s cubic-bezier(.3, .1, .3, 1) both; }
+.boot-card { position: relative; z-index: 1; width: min(440px, calc(100% - 48px)); box-sizing: border-box; padding: 30px 28px 24px; border-radius: 22px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; animation: bootIn .6s var(--spring) both;
+  background: var(--glass); -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
+  border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shade), 0 30px 80px rgba(0, 0, 0, .25);
+  background-image: linear-gradient(180deg, var(--glass-sheen), transparent 40%); }
+.boot-card b { font-size: 18px; color: var(--ink); }
+.boot-card p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.boot-card small { margin-top: 6px; font-size: 12.5px; color: var(--muted); opacity: .85; }
+.boot-ic { width: 54px; height: 54px; border-radius: 15px; display: grid; place-items: center; color: var(--on-acc);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 70%, #fff), var(--acc) 55%, color-mix(in srgb, var(--acc) 85%, #000));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 8px 22px color-mix(in srgb, var(--acc) 35%, transparent); }
+.boot-ic svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.boot-btns { display: flex; gap: 10px; margin-top: 8px; }
+.boot-pri { background-image: linear-gradient(180deg, rgba(255, 255, 255, .22), transparent 60%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 4px 14px color-mix(in srgb, var(--acc) 28%, transparent); }
+@media (max-width: 900px) { .boot { inset: 0; } }
+@keyframes bootIn { from { opacity: 0; transform: translateY(14px) scale(.97); filter: blur(4px); } }
+@keyframes bootBar { to { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .boot-wait, .boot-card, .boot.stuck::before { animation: none; } .boot-bar i { animation-duration: .01s; } }

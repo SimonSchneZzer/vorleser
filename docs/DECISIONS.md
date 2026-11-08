@@ -5,6 +5,23 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-08 · Fehlerbehandlung: feste Meldungen, nichts hängt still
+**Kontext:** Audit der ganzen App (Oberfläche, Backend, Download-Seite). Fundament ok (Catch-all im Server, Zeitlimits,
+atomares Schreiben), aber: rohe Exception-Texte in der UI („[Errno 28] …“, „'list' object has no attribute …“), kein
+Traceback im Log, ~30 unübersetzte Meldungen, Abfrage-Schleifen, die nach EINEM Fehler für immer stehen blieben
+(Export „43 %“, Update-Balken, Installation), leeres Fenster wenn der Server beim Start nicht antwortet, eine kaputte
+Text-Datei leerte die ganze Bibliothek, ein Fehler beim Start verhinderte den Updater, Klon-Worker ohne Zeitlimit,
+Export/Vorab-Erzeugen mischten bei Edge-Ausfall still die Ersatzstimme ein und meldeten „Fertig“.
+**Entscheidung:** `meldungen.py` als einziger Übersetzer Fehler → fester Satz (Vorbild `updater._user_error`); Server,
+Export, Klon-Setup, Diktat, Import nutzen ihn; Traceback ins Log, Fehler der Oberfläche über `/api/client-error` ebenfalls.
+Export und Vorab-Erzeugen nur in der gewählten Stimme (`synth_strict`: Aussetzer mit 5/20/60 s überbrücken, sonst
+ehrlicher Fehler). Startschritte einzeln abgesichert. Klon-Worker: Antworten über eine Queue mit Zeitlimit (Start 900 s,
+Abschnitt 600 s), danach beendet. Oberfläche: globaler Fehler-Fänger, `retryLater` (2 → 30 s) für alle Abfragen, Start
+fragt weiter, bis der Server antwortet, Toast als Popover über Dialogen, openDoc mit Token. Log ab 5 MB rotiert.
+**Start ohne Server (Board 18, von Simon freigegeben):** Bildschirm erst nach 1,5 s (sonst flackert er bei jedem normalen Start), „Vorleser startet …“ mit einmal laufendem Balken, nach 7 s Glas-Karte „Antwortet gerade nicht“ mit Erneut versuchen / Beenden (`pywebview.api.quit_app`, geht auch ohne Server). Download-Seite (Board 19): Hinweis, wenn der Download hakt; Handy-Hinweis mit „Link kopieren“; Windows-Hinweis zur Browser-Warnung als Zeile über den drei Schritten (ein vierter animierter Schritt hätte das Raster gesprengt).
+**Verworfen:** `cryptography` für AES-PDFs mitliefern (neue Abhängigkeit, erst nach Rückfrage) – stattdessen klare
+Meldung mit Ausweg. Zeitlimit für alle API-Aufrufe der Oberfläche (Synthese/Import dauern legitim lange).
+
 ## 2026-11-08 · Update laden: Wiederholung + Ausweichweg über die GitHub-API
 **Kontext:** Das Update auf 2.10.1 schlug dreimal mit „HTTP Error 504: Gateway Time-out“ fehl (Teil-Update und
 komplettes Paket). Ursache war nicht das Release, sondern github.com selbst: die Webseite (auch fremde Repos und

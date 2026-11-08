@@ -19,6 +19,7 @@ ergänzen** (Datum, Kontext, Entscheidung, Folgen) – auch bei Bugfixes, deren 
 | `exporter.py` | Export M4B/MP3/WAV mit Kapiteln, „Vorab erzeugen“ |
 | `stt.py` | Whisper: Diktat + Wortzeitmarken für Stimmen ohne eigene Marken |
 | `clone_setup.py` / `clone_worker.py` | Eigene Stimme nachinstallieren (mitgeliefertes `uv`) / Worker im eigenen venv |
+| `meldungen.py` | Fehler → fester deutscher Satz für die Oberfläche (`fuer_nutzer`), Traceback ins Log (`loggen`), `Meldung` für eigene Texte |
 | `updater.py` | Updates: Release im Repo `vorleser-download` erkennen, laden + vorbereiten; Tausch nach „Jetzt neu starten“ oder beim Beenden |
 | `storage.py` | Speicher-Aufschlüsselung (Audio pro Text über Cache-Hash), gezieltes Löschen |
 | `uninstaller.py` | Deinstallieren aus der App (Helfer nach dem Beenden, optional Daten behalten) |
@@ -63,6 +64,10 @@ Weitere Variablen: `VORLESER_DEBUG=1` (DevTools), `VORLESER_VERSION`, `VORLESER_
 - **Jeder `subprocess`-Aufruf bekommt `**NO_WINDOW`** (sonst blitzen unter Windows Konsolenfenster auf).
 - **Opus/WebM immer über `tts.to_opus()`** (in Datei, nicht `pipe:1`): sonst fehlt die Dauer im Header und
   die Wortmarkierung läuft dem Audio davon.
+- **Fehler nie roh in die Oberfläche.** Backend: eigene Meldungen als `raise Meldung("…")`/`ValueError("…")` mit festem
+  deutschem Satz, alles andere über `meldungen.fuer_nutzer(e)`; Hintergrund-Threads loggen mit `meldungen.loggen` (Traceback
+  → server.log → „Fehler melden“). Oberfläche: `toastErr`/`friendlyError`, Antworten über `readJson`, Abfrage-Schleifen
+  im Fehlerfall mit `retryLater` weiterführen (nie still stehen bleiben). `tests/test_meldungen.py` findet unübersetzte Meldungen.
 - **Texte in der Oberfläche sind deutsch**; Englisch entsteht zur Laufzeit über die Zuordnung in
   `static/i18n.js`. Neue Texte, die per JS gesetzt werden → dort eintragen (Test prüft wichtige).
 - **Tests nie ins Netz** (außer Marker `online`) und nie in echte Daten: `tests/conftest.py` setzt

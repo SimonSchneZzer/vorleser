@@ -4,6 +4,21 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.10.3
+Clearer messages when something goes wrong – and nothing gets stuck silently anymore.
+
+- **Clear messages:** errors now explain what happened in plain words (e.g. "No disk space left") instead of technical
+  codes – in German and English
+- **No more freezing:** progress for export, preparing, updates and installing your own voice keeps going after a
+  short hiccup instead of stopping forever
+- **Starting up:** if Vorleser takes longer to start, you see that it's starting – and after a while a card with
+  **Try again**
+- **Export and preparing** now always use the voice you picked; if it can't be reached, you get an honest message
+  instead of an audiobook with a mixed-in backup voice
+- **Import:** text files saved as "Unicode" on Windows now read correctly; protected or damaged PDFs/EPUBs get a clear
+  explanation
+- **Your library** still opens if a single text file is damaged; messages now also appear above open dialogs
+
 ## 2.10.2
 Updates now get through even when GitHub is having trouble – and a failed update can simply be tried again.
 

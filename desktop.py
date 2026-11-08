@@ -18,6 +18,12 @@ import paths
 
 # In der App gibt es keine Konsole: alle Ausgaben ins Log (vor allen anderen Importen)
 if paths.FROZEN:
+    try:                                   # Log nicht endlos wachsen lassen: ab 5 MB eine Vorgänger-Datei behalten
+        paths.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if paths.LOG_FILE.exists() and paths.LOG_FILE.stat().st_size > 5_000_000:
+            paths.LOG_FILE.replace(paths.LOG_FILE.with_name("server.old.log"))
+    except OSError:
+        pass
     _log = open(paths.LOG_FILE, "a", encoding="utf-8", buffering=1)
     sys.stdout = sys.stderr = _log
 
@@ -41,6 +47,10 @@ def _existing_instance(port: int) -> bool:
 
 class Api:
     """Aus der Oberfläche aufrufbar: window.pywebview.api.<name>(…)"""
+
+    def quit_app(self) -> None:
+        """„Beenden“ auf dem Start-Fehlerbildschirm – funktioniert auch, wenn der Server nicht antwortet."""
+        _quit()
 
     def save_export(self, doc_id: str) -> dict:
         if not re.fullmatch(r"[0-9a-f]{32}", doc_id or ""):

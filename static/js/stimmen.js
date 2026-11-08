@@ -20,7 +20,10 @@ async function reloadVoices() {
   for (const id of st.warmIds || []) if (!warm.has(id)) st.voiceReady = { id, t: performance.now() };   // eben fertig geworden
   st.warmIds = warm;
   clearTimeout(st.warmT);
-  if (warm.size) st.warmT = setTimeout(() => reloadVoices().then(() => { if (setTab === "voices") renderVoiceLib(); }).catch(() => {}), 3000);
+  if (warm.size) st.warmT = setTimeout(function again() {
+    reloadVoices().then(() => { st.warmRetry = {}; if (setTab === "voices") renderVoiceLib(); })
+      .catch(() => { st.warmT = retryLater(st.warmRetry ||= {}, again, 3000); });
+  }, 3000);
 }
 
 /* ---------- Stimmen-Panel ---------- */

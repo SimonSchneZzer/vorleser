@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import os
+import queue
 import re
 import subprocess
 import threading
@@ -21,14 +22,25 @@ import edge_tts
 import imageio_ffmpeg
 from piper import PiperVoice
 
+import meldungen
 import paths
 import settings
+from meldungen import FFmpegFehler, Meldung
 from paths import CACHE_DIR, CLONE_PY, DATA_DIR, NO_WINDOW
 from textproc import LANGS
 
 EDGE_LIST_FILE = DATA_DIR / "edge_voices.json"
 CLONE_DIR = DATA_DIR / "own_voices"
 CLONE_TIMEOUT = 600        # Sekunden pro Abschnitt (Klon ist langsam)
+CLONE_START_TIMEOUT = 900  # Sekunden für den Start des Workers (Modell laden)
+EDGE_WEG = "Die Online-Stimme ist gerade nicht erreichbar – bist du online?"
+CLONE_WEG = "Die eigene Stimme konnte nicht starten – die Details stehen im Log."
+CLONE_FEHLER = "Die eigene Stimme konnte diesen Abschnitt nicht erzeugen."
+CLONE_SPEICHER = "Zu wenig Arbeitsspeicher für die eigene Stimme."
+CLONE_HAENGT = "Die eigene Stimme hat zu lange gebraucht und wird neu gestartet."
+KEINE_STIMME = "Keine Stimme verfügbar (offline und keine Piper-Stimme installiert)"
+NICHTS_VORLESBAR = "Dieser Abschnitt enthält nichts Vorlesbares"
+STIMME_FEHLT = "Die gewählte Stimme ist nicht mehr installiert"
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 PREVIEW_TEXT = {"de": "Hallo! So klinge ich, wenn ich dir deine Texte vorlese.",
@@ -352,7 +364,7 @@ def ffmpeg(args: list[str], data: bytes | None = None) -> bytes:
         if tmp:
             os.unlink(tmp.name)
     if r.returncode != 0:
-        raise RuntimeError(f"ffmpeg: {r.stderr.decode(errors='replace')[-300:]}")
+        raise FFmpegFehler(f"ffmpeg: {r.stderr.decode(errors='replace')[-300:]}")
     return r.stdout
 
 
@@ -417,9 +429,15 @@ def _synth_edge(text: str, short: str) -> tuple[bytes, list]:
     return data, marks
 
 
+_worker_log_file = None
+
+
 def _worker_log():
-    """Fehlerausgabe des Klon-Prozesses: in der App ins Log (dort gibt es keine Konsole)."""
-    return open(paths.LOG_FILE, "a", encoding="utf-8") if paths.FROZEN else None
+    """Fehlerausgabe des Klon-Prozesses: in der App ins Log (dort gibt es keine Konsole). Ein Handle für alle Starts."""
+    global _worker_log_file
+    if paths.FROZEN and _worker_log_file is None:
+        _worker_log_file = open(paths.LOG_FILE, "a", encoding="utf-8")
+    return _worker_log_file
 
 
 class _CloneWorker:
@@ -435,10 +453,29 @@ class _CloneWorker:
         self.proc = subprocess.Popen([str(CLONE_PY), str(paths.CLONE_WORKER)], stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=_worker_log(), text=True, bufsize=1,
                                      encoding="utf-8", env=paths.clone_env(), **NO_WINDOW)
-        hello = json.loads(self.proc.stdout.readline() or "{}")
+        q, proc = queue.Queue(), self.proc
+        def pump():                            # Zeilen in eine Queue → Lesen mit Zeitlimit (auch unter Windows)
+            for line in proc.stdout:
+                q.put(line)
+            q.put("")
+        threading.Thread(target=pump, daemon=True).start()
+        self._q = q
+        try:
+            hello = json.loads(self._readline(CLONE_START_TIMEOUT) or "{}")
+        except ValueError:
+            hello = {}
         if not hello.get("ready"):
-            self.proc = None
-            raise RuntimeError("Stimmklon-Worker konnte nicht starten")
+            self.stop()
+            raise Meldung(CLONE_WEG)
+
+    def _readline(self, timeout: float) -> str:
+        """Nächste Antwort des Workers; hängt er (torch/MPS), wird er beendet statt alles zu blockieren."""
+        try:
+            return self._q.get(timeout=timeout)
+        except queue.Empty:
+            print(f"[clone] Worker antwortet seit {timeout:.0f} s nicht – wird beendet", flush=True)
+            self.stop()
+            raise Meldung(CLONE_HAENGT) from None
 
     def stop(self):
         if self.proc and self.proc.poll() is None:
@@ -472,12 +509,14 @@ class _CloneWorker:
         try:
             self.proc.stdin.write(json.dumps({"text": text, "lang": lang, "ref": str(ref), "out": str(out)}) + "\n")
             self.proc.stdin.flush()
-            res = json.loads(self.proc.stdout.readline() or '{"ok": false, "error": "Worker beendet"}')
+            res = json.loads(self._readline(CLONE_TIMEOUT) or '{"ok": false, "error": "Worker beendet"}')
             if not res.get("ok"):
-                if "memory" in str(res.get("error", "")).lower() and self.proc:
-                    self.proc.kill()            # nächster Auftrag startet einen frischen Worker
-                    self.proc = None
-                raise RuntimeError(res.get("error"))
+                err = str(res.get("error", ""))
+                print(f"[clone] Worker-Fehler: {err}", flush=True)
+                if "memory" in err.lower() and self.proc:
+                    self.stop()                 # nächster Auftrag startet einen frischen Worker
+                    raise Meldung(CLONE_SPEICHER)
+                raise Meldung(CLONE_FEHLER)
             return out.read_bytes()
         finally:
             out.unlink(missing_ok=True)
@@ -489,7 +528,7 @@ _clone_worker = _CloneWorker()
 def _synth_clone(text: str, slug: str, lang: str, low: bool = False) -> bytes:
     ref = CLONE_DIR / slug / "sample.wav"
     if not ref.exists():
-        raise RuntimeError("Stimmprofil nicht gefunden")
+        raise Meldung("Die eigene Stimme wurde nicht gefunden")
     wav = _clone_worker.synth(text, lang, ref, low=low)
     return to_opus(wav)
 
@@ -540,20 +579,22 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
     if engine == "edge":
         if time.time() < _edge_down_until:
             if not fallback:
-                raise RuntimeError("Edge gerade nicht erreichbar")
+                raise Meldung(EDGE_WEG)
             return _fallback(text, lang, voice_id)
         try:
             data, marks = _synth_edge(text, name)
-            path.with_suffix(".marks.json").write_text(json.dumps(marks, ensure_ascii=False), "utf-8")
         except Exception as e:
             # „NoAudioReceived“ betrifft nur diese eine Stimme – keine globale Sperre.
-            voice_only = type(e).__name__ == "NoAudioReceived"
+            # z. B. „* * *“ – nur dieser Abschnitt/diese Stimme, kein Netzproblem
+            voice_only = type(e).__name__ == "NoAudioReceived" or str(e) == "Edge lieferte kein Audio"
             if fallback and not voice_only:
                 _edge_down_until = time.time() + EDGE_COOLDOWN
             print(f"[edge] {name}: {type(e).__name__}" + ("" if voice_only or not fallback else f" – Piper übernimmt für {EDGE_COOLDOWN}s"), flush=True)
             if not fallback:
-                raise
+                raise Meldung(NICHTS_VORLESBAR if voice_only else EDGE_WEG) from e
             return _fallback(text, lang, voice_id)
+        # außerhalb des Edge-Blocks: volle Platte ist kein Edge-Ausfall (sonst 60 s Sperre + Ersatzstimme)
+        _write_atomic(path.with_suffix(".marks.json"), json.dumps(marks, ensure_ascii=False).encode())
     elif engine == "piper" and name in _piper_files():
         data = _synth_piper(text, name)
     elif engine == "clone" and clone_available():
@@ -580,17 +621,28 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
                 with _inflight_lock:
                     _inflight.pop(path, None)
                 ev.set()
-    else:
+    else:                                          # Piper-Stimme gelöscht / Klon entfernt
+        if not fallback:
+            raise Meldung(STIMME_FEHLT)
         return _fallback(text, lang, voice_id)
     print(f"[{engine}] {len(text):4d} Zeichen in {time.time() - t0:.2f}s", flush=True)
 
-    tmp = path.with_suffix(".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(path)
+    _write_atomic(path, data)
     schedule_prune()
     if engine == "clone" and text not in PREVIEW_TEXT.values():   # Wortmarken schon mal vorbereiten
         threading.Thread(target=get_marks, args=(text, voice_id, lang), daemon=True).start()
     return data, MIME[path.suffix[1:]], voice_id
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
+    """Über eine eigene Zwischendatei je Thread: erzeugen zwei Threads denselben Abschnitt, stört keiner den anderen."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}-{threading.get_ident()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _fallback(text: str, lang: str, failed: str) -> tuple[bytes, str, str]:
@@ -600,7 +652,7 @@ def _fallback(text: str, lang: str, failed: str) -> tuple[bytes, str, str]:
             return synthesize(text, fb, lang)
     fb = fallback_voice(lang)
     if not fb or fb == failed:
-        raise RuntimeError("Keine Stimme verfügbar (offline und keine Piper-Stimme installiert)")
+        raise Meldung(KEINE_STIMME)
     return synthesize(text, fb, lang)
 
 
@@ -656,7 +708,18 @@ def prune_cache() -> int:
     """Älteste Dateien löschen, bis der Cache unter 80 % des Limits liegt."""
     limit = cache_limit()
     with _prune_lock:
-        files = [(p, p.stat()) for p in CACHE_DIR.iterdir() if p.is_file()]
+        files = []
+        for p in CACHE_DIR.iterdir():
+            try:
+                st = p.stat()
+            except OSError:                        # gerade umbenannt (Zwischendatei eines anderen Threads)
+                continue
+            if p.suffix == ".tmp":                 # Rest nach Absturz: nach einer Stunde weg
+                if time.time() - st.st_mtime > 3600:
+                    p.unlink(missing_ok=True)
+                continue
+            if p.is_file():
+                files.append((p, st))
         total = sum(s.st_size for _, s in files)
         if total <= limit:
             return 0

@@ -80,15 +80,14 @@ async function importFile(f) {
   $("fileStatus").innerHTML = `<span class="spin" style="display:inline-block;vertical-align:-2px"></span> Lese ${esc(f.name)} …`;
   try {
     const r = await fetch("/api/import", { method: "POST", body: f, headers: { "X-Filename": encodeURIComponent(f.name) } });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || r.statusText);
+    const d = await readJson(r);
     $("text").value = d.text;
     $("title").value = d.title || f.name.replace(/\.[^.]+$/, "");
     st.langManual = false;
     setNewLang(d.lang, true);
     $("fileStatus").textContent = "";
     setSrc("paste"); updateCount();
-  } catch (err) { $("fileStatus").textContent = `Import fehlgeschlagen: ${err.message}`; }
+  } catch (err) { $("fileStatus").textContent = friendlyError(err); }   // eigener Satz vom Server, übersetzbar
 }
 $("pickFile").onclick = $("pickFile2").onclick = () => $("file").click();
 $("file").onchange = (e) => { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ""; };
@@ -137,7 +136,8 @@ let dict = null;
 $("dictBtn").onclick = async () => {
   const btn = $("dictBtn");
   if (!dict) {
-    try { dict = startRecorder(await getMic()); } catch (e) { return alert("Mikrofon nicht verfügbar: " + e.message); }
+    try { dict = startRecorder(await getMic()); }
+    catch (e) { reportClientError(`Mikrofon: ${e?.message || e}`); $("dictHint").textContent = "Mikrofon nicht verfügbar – bitte den Zugriff in den Systemeinstellungen erlauben."; return; }
     btn.classList.add("on"); btn.setAttribute("aria-label", "Diktat beenden");
     $("dictHint").textContent = "Aufnahme läuft – nochmal tippen zum Beenden.";
     dict.timer = setInterval(() => ($("dictTime").textContent = mmss(dict.secs())), 250);
@@ -150,14 +150,13 @@ $("dictBtn").onclick = async () => {
   try {
     const headers = st.langManual ? { "X-Lang": $("newLang").value } : {};
     const r = await fetch("/api/transcribe", { method: "POST", body: blob, headers });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error);
+    const d = await readJson(r);
     const ta = $("text");
     ta.value = (ta.value.trim() ? ta.value.trimEnd() + "\n\n" : "") + d.text;
     if (!st.langManual && st.langs[d.lang]) setNewLang(d.lang, true);
     updateCount(); setSrc("paste");
     $("dictHint").textContent = "Tippen und losreden. Längere Pausen werden zu Absätzen. Läuft lokal mit Whisper.";
-  } catch (e) { $("dictHint").textContent = "Diktat fehlgeschlagen: " + e.message; }
+  } catch (e) { $("dictHint").textContent = friendlyError(e); }
   finally { btn.disabled = false; $("dictTime").textContent = "0:00"; }
 };
 

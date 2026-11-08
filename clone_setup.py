@@ -7,13 +7,16 @@ Mac: Grafikchip (MPS). Windows: NVIDIA-Grafikkarte (CUDA), sonst Prozessor (lang
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import threading
 import time
 from pathlib import Path
 
+import meldungen
 import paths
+from meldungen import Meldung
 from paths import CLONE_ENV, CLONE_PY, NO_WINDOW
 
 PYTHON = "3.11"
@@ -175,6 +178,30 @@ def _progress(totals: dict, order: list[str]) -> None:
               totals=dict(totals))
 
 
+PHASE_FEHLER = {
+    "python": "Python für die eigene Stimme ließ sich nicht einrichten – bitte noch einmal versuchen.",
+    "packages": "Die Pakete für die eigene Stimme ließen sich nicht laden – bitte noch einmal versuchen.",
+    "model": "Das Stimmmodell ließ sich nicht laden – bitte noch einmal versuchen.",
+}
+_NETZ = re.compile(r"failed to fetch|could not resolve|dns error|connection (refused|reset|error)|timed out|"
+                   r"network is unreachable|name or service not known|nodename nor servname|temporary failure", re.I)
+
+
+def _phase_fehler(phase: str) -> Meldung:
+    """Verständlicher Grund aus dem Setup-Log; die letzten Zeilen auch ins server.log (→ „Fehler melden“)."""
+    try:
+        tail = SETUP_LOG.read_text("utf-8", errors="replace").splitlines()[-15:]
+    except OSError:
+        tail = []
+    print("[clone-setup] letzte Log-Zeilen:\n  " + "\n  ".join(tail), flush=True)
+    text = "\n".join(tail)
+    if "no space left" in text.lower() or "errno 28" in text.lower():
+        return Meldung(meldungen.PLATTE)
+    if _NETZ.search(text):
+        return Meldung(meldungen.OFFLINE)
+    return Meldung(PHASE_FEHLER.get(phase, meldungen.INTERN))
+
+
 def _run(phase: str, args: list[str], totals: dict, order: list[str], watch: tuple[Path, ...] = ()) -> None:
     """Befehl ausführen; währenddessen Fortschritt (wachsende Ordner) und Zwischenschritt melden."""
     global _proc
@@ -200,7 +227,7 @@ def _run(phase: str, args: list[str], totals: dict, order: list[str], watch: tup
         if _cancel.is_set():
             raise InterruptedError
         if _proc.returncode != 0:
-            raise RuntimeError(f"{phase} fehlgeschlagen (Details im Log)")
+            raise _phase_fehler(phase)
         with _lock:                                   # Phase fertig → voll anrechnen
             _state["mb"] = totals.get(phase, _state["mb"])
             _progress(totals, order)
@@ -256,9 +283,9 @@ def _install() -> None:
                 _state.clear()
                 _state["status"] = "idle"
             return
-        print(f"[clone-setup] Fehler: {e}", flush=True)
+        meldungen.loggen("clone-setup", e)
         with _lock:
-            _state.update(status="error", error=str(e))
+            _state.update(status="error", error=meldungen.fuer_nutzer(e))
     finally:
         shutil.rmtree(UV_CACHE, ignore_errors=True)
 

@@ -128,7 +128,7 @@ jobs:
           # latest.json für den Updater der App (Download-Seite, kein Ratenlimit) – erst NACH dem Hochladen,
           # damit eine App nie eine Version meldet, deren Installer noch fehlt
           python3 - "$VER" <<'PY'
-          import json, os, sys
+          import json, os, sys, time
           ver = sys.argv[1]
           base = f"https://github.com/SimonSchneZzer/vorleser-download/releases/download/v{ver}/"
           notes = open("notes.md", encoding="utf-8").read().split("\n---\n")[0].strip()[:600]
@@ -139,7 +139,8 @@ jobs:
               if os.path.exists(z) and os.path.exists(info):
                   assets[n]["patch"] = {"url": base + z, "size": os.path.getsize(z), "from": json.load(open(info))["from"]}
           with open("latest.json", "w", encoding="utf-8") as f:
-              json.dump({"version": ver, "notes": notes, "page": "https://simonschnezzer.github.io/vorleser-download/",
+              json.dump({"version": ver, "published": time.strftime("%Y-%m-%d"), "notes": notes,
+                         "page": "https://simonschnezzer.github.io/vorleser-download/",
                          "assets": assets}, f, ensure_ascii=False, indent=2)
           PY
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/SimonSchneZzer/vorleser-download.git" dl
@@ -149,4 +150,5 @@ jobs:
           git config user.email "50883040+SimonSchneZzer@users.noreply.github.com"
           git add latest.json
           git commit -m "latest.json: Vorleser $VER"
-          git push
+          # github.com hakt manchmal (z. B. 504) → sonst wäre das Release online, latest.json aber veraltet
+          for i in 1 2 3; do git push && break; [ "$i" = 3 ] && exit 1; sleep $((i * 20)); git pull --rebase -q; done

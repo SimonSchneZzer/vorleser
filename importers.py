@@ -39,7 +39,20 @@ def import_file(filename: str, data: bytes) -> dict:
     raise ImportFailed(f"Dateityp {ext} wird nicht unterstützt (EPUB, PDF, TXT, MD, HTML)")
 
 
+PDF_GESCHUETZT = ("Das PDF ist geschützt und lässt sich nicht lesen – speichere es ohne Schutz "
+                  "(z. B. „Drucken › Als PDF sichern“) und importiere es erneut.")
+PDF_KAPUTT = "Das PDF konnte nicht gelesen werden – die Datei ist vermutlich beschädigt."
+EPUB_KAPUTT = "Das EPUB konnte nicht gelesen werden – die Datei ist vermutlich beschädigt oder kopiergeschützt."
+
+
 def _decode(data: bytes) -> str:
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):          # UTF-16 mit BOM (Windows-Editor „Unicode“)
+        return data.decode("utf-16", errors="replace")
+    if len(data) > 8 and data[:200].count(0) > len(data[:200]) // 4:   # UTF-16 ohne BOM: jedes 2. Byte 0
+        try:
+            return data.decode("utf-16-le" if data[1] == 0 else "utf-16-be")
+        except UnicodeDecodeError:
+            pass
     for enc in ("utf-8-sig", "cp1252", "latin-1"):
         try:
             return data.decode(enc)
@@ -97,7 +110,8 @@ def _epub(data: bytes, stem: str) -> dict:
             f.write(data)
         book = epub.read_epub(tmp, options={"ignore_ncx": False})
     except Exception as e:
-        raise ImportFailed(f"EPUB konnte nicht gelesen werden: {e}") from e
+        print(f"[import] EPUB: {e!r}", flush=True)
+        raise ImportFailed(EPUB_KAPUTT) from e
     finally:
         try:
             os.unlink(tmp)
@@ -155,10 +169,19 @@ def _pdf(data: bytes, stem: str) -> dict:
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
-            reader.decrypt("")
+            try:                                          # nur Besitzer-Passwort → leeres Passwort öffnet es
+                ok = reader.decrypt("")
+            except Exception as e:                        # z. B. AES ohne Krypto-Paket
+                print(f"[import] PDF verschlüsselt: {e!r}", flush=True)
+                ok = 0
+            if not ok:
+                raise ImportFailed(PDF_GESCHUETZT)
         pages = [(p.extract_text() or "") for p in reader.pages]
+    except ImportFailed:
+        raise
     except Exception as e:
-        raise ImportFailed(f"PDF konnte nicht gelesen werden: {e}") from e
+        print(f"[import] PDF: {e!r}", flush=True)
+        raise ImportFailed(PDF_KAPUTT) from e
     if sum(len(p.strip()) for p in pages) < 20:
         raise ImportFailed("Das PDF enthält keinen Text (vermutlich eingescannt – dafür wäre OCR nötig)")
 

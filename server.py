@@ -21,6 +21,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import bugreport
+import meldungen
 import clone_setup
 import exporter
 import paths
@@ -168,7 +169,13 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(n)
 
     def body(self) -> dict:
-        return json.loads(self.raw_body() or b"{}")
+        try:
+            data = json.loads(self.raw_body() or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise ValueError(meldungen.ANFRAGE) from None
+        if not isinstance(data, dict):
+            raise ValueError(meldungen.ANFRAGE)
+        return data
 
     def _port(self) -> int:
         return self.server.server_address[1]
@@ -200,15 +207,17 @@ class Handler(BaseHTTPRequestHandler):
                     return fn(self, *m.groups())
             self.error(404, "Nicht gefunden")
         except KeyError as e:
-            self.error(404, f"Nicht gefunden: {e}")
-        except (ValueError, ImportFailed) as e:
-            self.error(400, str(e))
+            print(f"[server] {method} {path}: nicht gefunden ({e!r})", flush=True)
+            self.error(404, meldungen.NICHT_GEFUNDEN)
+        except (ValueError, ImportFailed, meldungen.Meldung) as e:
+            print(f"[server] {method} {path}: {e}", flush=True)
+            self.error(400, meldungen.fuer_nutzer(e))
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception as e:
-            print(f"[server] Fehler bei {method} {path}: {e!r}", flush=True)
+            meldungen.loggen(f"server {method} {path}", e)       # mit Traceback – nur der feste Satz geht in die UI
             try:
-                self.error(500, str(e))
+                self.error(500, meldungen.fuer_nutzer(e))
             except Exception:
                 pass
 
@@ -267,8 +276,13 @@ class Handler(BaseHTTPRequestHandler):
     def list_docs(self):
         def summary(doc):                          # + wie viele Abschnitte schon fertig erzeugt sind (heller Balken)
             return {**doc_summary(doc), "prepared": sum(tts.is_cached(c["text"], doc["voice"]) for c in doc["chunks"])}
+        docs = []
         with _doc_lock:
-            docs = [summary(upgrade_doc(json.loads(p.read_text("utf-8")))) for p in DOCS_DIR.glob("*.json")]
+            for p in DOCS_DIR.glob("*.json"):
+                try:                               # eine kaputte Datei (Stromausfall, Sync-Tool) darf nicht alle verstecken
+                    docs.append(summary(upgrade_doc(json.loads(p.read_text("utf-8")))))
+                except Exception as e:
+                    print(f"[server] Text-Datei {p.name} übersprungen (beschädigt?): {e!r}", flush=True)
         docs.sort(key=lambda d: d["progress"].get("updated") or d["created"], reverse=True)
         self.json({"docs": docs})
 
@@ -281,7 +295,7 @@ class Handler(BaseHTTPRequestHandler):
         ids = [v["id"] for v in tts.voices_for(lang)]
         voice = data.get("voice") if data.get("voice") in ids else tts.default_voice(lang)
         if not voice:
-            raise ValueError(f"Keine Stimme für {LANGS[lang]} verfügbar – siehe README.md")
+            raise ValueError("Für diese Sprache ist gerade keine Stimme verfügbar")
         chunks, chapters = chunk_text(text, lang)
         if not chunks:
             raise ValueError("Kein vorlesbarer Text gefunden")
@@ -518,6 +532,14 @@ class Handler(BaseHTTPRequestHandler):
     def bugreport_info(self):
         self.json(bugreport.info())
 
+    def client_error(self):
+        """Unerwartete Fehler der Oberfläche ins Log (in pywebview gibt es keine sichtbare Konsole)."""
+        p = self.body()
+        msg = str(p.get("msg") or "")[:500].replace("\n", " ")
+        stack = str(p.get("stack") or "")[:1500]
+        print(f"[oberfläche] {msg}" + (f"\n{stack}" if stack else ""), flush=True)
+        self.json({"ok": True})
+
     # -- Updates (Desktop-App) --
     def update_status(self):
         self.json(updater.status())
@@ -590,6 +612,7 @@ ROUTES = [
     (r"/api/clone-setup", "POST", Handler.clone_setup_start),
     (r"/api/clone-setup", "DELETE", Handler.clone_setup_remove),
     (r"/api/bugreport", "GET", Handler.bugreport_info),
+    (r"/api/client-error", "POST", Handler.client_error),
     (r"/api/uninstall", "GET", Handler.uninstall_info),
     (r"/api/uninstall", "POST", Handler.uninstall_run),
     (r"/api/storage", "GET", Handler.storage_report),
@@ -648,12 +671,26 @@ def startup() -> None:
     """Vorbereitung, die den Start nicht blockieren muss."""
     for old in tts.CACHE_DIR.glob("*.wav"):  # Cache-Format von Version 1
         old.unlink(missing_ok=True)
-    tts.refresh_edge_voices()
-    tts.warm_up()
-    threading.Thread(target=tts.prune_cache, daemon=True).start()
-    threading.Thread(target=tts.fix_webm_durations, daemon=True).start()
-    threading.Thread(target=tts.warm_previews, daemon=True).start()
-    updater.start_background()
+    # Jeder Schritt für sich: scheitert einer (z. B. Platte voll), laufen die übrigen – vor allem der Updater,
+    # sonst käme nicht einmal der Fix für das Problem an.
+    for name, step in (("Edge-Stimmenliste", tts.refresh_edge_voices), ("Offline-Stimme", tts.warm_up),
+                       ("Updater", updater.start_background)):
+        try:
+            step()
+        except Exception as e:
+            meldungen.loggen(f"start {name}", e)
+    for fn in (tts.prune_cache, tts.fix_webm_durations, tts.warm_previews):
+        threading.Thread(target=_logged(fn), daemon=True).start()
+
+
+def _logged(fn):
+    """Hintergrund-Thread: Fehler mit Traceback ins Log statt still zu sterben."""
+    def run():
+        try:
+            fn()
+        except Exception as e:
+            meldungen.loggen(f"hintergrund {fn.__name__}", e)
+    return run
 
 
 def serve() -> None:

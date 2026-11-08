@@ -26,14 +26,13 @@ async function uploadClone(blob) {
   $("cMsg").textContent = "Stimme wird angelegt …";
   try {
     const r = await fetch("/api/clones", { method: "POST", body: blob, headers: { "X-Name": encodeURIComponent($("cName").value.trim() || $("cName").placeholder), "X-Lang": UI_LANG } });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error);
+    const d = await readJson(r);
     st.voiceLand = { id: d.id, t: performance.now() };
     await reloadVoices();
     $("cloneDlg").close();
     renderSettings();
     cloneCb?.(d.id);
-  } catch (e) { $("cMsg").textContent = e.message; }
+  } catch (e) { $("cMsg").textContent = friendlyError(e); }
 }
 function showCloneRedo(on) {
   $("cRedo").classList.toggle("show", on);
@@ -62,7 +61,7 @@ async function startCloneTake(again = false) {
 }
 $("cRec").onclick = async () => {
   if (!cTake) {
-    try { await startCloneTake(); } catch (e) { return ($("cMsg").textContent = "Mikrofon nicht verfügbar: " + e.message); }
+    try { await startCloneTake(); } catch (e) { reportClientError(`Mikrofon: ${e?.message || e}`); return ($("cMsg").textContent = "Mikrofon nicht verfügbar – bitte den Zugriff in den Systemeinstellungen erlauben."); }
     $("cRec").classList.add("on");
     showCloneRedo(true);
     return;
@@ -79,7 +78,7 @@ $("cRedo").onclick = async () => {
   const b = $("cRedo"); b.classList.remove("turn"); void b.offsetWidth; b.classList.add("turn");
   setTimeout(() => b.classList.remove("turn"), 520);
   $("cText").scrollTop = 0; animateIn($("cText"), "swap");
-  try { await startCloneTake(true); } catch (e) { resetCloneRec(); $("cMsg").textContent = "Mikrofon nicht verfügbar: " + e.message; }
+  try { await startCloneTake(true); } catch (e) { resetCloneRec(); reportClientError(`Mikrofon: ${e?.message || e}`); $("cMsg").textContent = "Mikrofon nicht verfügbar – bitte den Zugriff in den Systemeinstellungen erlauben."; }
 };
 $("cFile").onchange = (e) => { const f = e.target.files[0]; if (f) uploadClone(f); e.target.value = ""; };
 $("cClose").onclick = () => $("cloneDlg").close();
@@ -263,12 +262,18 @@ function storageSkeleton() {                             // Platzhalter, bis die
   $("stoMisc").innerHTML = "";
   for (const id of ["whisperSize", "cloneSize", "piperSize"]) $(id).innerHTML = sk(54);
 }
+const stoRetry = {};
 async function renderStorage() {
+  clearTimeout(stoRetry.t);                              // kein zweiter Wiederholungs-Strang
   const tab = $("tabStorage");
   if (stoLast) fillStorage(stoLast, false);
   else { tab.classList.add("skel"); storageSkeleton(); }
   let r;
-  try { r = await api("/api/storage"); } catch { return; }
+  try { r = await api("/api/storage"); stoRetry.fails = 0; }
+  catch (e) {                                            // Platzhalter nicht für immer stehen lassen
+    if (!stoLast && setTab === "storage") { if (!stoRetry.fails) toastErr(e); stoRetry.t = retryLater(stoRetry, renderStorage); }
+    return;
+  }
   const fresh = tab.classList.contains("skel");
   tab.classList.remove("skel");
   stoLast = r;
@@ -467,7 +472,11 @@ function csCollapse(done) {
 async function cloneSetupPoll(quiet = false) {
   clearTimeout(csPollT);
   let s;
-  try { s = await api("/api/clone-setup"); } catch { csPolling = false; return; }
+  try { s = await api("/api/clone-setup"); cs.retry = {}; }
+  catch {                                                // kurz keine Antwort → weiter abfragen (Uhr/Balken laufen sonst ins Leere)
+    if (csPolling) csPollT = retryLater(cs.retry ||= {}, () => cloneSetupPoll());
+    return;
+  }
   const box = $("cloneSetupBox");
   if (s.status === "running") {
     if (!csPolling) { cs.shown = 0; cs.barPhase = ""; cs.lastStep = ""; cs.tipPhase = ""; }
@@ -496,7 +505,7 @@ async function cloneSetupPoll(quiet = false) {
   }
   csCollapse();
   if (s.status === "error" && !quiet) {
-    toast(`Installation fehlgeschlagen: ${s.error}`, true);
+    toast(s.error || "Installation fehlgeschlagen", true);
     renderVoiceLib();
   } else if (was) renderVoiceLib();
 }
@@ -514,7 +523,8 @@ $("quitBtn").onclick = async () => {
 $("cacheLimit").onchange = () => saveSettings({ cacheMB: +$("cacheLimit").value });
 $("cacheClear").onclick = async () => {
   if (!(await ask({ title: "Speicher leeren?", text: "Erzeugtes Audio wird gelöscht und beim nächsten Abspielen neu erzeugt. Mit eigener Stimme kann das dauern.", ok: "Leeren", danger: true }))) return;
+  try { await api("/api/cache", { method: "DELETE" }); } catch (e) { return toastErr(e); }   // erst Server, dann lokal
   if (st.doc) { const keep = { i: st.idx, off: st.loadedIdx === st.idx ? audio.currentTime : st.pendingOffset }; if (st.wantPlay) pause(); clearCache(); st.idx = keep.i; st.pendingOffset = keep.off; }
-  await api("/api/cache", { method: "DELETE" }); renderStorage(); markReady(); refreshLibrary().catch(() => {});
+  renderStorage(); markReady(); refreshLibrary().catch(() => {});
 };
 
