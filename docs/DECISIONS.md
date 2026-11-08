@@ -5,6 +5,25 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-08 · Update laden: Wiederholung + Ausweichweg über die GitHub-API
+**Kontext:** Das Update auf 2.10.1 schlug dreimal mit „HTTP Error 504: Gateway Time-out“ fehl (Teil-Update und
+komplettes Paket). Ursache war nicht das Release, sondern github.com selbst: die Webseite (auch fremde Repos und
+`releases/download/…`) lieferte in der Region `switzerlandnorth` stundenlang 504, die Statusseite meldete
+„operational“. `api.github.com` und der Datei-Server (`release-assets.githubusercontent.com`) liefen normal.
+Die Karte zeigte den rohen Python-Fehler plus einen nicht übersetzten deutschen Satz, und „Download-Seite“ half nicht
+(deren Links zeigen ebenfalls auf github.com).
+**Entscheidung:** `_download` versucht es bei 5xx/429/Netzfehlern zweimal neu (2 s, 5 s) und lädt danach dieselbe
+Datei über `api.github.com/repos/…/releases/assets/<id>` (`Accept: application/octet-stream`, leitet auf den
+Datei-Server um). Die Karte bekommt feste, übersetzbare Meldungen (`MSG_SERVER`/`MSG_OFFLINE`/`MSG_OTHER`), Details
+nur im Log. „Später“ bei einem Fehler blendet die Karte nur bis zum nächsten Start aus (keine 24-h-Pause wie beim
+normalen Angebot); „Jetzt suchen“ oder ein neuer Versuch zeigen sie wieder.
+Die Karte zeigte erst 15 MB (Teil-Update), dann 263 MB (Ausweichen aufs komplette Paket), dann den Fehler. Jetzt:
+„Verbindung wird hergestellt …“ (`connected: false`), die MB-Zahl erst nach der Antwort des Servers (Content-Length),
+danach fest. Scheitert das Teil-Update an Server-/Netzfehlern, gibt es kein komplettes Paket hinterher (käme vom
+selben Server); nur bei abweichenden Dateien/Prüfsummen weiterhin das komplette Paket.
+**Folgen:** Die API (60 Anfragen/h pro IP) wird nur im Fehlerfall gefragt. Fällt GitHub komplett aus, hilft nur
+noch ein zweiter Download-Ort (verworfen, siehe 2026-11-06: Dateigrößenlimits bei Pages/Cloudflare/Netlify).
+
 ## 2026-11-07 · Markierungen nach dem Laden der Lese-Schrift neu anlegen
 **Kontext:** Wort- und Satz-Box standen ein paar Pixel neben dem Text (Wort-Box zu hoch). Ursache: Literata kommt
 asynchron von Google Fonts (`display=swap`); wechselt die Schrift nach dem Setzen der Boxen, verschieben sich die

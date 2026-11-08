@@ -57,6 +57,7 @@ function updRenderCard() {
   const s = upd.s, card = $("upd");
   card.classList.remove("news"); updIcon("i-dl"); $("updLater").textContent = "Später";
   $("updRow").classList.remove("hidden");
+  $("updPage").classList.add("hidden");
   $("verTxt").textContent = `Version ${s.current}`;
   $("updNote").textContent = s.available ? `Version ${s.latest} ist verfügbar` : s.latest ? "Du hast die neueste Version" : "Prüft bei jedem Start automatisch";
   const busy = s.state === "downloading" || s.state === "preparing" || s.state === "installing";
@@ -64,9 +65,9 @@ function updRenderCard() {
   $("updBar").classList.toggle("hidden", !busy);
   $("updBtns").classList.toggle("hidden", busy);
   if (s.state === "downloading") {
-    const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+    const pct = s.connected && s.total ? Math.round((s.done / s.total) * 100) : 0;
     $("updTitle").textContent = "Update wird geladen";
-    $("updText").textContent = s.total ? `${fmtMB(s.done)} von ${fmtMB(s.total)}` : "";
+    $("updText").textContent = s.connected && s.total ? `${fmtMB(s.done)} von ${fmtMB(s.total)}` : "Verbindung wird hergestellt …";
     $("updFill").style.width = `${pct}%`;
     return updShow(true);
   }
@@ -89,9 +90,12 @@ function updRenderCard() {
     return updShow(true);
   }
   if (s.state === "error") {
+    if (upd.errLater) return updShow(false);            // „Später“ → erst nach dem nächsten Start wieder fragen
     $("updTitle").textContent = "Update fehlgeschlagen";
-    $("updText").textContent = `${s.error || ""} – du kannst die neue Version auch von der Webseite laden.`;
-    $("updGo").textContent = "Download-Seite";
+    const other = "Das Update ließ sich nicht vorbereiten. Versuch es noch einmal oder lade die neue Version von der Webseite.";
+    $("updText").textContent = s.error || other;
+    $("updPage").classList.toggle("hidden", (s.error || other) !== other);   // nur, wenn die Webseite wirklich hilft
+    $("updGo").textContent = s.canInstall ? "Erneut versuchen" : "Download-Seite";
     return updShow(true);
   }
   if (newsPending()) {                                  // gerade aktualisiert → einmal zeigen, was neu ist
@@ -128,6 +132,7 @@ async function updRefresh(force = false) {
 $("updLater").onclick = () => {
   if ($("upd").classList.contains("news")) { newsSeen(); return updShow(false); }
   if (upd.s?.state === "ready") { upd.later = true; return updShow(false); }   // wird beim Beenden eingespielt
+  if (upd.s?.state === "error") { upd.errLater = true; return updShow(false); }  // nur für diesen Start, keine 24-h-Pause
   try { localStorage.setItem(updLaterKey, JSON.stringify({ v: upd.s?.latest, until: Date.now() + 24 * 3600e3 })); } catch {}
   updShow(false);
 };
@@ -138,11 +143,13 @@ $("updGo").onclick = async () => {
     try { upd.s = await api("/api/update/restart", { method: "POST" }); } catch (e) { return toastErr(e); }
     return updRender();
   }
-  if (!s.canInstall || s.state === "error") return openExternal(s.page);
+  if (!s.canInstall) return openExternal(s.page);   // „Erneut versuchen“ nach einem Fehler startet einfach neu
+  upd.errLater = false;
   try { upd.s = await api("/api/update/install", { method: "POST" }); } catch (e) { return toastErr(e); }
   updRender();
   upd.timer = setTimeout(updRefresh, 400);
 };
+$("updPage").onclick = (e) => { e.preventDefault(); openExternal(upd.s?.page || "https://simonschnezzer.github.io/vorleser-download/"); };
 function updIcon(id) { $("updIc").querySelector("use")?.setAttribute("href", `#${id}`); }
 
 /* ---------- Was ist neu (Versionsverlauf aus CHANGELOG.md) ---------- */
@@ -176,6 +183,7 @@ $("newsBug").onclick = (e) => { e.preventDefault(); $("newsDlg").close(); openBu
 $("srcBtn").onclick = () => openExternal("https://github.com/SimonSchneZzer/vorleser");
 $("updCheck").onclick = async () => {
   const b = $("updCheck"); b.disabled = true;
+  upd.errLater = false;                                 // ausdrücklich gesucht → auch einen Fehler wieder zeigen
   const s = await updRefresh(true);
   b.disabled = false;
   if (!s) return toast("Prüfen fehlgeschlagen – bist du online?", true);

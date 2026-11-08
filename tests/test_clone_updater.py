@@ -355,3 +355,97 @@ def test_mac_helfer_tauscht_vorbereitete_app(monkeypatch, tmp_path):
             break
         time.sleep(0.1)
     assert (app / "Contents" / "neu").exists() and not (app / "Contents" / "alt").exists() and not staged.exists()
+
+
+# --------------------------------------------------------------------------- #
+# Laden: Wiederholung bei Serverfehlern, Ausweichweg über die GitHub-API
+def _http(code):
+    import urllib.error
+    return urllib.error.HTTPError("u", code, "x", {}, None)
+
+
+def test_laden_wiederholt_bei_504_dann_api(monkeypatch, tmp_path):
+    """github.com liefert 504 → zwei neue Versuche, dann dieselbe Datei über die API (mit Accept-Header)."""
+    monkeypatch.setattr(updater, "RETRY_WAIT", (0, 0))
+    monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path)
+    calls = []
+
+    def once(latest, url, size, name, headers):
+        calls.append((url, headers))
+        if url.startswith("https://github.com/"):
+            raise _http(504)
+        return tmp_path / name
+    monkeypatch.setattr(updater, "_download_once", once)
+    monkeypatch.setattr(updater, "_api_asset_url", lambda v, n: f"https://api.github.com/assets/{v}/{n}")
+    latest = {"version": "2.0.0", "url": "https://github.com/x/releases/download/v2.0.0/Vorleser-mac.dmg", "size": 1}
+    assert updater._download(latest) == tmp_path / updater.ASSET
+    assert [u for u, _ in calls].count(latest["url"]) == 3
+    assert calls[-1] == ("https://api.github.com/assets/2.0.0/Vorleser-mac.dmg", {"Accept": "application/octet-stream"})
+
+
+def test_laden_404_ohne_wiederholung(monkeypatch, tmp_path):
+    monkeypatch.setattr(updater, "RETRY_WAIT", (0, 0))
+    calls = []
+
+    def once(*a):
+        calls.append(a)
+        raise _http(404)
+    monkeypatch.setattr(updater, "_download_once", once)
+    monkeypatch.setattr(updater, "_api_asset_url", lambda v, n: pytest.fail("API darf bei 404 nicht gefragt werden"))
+    with pytest.raises(Exception):
+        updater._download({"version": "2.0.0", "url": "https://github.com/x/a.dmg", "size": 1})
+    assert len(calls) == 1
+
+
+def test_meldungen_fuer_die_karte():
+    import socket
+    import urllib.error
+    assert updater._user_error(_http(504)) == updater.MSG_SERVER
+    assert updater._user_error(urllib.error.URLError(socket.gaierror(8, "x"))) == updater.MSG_OFFLINE
+    assert updater._user_error(urllib.error.URLError(TimeoutError())) == updater.MSG_SERVER
+    assert updater._user_error(RuntimeError("Prüfsumme falsch: a")) == updater.MSG_OTHER
+    assert updater._user_error(updater._NoUpdate("Keine neuere Version gefunden")) == "Keine neuere Version gefunden"
+
+
+def test_meldungen_sind_uebersetzt():
+    i18n = (paths.APP_DIR / "static" / "i18n.js").read_text("utf-8")
+    for m in (updater.MSG_SERVER, updater.MSG_OFFLINE, updater.MSG_OTHER, "Keine neuere Version gefunden",
+              "Nur in der installierten App", "App-Ordner nicht gefunden", "Keine Schreibrechte im App-Ordner",
+              "Bitte Vorleser zuerst in den Ordner Programme ziehen"):
+        assert json.dumps(m, ensure_ascii=False) + ":" in i18n, m
+
+
+def test_teilupdate_netzfehler_kein_komplettpaket(monkeypatch):
+    """504 beim Teil-Update → Fehler, nicht 263 MB vom selben Server hinterher (Karte sprang 15 → 263 MB)."""
+    monkeypatch.setattr(paths, "APP_VERSION", "1.0.0")
+    latest = {"version": "1.1.0", "url": "https://github.com/x/a.dmg", "size": 263, "notes": "", "page": "",
+              "patch": {"url": "https://github.com/x/p.zip", "size": 15, "from": ["1.0.0"]}}
+    monkeypatch.setattr(updater, "check", lambda force=False: latest)
+    monkeypatch.setattr(updater, "_patch_for", lambda l: l["patch"])
+    monkeypatch.setattr(updater, "_prepare_patch", lambda l, p: (_ for _ in ()).throw(_http(504)))
+    monkeypatch.setattr(updater, "_download", lambda *a, **k: pytest.fail("komplettes Paket darf nicht geladen werden"))
+    monkeypatch.setattr(updater, "_state", {"state": "downloading"})
+    updater._prepare()
+    assert updater._state["state"] == "error" and updater._state["error"] == updater.MSG_SERVER
+
+
+def test_groesse_erst_nach_antwort(monkeypatch, tmp_path):
+    """Vor der Antwort des Servers: connected=False und keine Größe; danach feste Größe aus Content-Length."""
+    monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path)
+    monkeypatch.setattr(updater, "_state", {"state": "downloading"})
+    seen = {}
+
+    class Resp:
+        headers = {"Content-Length": "4"}
+        def __init__(self): self.left = [b"abcd"]
+        def read(self, n): return self.left.pop() if self.left else b""
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    def urlopen(req, timeout):
+        seen["vorher"] = dict(updater._state)
+        return Resp()
+    monkeypatch.setattr(updater.urllib.request, "urlopen", urlopen)
+    updater._download_once({"version": "1.1.0", "size": 4}, "http://x/a", None, "a.dmg", {})
+    assert seen["vorher"]["connected"] is False and seen["vorher"]["total"] == 0
+    assert updater._state["connected"] is True and updater._state["total"] == 4 and updater._state["done"] == 4

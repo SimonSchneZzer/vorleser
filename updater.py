@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -190,19 +191,90 @@ def _patch_for(latest: dict | None) -> dict | None:
     return p if ok else None
 
 
+RETRY_WAIT = (2, 5)                    # Sekunden zwischen den Versuchen je Weg (504 o. Ä. ist meist kurz)
+MSG_SERVER = "GitHub ist gerade nicht erreichbar. Versuch es in ein paar Minuten noch einmal."
+MSG_OFFLINE = "Keine Internetverbindung. Versuch es noch einmal, sobald du online bist."
+MSG_OTHER = "Das Update ließ sich nicht vorbereiten. Versuch es noch einmal oder lade die neue Version von der Webseite."
+
+
+def _transient(e: Exception) -> bool:
+    """Lohnt ein neuer Versuch? Serverfehler (5xx), 429 und Netzwerkfehler ja – 404 o. Ä. nicht."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500 or e.code == 429
+    return isinstance(e, (urllib.error.URLError, TimeoutError, ConnectionError))
+
+
+class _NoUpdate(RuntimeError):
+    pass
+
+
+def _user_error(e: Exception) -> str:
+    """Feste, übersetzbare Meldung für die Update-Karte (Details stehen im Log)."""
+    if isinstance(e, _NoUpdate):
+        return str(e)
+    if isinstance(e, urllib.error.HTTPError):
+        return MSG_SERVER if _transient(e) else MSG_OTHER
+    if isinstance(e, urllib.error.URLError) and isinstance(e.reason, socket.gaierror):
+        return MSG_OFFLINE                                 # Name nicht auflösbar → kein Netz
+    return MSG_SERVER if _transient(e) else MSG_OTHER
+
+
+def _api_asset_url(version: str, name: str) -> str | None:
+    """Ausweichweg, wenn github.com selbst hakt (z. B. 504 einer Region): dieselbe Datei über die API.
+    Die API leitet direkt auf den Datei-Server weiter und läuft über andere Server als die Webseite."""
+    req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/tags/v{version}",
+                                 headers={"Accept": "application/vnd.github+json", "User-Agent": "Vorleser-Updater"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        rel = json.loads(r.read())
+    a = next((a for a in rel.get("assets", []) if a.get("name") == name), None)
+    return a and a.get("url")
+
+
 def _download(latest: dict, url: str | None = None, size: int | None = None, name: str = ASSET or "") -> Path:
+    """Laden mit Wiederholung; scheitert der normale Link an Server-/Netzfehlern, über die GitHub-API."""
+    url = url or latest["url"]
+    try:
+        return _download_retry(latest, url, size, name, {})
+    except Exception as e:
+        if not _transient(e) or "github.com/" not in url:
+            raise
+        print(f"[update] {url.rsplit('/', 1)[-1]} über github.com nicht ladbar ({e}) – versuche GitHub-API", flush=True)
+        try:
+            api = _api_asset_url(latest["version"], url.rsplit("/", 1)[-1])
+        except Exception as e2:
+            print(f"[update] API nicht erreichbar ({e2})", flush=True)
+            raise e from None
+        if not api:
+            raise
+        return _download_retry(latest, api, size, name, {"Accept": "application/octet-stream"})
+
+
+def _download_retry(latest: dict, url: str, size: int | None, name: str, headers: dict) -> Path:
+    for wait in (*RETRY_WAIT, None):
+        try:
+            return _download_once(latest, url, size, name, headers)
+        except Exception as e:
+            if wait is None or not _transient(e):
+                raise
+            print(f"[update] Laden fehlgeschlagen ({e}) – neuer Versuch in {wait} s", flush=True)
+            time.sleep(wait)
+
+
+def _download_once(latest: dict, url: str, size: int | None, name: str, headers: dict) -> Path:
     UPDATES_DIR.mkdir(parents=True, exist_ok=True)
-    url, size = url or latest["url"], latest["size"] if size is None else size
+    size = latest["size"] if size is None else size
     dest = UPDATES_DIR / f"{latest['version']}-{name}"
     if dest.exists() and (not size or dest.stat().st_size == size):
         return dest
     part = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": "Vorleser-Updater"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Vorleser-Updater", **headers})
+    with _lock:                                   # Karte: „Verbindung wird hergestellt …“, noch keine MB-Zahl
+        _state.update(connected=False, done=0, total=0)
     with urllib.request.urlopen(req, timeout=60) as r, open(part, "wb") as f:
         total = int(r.headers.get("Content-Length") or size or 0)
         done = 0
-        with _lock:
-            _state.update(done=0, total=total)
+        with _lock:                               # erst jetzt steht die Größe fest – sie ändert sich nicht mehr
+            _state.update(connected=True, done=0, total=total)
         while chunk := r.read(1 << 20):
             f.write(chunk)
             done += len(chunk)
@@ -399,7 +471,7 @@ def _prepare() -> None:
     try:
         latest = check(force=True)
         if not latest or _ver(latest["version"]) <= _ver(paths.APP_VERSION):
-            raise RuntimeError("Keine neuere Version gefunden")
+            raise _NoUpdate("Keine neuere Version gefunden")
         patch = _patch_for(latest)
         if patch:
             try:
@@ -410,9 +482,11 @@ def _prepare() -> None:
                 print(f"[update] {latest['version']} bereit (Teil-Update, {patch.get('size', 0) // 1_000_000} MB)", flush=True)
                 return
             except Exception as e:
+                if _transient(e):                 # Server/Netz hakt → das große Paket käme vom selben Server
+                    raise
                 print(f"[update] Teil-Update nicht möglich ({e}) – lade komplettes Paket", flush=True)
                 with _lock:
-                    _state.update(state="downloading", done=0, total=latest["size"])
+                    _state.update(state="downloading", connected=False, done=0, total=0)
         installer = _download(latest)
         with _lock:
             _state.update(state="preparing")
@@ -424,7 +498,7 @@ def _prepare() -> None:
     except Exception as e:
         print(f"[update] Fehler: {e}", flush=True)
         with _lock:
-            _state.update(state="error", error=str(e))
+            _state.update(state="error", error=_user_error(e))
 
 
 def install(quit_app=None) -> dict:
@@ -436,7 +510,7 @@ def install(quit_app=None) -> dict:
         if _state["state"] in ("downloading", "preparing", "ready", "installing"):
             return dict(_state)
         _state.clear()
-        _state.update(state="downloading", done=0, total=(_patch_for(_latest) or _latest or {}).get("size", 0))   # Teil-Update: gleich die kleine Größe
+        _state.update(state="downloading", connected=False, done=0, total=0)   # Größe erst, wenn der Server antwortet
     threading.Thread(target=_prepare, daemon=True).start()
     return status()
 

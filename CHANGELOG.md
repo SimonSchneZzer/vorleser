@@ -4,6 +4,16 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 2.10.2
+Updates now get through even when GitHub is having trouble – and a failed update can simply be tried again.
+
+- **Updates:** if a download fails because of a server hiccup, the app retries on its own and then takes a second
+  route via GitHub's API
+- **Try again:** a failed update now offers **Try again** with a clear message instead of a technical error code;
+  **Later** hides it only until the next start
+- **Download size:** the card says "Connecting …" first and shows the size only once it's certain – it no longer jumps
+- **English interface:** update messages that still appeared in German are now translated
+
 ## 2.10.1
 The word and sentence highlight now sit exactly on the text again.
 

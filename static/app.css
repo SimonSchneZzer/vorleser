@@ -687,7 +687,9 @@ dialog[open]::backdrop { animation: fadeIn .3s var(--ease) both; }
 .upd b { display: block; font-size: 14px; color: var(--ink); }
 .upd p { margin: 3px 0 10px; font-size: 13px; line-height: 1.45; color: var(--muted); }
 .upd .bar8 { margin: 2px 0 4px; }
-.upd-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.upd-btns { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.upd-link { margin-right: auto; font-size: 12.5px; font-weight: 600; color: var(--acc-text); text-decoration: none; }
+.upd-link:hover { text-decoration: underline; }
 
 /* Bearbeiten */
 .ed-crumb { font-weight: 600; font-size: 15px; }
