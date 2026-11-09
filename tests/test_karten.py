@@ -248,7 +248,6 @@ def test_lesezeichen_backend(api):
 
 @pytest.mark.browser
 def test_lesezeichen_im_browser(api):
-    import base64
     _, d = api.json("POST", "/api/docs", {"title": "Die Verwandlung", "text": "# Erster Teil\n\n" + "Als Gregor Samsa eines Morgens aus unruhigen Träumen erwachte, fand er sich verwandelt. " * 6
                                           + "\n\nEr lag auf seinem panzerartig harten Rücken und sah seinen gewölbten Bauch. " * 6})
 
@@ -268,11 +267,9 @@ def test_lesezeichen_im_browser(api):
             if await c.js("!!document.querySelector('#bmHint.card-on')"):
                 break
         assert await c.js("st.doc.bookmarks.length") == 1 and await c.js("!$('bmHint').classList.contains('hidden')")
-        r = await c.cmd("Page.captureScreenshot", format="png"); open("/private/tmp/claude-501/-Users-simonschnetzer-Projects/a6a50cab-7557-45b9-b1e7-f1fc51169339/scratchpad/bm-hint.png", "wb").write(base64.b64decode(r["data"]))
         assert await c.js("!!$('chapterMenu').querySelector('.cm-bm')")              # Reiter „Lesezeichen“ offen
         await c.js("$('bmHintOk').click(); 1"); await asyncio.sleep(0.5)
         await c.js("document.querySelector('.bm-mark').click(); 1"); await asyncio.sleep(0.4)
-        r = await c.cmd("Page.captureScreenshot", format="png"); open("/private/tmp/claude-501/-Users-simonschnetzer-Projects/a6a50cab-7557-45b9-b1e7-f1fc51169339/scratchpad/bm-pop.png", "wb").write(base64.b64decode(r["data"]))
         await c.js("$('bmPopDel').click(); 1"); await asyncio.sleep(0.6)
         assert await c.js("st.doc.bookmarks.length") == 0
     try:
