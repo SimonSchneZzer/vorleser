@@ -53,12 +53,12 @@ def _voice_ids(extra: set[str] = frozenset()) -> set[str]:
     return ids
 
 
-def _names_for(texts, voice_ids, index: dict[str, int]) -> set[str]:
+def _names_for(texts, voice_ids, index: dict[str, int], doc_id: str | None = None) -> set[str]:
     """Cache-Dateien (Audio + Wortmarken) für diese Texte mit irgendeiner der Stimmen."""
     found = set()
     for text in texts:
         for vid in voice_ids:
-            p = tts.cache_path(text, vid)
+            p = tts.cache_path(text, vid, doc_id)
             if p.name in index:
                 found.add(p.name)
                 marks = p.with_suffix(".marks.json").name
@@ -99,7 +99,7 @@ def report() -> dict:
     assigned: set[str] = set()
     per_doc = []
     for d in docs:
-        names = _names_for({c["text"] for c in d.get("chunks", [])}, voice_ids, index)
+        names = _names_for({c["text"] for c in d.get("chunks", [])}, voice_ids, index, d.get("id"))
         assigned |= names
         exp = sum(exporter.export_path(d["id"], f).stat().st_size for f in exporter.FORMATS
                   if exporter.export_path(d["id"], f).exists())
@@ -146,7 +146,7 @@ def _remove(names) -> int:
 def delete_doc_audio(doc: dict) -> int:
     """Erzeugtes Audio + Wortmarken eines Texts löschen (der Text selbst bleibt)."""
     index = _cache_index()
-    names = _names_for({c["text"] for c in doc.get("chunks", [])}, _voice_ids({doc.get("voice", "")}), index)
+    names = _names_for({c["text"] for c in doc.get("chunks", [])}, _voice_ids({doc.get("voice", "")}), index, doc.get("id"))
     keep = _preview_names(index, _voice_ids())        # Hörproben nie mitlöschen
     return _remove(names - keep)
 
@@ -163,7 +163,7 @@ def delete_other() -> int:
     voice_ids = _voice_ids({d.get("voice", "") for d in docs})
     used = _preview_names(index, voice_ids)
     for d in docs:
-        used |= _names_for({c["text"] for c in d.get("chunks", [])}, voice_ids, index)
+        used |= _names_for({c["text"] for c in d.get("chunks", [])}, voice_ids, index, d.get("id"))
     return _remove(set(index) - used)
 
 

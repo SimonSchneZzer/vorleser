@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vorleser</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  /* Mini-Player für markierten Text (Version 3.0, Board 22) – eigenes rahmenloses Fenster der Desktop-App.
+     Klasse „mp“, nicht „mini“: .mini gibt es in app.css schon (140 px breit) → Fenster war zusammengequetscht. */
+  html, body { margin: 0; background: transparent !important; overflow: hidden; }
+  [hidden] { display: none !important; }
+  /* Windows: rahmenloses Fenster kann nicht durchsichtig sein → Seite füllt es selbst */
+  html.opaque, html.opaque body { background: var(--bg) !important; }
+  html.opaque .mp { margin: 0; border-radius: 0; border: 0; box-shadow: none; animation: none; }   /* .warn/.err haben display:flex – „hidden“ muss trotzdem verstecken */
+  .mp { margin: 10px; padding: 14px 16px; border-radius: 18px; color: var(--ink); font: 14px/1.4 var(--ui);
+    background: var(--glass); -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
+    border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shade);
+    background-image: linear-gradient(180deg, var(--glass-sheen), transparent 40%);
+    animation: miniIn .55s var(--spring) both; -webkit-app-region: drag; }
+  .mp.leaving { animation: miniOut .3s var(--ease) both; }
+  .mp button { -webkit-app-region: no-drag; }
+  @keyframes miniIn { from { opacity: 0; transform: translateY(-22px) scale(.96); } }
+  @keyframes miniOut { to { opacity: 0; transform: translateY(-16px) scale(.97); } }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .pp { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--acc); color: var(--on-acc); display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
+  .x { width: 32px; height: 32px; border-radius: 9px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+  .x:hover { background: var(--subtle); color: var(--ink); }
+  .t { flex: 1; min-width: 0; }
+  .t b { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { margin-top: 7px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .25s linear; }
+  .warn { margin-top: 12px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.45;
+    background: color-mix(in srgb, var(--acc) 12%, transparent); border: 1px solid color-mix(in srgb, var(--acc) 30%, transparent); animation: fadeUp .4s var(--ease-out) both; }
+  .warn span { flex: 1; }
+  .foot { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+  .foot .v { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .chip { height: 30px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: 600 12.5px var(--ui); cursor: pointer; }
+  .chip:hover { border-color: var(--muted); }
+  .err { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+  /* Mitlesezeile wie in der App (Satz, Wort-Box gleitet mit) */
+  .mp-ml { height: 30px; max-width: none; -webkit-app-region: drag; }
+  .mp-ml .ml-row { font: 16px/30px var(--read); }
+  .mp-ml .mbox { position: absolute; z-index: -1; left: 0; top: 2px; height: 26px; border-radius: 6px; background: var(--acc); opacity: 0;
+    transition: transform .24s var(--ease-out), width .24s var(--ease-out), opacity .2s var(--ease); }
+  .mp-ml .mbox.on { opacity: 1; }
+  .mp-ml .mbox.snap { transition: opacity .2s var(--ease); }
+  .hidden { display: none !important; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } }
+  @media (prefers-reduced-motion: reduce) { .mp, .mp.leaving, .warn { animation: none; } }
+</style>
+</head>
+<body>
+<div class="mp" id="mini" role="region" aria-label="Markierten Text vorlesen">
+  <div class="row">
+    <button class="pp" id="pp" aria-label="Pause"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="ppIc" d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
+    <div class="t"><b id="prev" data-noi18n></b><div class="ml-win mp-ml hidden" id="mlWin" data-noi18n></div><div class="bar"><i id="fill"></i></div></div>
+    <button class="x" id="close" aria-label="Schließen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="warn" id="ask" hidden><span><b>Kein markierter Text gefunden.</b> In der Zwischenablage liegt der Text oben – vorlesen?</span><button class="chip" id="askGo">Zwischenablage vorlesen</button></div>
+  <div class="warn" id="warn" hidden><span>Deine eigene Stimme braucht pro Abschnitt etwas länger. Für markierten Text eine schnelle Stimme nehmen?</span><button class="chip" id="fast">Schnelle Stimme</button></div>
+  <div class="err" id="err" hidden></div>
+  <div class="foot"><button class="chip" id="save">In Bibliothek sichern</button><span class="v" id="voice" data-noi18n></span></div>
+</div>
+<audio id="au"></audio>
+<script src="/i18n.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+try {                                                   // Farben/Theme wie im Hauptfenster
+  const t = JSON.parse(localStorage.getItem("vorleser.theme") || "null");
+  if (t) { document.documentElement.dataset.theme = t.theme; for (const k in t.vars) document.documentElement.style.setProperty(k, t.vars[k]); }
+} catch {}
+const qid = (location.hash.match(/q=([0-9a-f]{32})/) || [])[1];
+const ask = /[#&]ask=1/.test(location.hash);
+if (/[#&]opaque=1/.test(location.hash)) document.documentElement.classList.add("opaque");              // nichts markiert → erst fragen (Board 25)
+const m = { info: null, i: 0, next: null, done: false };
+const api = async (p, o) => { const r = await fetch(p, { headers: { "Content-Type": "application/json" }, ...o }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || "Fehler"); return d; };
+const bridge = () => window.pywebview?.api;
+// Fensterhöhe folgt dem Inhalt (Hinweise/Warnungen kommen und gehen) – sonst wird unten abgeschnitten
+new ResizeObserver(() => { try { bridge()?.mini_groesse(Math.ceil($("mini").getBoundingClientRect().height) + 20); } catch {} }).observe($("mini"));
+function close() {
+  m.done = true; $("au").pause();
+  $("mini").classList.add("leaving");
+  setTimeout(() => { try { bridge()?.mini_close(); } catch {} }, 300);
+}
+function showInfo(d) {
+  m.info = d;
+  $("prev").textContent = `„${d.preview.replace(/\s+/g, " ").slice(0, 90)}${d.preview.length > 90 ? " …" : ""}“`;
+  $("voice").textContent = d.voiceName;
+  $("warn").hidden = !d.slow || !d.fast;
+}
+const url = (i) => `/api/quick/${qid}/audio/${i}`;
+/* ---------- Mitlesezeile (gleiche Logik wie dokument.js: Wörter schätzen, dann echte Wortmarken) ---------- */
+const ml = { i: -1, words: [], sent: -1, k: -1 };
+const norm = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+const sentEnd = (w) => /[.!?…]["'“”»«)]*$/.test(w);
+const weight = (s) => s.length + 2 + (/[,;:–]$/.test(s) ? 4 : 0) + (sentEnd(s) ? 8 : 0);
+function mlBuild(i) {
+  const text = m.info?.texts?.[i] || ""; let sent = 0;
+  ml.i = i; ml.sent = -1; ml.k = -1; ml.timed = false;
+  ml.words = [...text.matchAll(/\S+/g)].map((x) => { const w = { text: x[0], sent, t: 0 }; if (sentEnd(x[0])) sent++; return w; });
+  $("prev").classList.add("hidden"); $("mlWin").classList.remove("hidden");
+}
+function mlTime(dur) {                                   // erst schätzen …
+  const L = ml.words, total = L.reduce((a, w) => a + weight(w.text), 0) || 1, span = Math.max(0.1, dur - 0.3);
+  let acc = 0; for (const w of L) { w.t = 0.05 + (acc / total) * span; acc += weight(w.text); }
+}
+async function mlMarks(i) {                              // … dann echte Wortmarken (Edge sofort, sonst per Whisper)
+  try {
+    const { marks } = await api(`/api/quick/${qid}/marks/${i}`);
+    if (ml.i !== i || !marks?.length) return;
+    const L = ml.words, times = L.map(() => null); let p = 0;
+    for (const [t, , txt] of marks) {
+      const n = norm(txt); if (!n) continue;
+      for (let k = p; k < Math.min(p + 5, L.length); k++) {
+        const wn = norm(L[k].text);
+        if (wn && (wn.includes(n) || n.includes(wn))) { if (times[k] == null) times[k] = t; p = wn.endsWith(n) || n.includes(wn) ? k + 1 : k; break; }
+      }
+    }
+    if (times.filter((t) => t != null).length < L.length * 0.5) return;
+    let last = 0; L.forEach((w, k) => { w.t = times[k] ?? last; last = w.t; });
+    ml.timed = true;                                     // echte Marken – Schätzung nicht mehr nötig
+  } catch {}
+}
+function mlShow(k) {
+  const w = ml.words[k]; if (!w || k === ml.k) return;
+  ml.k = k;
+  const win = $("mlWin"); let row = win.querySelector(".ml-row:not(.gone)");
+  if (w.sent !== ml.sent || !row) {                      // neuer Satz: alte Zeile hebt sich weg, neue steigt nach
+    ml.sent = w.sent;
+    const old = row;
+    row = document.createElement("div"); row.className = "ml-row snap";
+    row.innerHTML = ml.words.map((x, n) => x.sent === w.sent ? `<span class="mw" data-k="${n}">${esc(x.text)}</span>` : "").filter(Boolean).join(" ") + `<span class="mbox"></span>`;
+    win.appendChild(row);
+    if (old) {
+      old.classList.add("gone");
+      old.animate([{ opacity: 1, translate: "0 0" }, { opacity: 0, translate: "0 -12px" }], { duration: 220, fill: "forwards" }).finished.then(() => old.remove(), () => old.remove());
+      row.animate([{ opacity: 0, translate: "0 12px" }, { opacity: 1, translate: "0 0" }], { duration: 380, delay: 100, fill: "backwards" });
+    }
+  }
+  const el = row.querySelector(`[data-k="${k}"]`), box = row.querySelector(".mbox"); if (!el) return;
+  row.querySelectorAll(".mw").forEach((s) => s.className = +s.dataset.k < k ? "mw said" : +s.dataset.k === k ? "mw cur" : "mw");
+  const fresh = !box.classList.contains("on");
+  box.classList.toggle("snap", fresh);
+  box.style.transform = `translateX(${el.offsetLeft - 3}px)`; box.style.width = `${el.offsetWidth + 6}px`;
+  box.classList.add("on");
+  // wie in der App: kurzer Satz mittig, langer gleitet mit (Wort bei ~40 %, Ränder frei von der Ausblendung)
+  const Wn = win.clientWidth, rw = row.scrollWidth, x = el.offsetLeft + el.offsetWidth / 2, pad = Math.round(Wn * 0.07);
+  row.style.transform = `translateX(${rw <= Wn - 2 * pad ? (Wn - rw) / 2 : -Math.max(-pad, Math.min(x - Wn * 0.4, rw - Wn + pad))}px)`;
+  if (row.classList.contains("snap")) requestAnimationFrame(() => row.classList.remove("snap"));
+}
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+async function prefetch(i) {                            // nächsten Abschnitt schon laden → keine Pause dazwischen
+  if (i >= m.info.count) return null;
+  const r = await fetch(url(i)); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Fehler");
+  return URL.createObjectURL(await r.blob());
+}
+async function play(i) {
+  if (m.done) return;
+  if (i >= m.info.count) { $("fill").style.width = "100%"; return setTimeout(close, 700); }
+  m.i = i;
+  try {
+    const src = m.next && m.next.i === i ? await m.next.p : await prefetch(i);
+    m.next = { i: i + 1, p: prefetch(i + 1).catch(() => null) };
+    $("au").src = src; mlBuild(i); mlMarks(i); await $("au").play();
+  } catch (e) {
+    if (e?.name === "NotAllowedError") {                 // Autoplay gesperrt (z. B. WebView2) → Abspielen-Knopf anbieten
+      $("ppIc").setAttribute("d", "M7 4l13 8-13 8z"); $("pp").setAttribute("aria-label", "Abspielen"); return;
+    }
+    $("err").hidden = false; $("err").textContent = e.message;
+  }
+}
+function mlTick() {
+  const a = $("au"); if (!m.info || !a.duration) return;
+  $("fill").style.width = `${((m.i + a.currentTime / a.duration) / m.info.count) * 100}%`;
+  if (ml.i === m.i && ml.words.length) {
+    if (!ml.timed) { mlTime(a.duration); ml.timed = true; }
+    let k = Math.max(0, ml.k); if (ml.words[k] && ml.words[k].t > a.currentTime) k = 0;
+    while (k + 1 < ml.words.length && ml.words[k + 1].t <= a.currentTime) k++;
+    mlShow(k);
+  }
+}
+let raf = 0;
+const loop = () => { mlTick(); raf = $("au").paused ? 0 : requestAnimationFrame(loop); };   // Bild für Bild wie in der App
+$("au").onplay = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(loop); };
+$("au").ontimeupdate = mlTick;
+$("au").onended = () => play(m.i + 1);
+$("pp").onclick = () => {
+  const a = $("au"); a.paused ? a.play() : a.pause();
+  $("ppIc").setAttribute("d", a.paused ? "M7 4l13 8-13 8z" : "M6 4h4v16H6zM14 4h4v16h-4z");
+  $("pp").setAttribute("aria-label", a.paused ? "Abspielen" : "Pause");
+};
+$("close").onclick = close;
+addEventListener("keydown", (e) => { if (e.key === "Escape") close(); if (e.key === " ") { e.preventDefault(); $("pp").click(); } });
+$("save").onclick = async () => {
+  try { await api(`/api/quick/${qid}/save`, { method: "POST" }); } catch (e) { $("err").hidden = false; $("err").textContent = e.message; return; }
+  $("save").textContent = "✓ In der Bibliothek"; $("save").disabled = true;
+  try { bridge()?.mini_saved(); } catch {}
+};
+$("fast").onclick = async () => {
+  try { showInfo(await api(`/api/quick/${qid}/voice`, { method: "POST", body: JSON.stringify({ voice: m.info.fast }) })); } catch { return; }
+  m.next = null; play(m.i);                               // ab dem aktuellen Abschnitt mit der schnellen Stimme
+};
+(async () => {
+  if (!qid) return close();
+  try { showInfo(await api(`/api/quick/${qid}`)); } catch (e) { $("err").hidden = false; $("err").textContent = e.message; return; }
+  if (ask) {
+    $("ask").hidden = false; $("ppIc").setAttribute("d", "M7 4l13 8-13 8z");
+    $("askGo").onclick = () => { $("ask").hidden = true; $("ppIc").setAttribute("d", "M6 4h4v16H6zM14 4h4v16h-4z"); play(0); };
+    return;
+  }
+  play(0);
+})();
+</script>
+</body>
+</html>

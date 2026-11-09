@@ -121,16 +121,21 @@ class Cdp:
 
 
 async def _neu_laden(c):
-    """Seite neu laden und sicher auf die NEUE warten (die alte darf nicht mehr antworten)."""
-    await c.js("window.__alteSeite = true; 1")
-    await c.cmd("Page.reload")
-    for _ in range(120):
-        await asyncio.sleep(0.25)
-        try:
-            if await c.js("!window.__alteSeite && typeof openDoc === 'function' && !!st.settings"):
-                return
-        except AssertionError:
-            pass                                    # Seite gerade im Wechsel
+    """Seite neu laden und sicher auf die NEUE warten (die alte darf nicht mehr antworten).
+    Unter Last kommt selten ein Skript nicht an („renderSettings is not defined“) – dann bis zu 3× neu laden und die
+    Fehler dieses abgebrochenen Ladens verwerfen. Echte App-Fehler treten beim sauberen Laden wieder auf."""
+    for versuch in range(3):
+        fehler_vorher = len(c.errors)
+        await c.js("window.__alteSeite = true; 1")
+        await c.cmd("Page.reload", ignoreCache=True)
+        for _ in range(60):
+            await asyncio.sleep(0.25)
+            try:
+                if await c.js("!window.__alteSeite && typeof openDoc === 'function' && typeof st !== 'undefined' && !!st.settings"):
+                    return
+            except AssertionError:
+                pass                                # Seite gerade im Wechsel
+        del c.errors[fehler_vorher:]                 # Laden abgebrochen → dessen Folgefehler nicht der App anlasten
     raise AssertionError("Seite nicht neu geladen")
 
 
@@ -142,7 +147,8 @@ def _im_browser(api, szenario):
     aiohttp = pytest.importorskip("aiohttp")
     port = _free_port()
     profile = tempfile.mkdtemp(prefix="vorleser-chrome-")
-    proc = subprocess.Popen([chrome, "--headless=new", "--disable-gpu", "--no-first-run", f"--remote-debugging-port={port}",
+    proc = subprocess.Popen([chrome, "--headless=new", "--disable-gpu", "--no-first-run", "--autoplay-policy=no-user-gesture-required", "--mute-audio",   # Testtöne nie aus den Lautsprechern
+                              f"--remote-debugging-port={port}",
                              f"--user-data-dir={profile}", "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     async def run():
@@ -309,3 +315,29 @@ def test_bibliothek_zeigt_gleichen_fortschritt_wie_player(api):
         assert p["chunk"] == 1 and "frac" in p                       # gespeichert, nicht nur angezeigt
     finally:
         api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_satzflaeche_folgt_der_wortbox(api):
+    """Verschiebt sich der Text, ohne dass der Leser seine Größe ändert, rückt highlight() Wort-Box UND Satz-Fläche
+    zurecht (früher nur die Wort-Box – der Satz stand dann eine Stelle daneben)."""
+    async def szenario(c):
+        text = "# Titel\n\n" + " ".join(f"Das ist Satz Nummer {n}, der etwas länger ist, damit er umbricht." for n in range(12))
+        _, d = api.json("POST", "/api/docs", {"title": "Satzfläche", "text": text})
+        await _neu_laden(c)
+        await c.js(f"openDoc('{d['id']}').then(() => 1)")
+        await asyncio.sleep(0.6)
+        await c.js("setWord(Math.min(30, st.words.list.length - 1)); 1")
+        await asyncio.sleep(0.5)
+        M = """(() => { const W = st.words, ws = W.list.filter((x) => x.sent === W.curSent);
+            const w = ws[0].el.firstElementChild.getBoundingClientRect(), b = document.querySelector('#sboxes i').getBoundingClientRect();
+            return [Math.round(w.top), Math.round(b.top)]; })()"""
+        w, b = await c.js(M)
+        assert abs(w - b) <= 2
+        await c.js("document.querySelectorAll('#sboxes i').forEach((i) => i.style.transform += ' translateY(190px)'); 1")   # veraltet
+        await c.js("highlight(false); 1")
+        await asyncio.sleep(0.2)
+        w, b = await c.js(M)
+        assert abs(w - b) <= 2, (w, b)
+        api.call("DELETE", f"/api/docs/{d['id']}")
+    _im_browser(api, szenario)

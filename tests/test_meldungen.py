@@ -135,7 +135,7 @@ def test_export_ueberbrueckt_aussetzer_ohne_ersatzstimme(monkeypatch):
     monkeypatch.setattr(exporter, "RETRY_WAIT", (0, 0, 0))
     calls = []
 
-    def synth(text, voice, lang, fallback=True, low=False):
+    def synth(text, voice, lang, fallback=True, low=False, doc_id=None):
         calls.append(fallback)
         if len(calls) < 3:
             raise meldungen.Meldung(tts.EDGE_WEG)
@@ -156,7 +156,7 @@ def test_export_nichts_vorlesbar_bricht_nicht_ab(monkeypatch):
     import exporter
     calls = []
 
-    def synth(text, voice, lang, fallback=True, low=False):
+    def synth(text, voice, lang, fallback=True, low=False, doc_id=None):
         calls.append(fallback)
         if not fallback:
             raise meldungen.Meldung(tts.NICHTS_VORLESBAR)
@@ -182,3 +182,35 @@ def test_geloeschte_stimme_ohne_stille_ersatzstimme():
     with pytest.raises(meldungen.Meldung) as e:
         tts.synthesize("Ein Satz, der noch nicht im Cache liegt 4711.", "piper:gibt-es-nicht", "de", fallback=False)
     assert str(e.value) == tts.STIMME_FEHLT
+
+
+def _wav(secs: float) -> bytes:
+    import io, wave
+    b = io.BytesIO()
+    with wave.open(b, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(24000)
+        w.writeframes(b"\0\0" * int(24000 * secs))
+    return b.getvalue()
+
+
+def test_eigene_stimme_bricht_ab_wird_nachgeholt(monkeypatch, tmp_path):
+    """Chatterbox bricht manchmal mitten im Satz ab (Hör-Plan, Frage 18: 18 Wörter in 3,3 s) → neu erzeugen,
+    notfalls Satz für Satz – statt dass Text fehlt und die Markierung drüberrast."""
+    text = "Frage 18: Welche Klänge möchtest du? Mein Vorschlag sind diese fünf: Regen, Kaminfeuer, Café, Wald und sanftes Rauschen."
+    calls = []
+
+    def synth(t, lang, ref, low=False):
+        calls.append(t)
+        return _wav(3.3) if t == text else _wav(len(t.split()) / 2.3)   # ganzer Text: immer abgebrochen
+    monkeypatch.setattr(tts, "CLONE_DIR", tmp_path)
+    (tmp_path / "ich").mkdir(); (tmp_path / "ich" / "sample.wav").write_bytes(b"x")
+    monkeypatch.setattr(tts._clone_worker, "synth", synth)
+    monkeypatch.setattr(tts, "to_opus", lambda wav: wav)
+    out = tts._synth_clone(text, "ich", "de")
+    assert calls[:2] == [text, text] and len(calls) == 4          # 2 Versuche, dann die 2 Sätze einzeln
+    assert tts._wav_secs(out) > 7                                  # vollständig (≈ 18 Wörter / 2,3 + Pause)
+
+
+def test_eigene_stimme_normales_tempo_bleibt():
+    assert not tts._clone_too_short("Ein ganz normaler Satz mit acht Wörtern drin.", _wav(3.2))
+    assert not tts._clone_too_short("Kurz.", _wav(0.2))             # kurze Texte schwanken – nie nachholen

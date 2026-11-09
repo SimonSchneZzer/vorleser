@@ -202,7 +202,39 @@ def _phase_fehler(phase: str) -> Meldung:
     return Meldung(PHASE_FEHLER.get(phase, meldungen.INTERN))
 
 
-def _run(phase: str, args: list[str], totals: dict, order: list[str], watch: tuple[Path, ...] = ()) -> None:
+def _verknuepfungen_weg() -> None:
+    """Windows: uv legt neben `cpython-3.11.18-…` eine Verzeichnis-Verknüpfung (Junction) `cpython-3.11-…` an. Windows 11
+    (ab 24H2) verweigert teils das Durchlaufen solcher Junctions – os error 448 „nicht vertrauenswürdiger
+    Bereitstellungspunkt“ (Rückmeldung 8.11.2026). Eine halb angelegte Junction lässt danach JEDEN neuen Versuch scheitern
+    → vorher und nachher entfernen; das Python selbst liegt im echten Ordner daneben."""
+    if not PY_DIR.exists():
+        return
+    for p in PY_DIR.iterdir():
+        try:
+            if p.is_junction():
+                os.rmdir(p)                           # entfernt nur die Verknüpfung, nicht das Ziel
+            elif p.is_symlink():
+                p.unlink()
+        except OSError as e:
+            meldungen.loggen("python-verknuepfung entfernen", e)
+
+
+def _managed_python() -> Path | None:
+    """Neueste echte (nicht verknüpfte) uv-Python-Installation der gewünschten Version."""
+    def ver(p: Path) -> tuple:
+        m = re.match(rf"cpython-{re.escape(PYTHON)}\.(\d+)", p.name)
+        return (int(m.group(1)),) if m else (-1,)
+    for p in sorted(PY_DIR.glob(f"cpython-{PYTHON}.*"), key=ver, reverse=True):
+        if p.is_junction() or p.is_symlink():
+            continue
+        exe = p / ("python.exe" if paths.IS_WIN else "bin/python3")
+        if exe.exists():
+            return exe
+    return None
+
+
+def _run(phase: str, args: list[str], totals: dict, order: list[str], watch: tuple[Path, ...] = (),
+         env_extra: dict | None = None) -> None:
     """Befehl ausführen; währenddessen Fortschritt (wachsende Ordner) und Zwischenschritt melden."""
     global _proc
     if _cancel.is_set():
@@ -216,7 +248,7 @@ def _run(phase: str, args: list[str], totals: dict, order: list[str], watch: tup
     measure = lambda: sum(_dir_mb(d) for d in watch if d.exists())
     base = measure()                                  # nur den Zuwachs zählen (Ordner kann schon Daten enthalten)
     try:
-        _proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, env=_env(), **NO_WINDOW)
+        _proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, env={**_env(), **(env_extra or {})}, **NO_WINDOW)
         while _proc.poll() is None:
             time.sleep(1.5)
             with _lock:
@@ -251,8 +283,22 @@ def _install() -> None:
         with _lock:
             _state.update(gpu=gpu, started=started, totals=dict(totals))
         threading.Thread(target=lambda: totals.update(model=_model_mb()), daemon=True).start()
-        _run("python", [uv, "venv", "--python", PYTHON, str(CLONE_ENV)], totals, order,
-             watch=(PY_DIR,) if paths.FROZEN else ())
+        if paths.IS_WIN and paths.FROZEN:             # ohne Junction-Umweg (siehe _verknuepfungen_weg)
+            _verknuepfungen_weg()
+            try:
+                _run("python", [uv, "python", "install", PYTHON], totals, order, watch=(PY_DIR,))
+            except Meldung:
+                if not _managed_python():             # nur die Verknüpfung ist gescheitert → Python ist trotzdem da
+                    raise
+            _verknuepfungen_weg()
+            exe = _managed_python()
+            if not exe:
+                raise Meldung(PHASE_FEHLER["python"])
+            _run("python", [uv, "venv", "--python", str(exe), str(CLONE_ENV)], totals, order,
+                 env_extra={"UV_PYTHON_PREFERENCE": "managed"})   # fester Pfad – kein Suchen über Verknüpfungen
+        else:
+            _run("python", [uv, "venv", "--python", PYTHON, str(CLONE_ENV)], totals, order,
+                 watch=(PY_DIR,) if paths.FROZEN else ())
         pip = [uv, "pip", "install", "--python", str(CLONE_PY)]
         if nvidia:
             try:     # torch 2.6 gibt es für CUDA 12.4; scheitert das, nimmt der Prozessor

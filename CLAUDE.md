@@ -3,6 +3,8 @@
 Desktop-App (macOS + Windows), die Texte (EPUB, PDF, TXT, MD, HTML) als Hörbuch vorliest. Python-Server
 + Weboberfläche in einem nativen Fenster (pywebview). Oberfläche, Kommentare und Commits sind **deutsch**.
 
+**Arbeitsplan (lokal, nicht im Repo): `docs/PLAN-3.0.md` (Entscheidungen + „Wo wir stehen“) – falls vorhanden, zuerst lesen und nach jedem Schritt aktualisieren.**
+
 **Bevor du etwas Größeres änderst: `docs/DECISIONS.md` lesen.** Dort steht, warum Dinge so sind, wie sie
 sind (inkl. verworfener Alternativen). **Nach jeder nicht offensichtlichen Entscheidung dort einen Eintrag
 ergänzen** (Datum, Kontext, Entscheidung, Folgen) – auch bei Bugfixes, deren Ursache überraschend war.
@@ -74,7 +76,10 @@ Weitere Variablen: `VORLESER_DEBUG=1` (DevTools), `VORLESER_VERSION`, `VORLESER_
   `VORLESER_HOME` auf einen Wegwerf-Ordner, bevor Module importiert werden.
 - Die Wort-Markierung ist **eine** Box (`#wbox`, `placeWordBox` in `static/js/dokument.js`) hinter dem Text (z-index −1);
   Hintergründe auf dem aktuellen Abschnitt verdecken sie → dort keine Hover-Hintergründe.
-- View Transitions (`withTransition`) rendern `backdrop-filter` nicht → während des Onboardings aus.
+- View Transitions (`withTransition`) rendern `backdrop-filter` nicht → während des Onboardings aus. Ebenso: ein Vorfahr mit
+  `filter`/`opacity`-Animation schaltet die Unschärfe einer Glas-Leiste darin ab → solche Ansichten kinderweise animieren (`navIn`).
+  Auch umgekehrt: **kein `filter` in Animationen auf oder in Glas-Flächen** (Tutorial-Karte, Onboarding-Karte, Player) – WebKit
+  lässt die Unschärfe dann kurz fallen, der Bildschirm „blitzt“ (Tutorial, 9.11.2026).
 - Release-Dateinamen sind fest: `Vorleser-mac.dmg`, `Vorleser-windows-setup.exe` (Webseite + Updater).
 - App ist **unsigniert** (Entscheidung); Erstinstallation zeigt eine Warnung, Updates über den Updater nicht.
 

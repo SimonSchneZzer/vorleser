@@ -6,6 +6,12 @@
 function showNew() {
   showView("new");                                        // Wiedergabe läuft weiter – der Player bleibt unten
   fillLangSelect();
+  draftRestore();
+  // Leeres Feld: Sprache der Oberfläche vorwählen (englische App startete mit „German“, Tester-Rückmeldung)
+  const ui = UI_LANG === "en" ? "en" : "de";
+  if (!$("text").value.trim() && !st.langManual && $("newLang").value !== ui && [...$("newLang").options].some((o) => o.value === ui)) {
+    $("newLang").value = ui; st.newVoice = st.defaults[ui];
+  }
   if (!st.newVoice || voiceById(st.newVoice)?.lang !== $("newLang").value) st.newVoice = st.defaults[$("newLang").value];
   setVoicePill($("newVoiceAv"), $("newVoiceLbl"), st.newVoice);
   updateCount();
@@ -18,7 +24,7 @@ function fillLangSelect() {
   if (cur && [...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 function setSrc(src) {
-  const ids = { paste: "srcPaste", file: "srcFile", dict: "srcDict" }, order = Object.keys(ids);
+  const ids = { paste: "srcPaste", file: "srcFile", dict: "srcDict", link: "srcLink" }, order = Object.keys(ids);
   const prev = order.find((k) => !$(ids[k]).classList.contains("hidden"));
   const how = prev && prev !== src ? (order.indexOf(src) > order.indexOf(prev) ? "right" : "left") : null;
   const ghost = how && view === "new" ? ghostOf($(ids[prev])) : null;
@@ -26,6 +32,8 @@ function setSrc(src) {
   $("srcPaste").classList.toggle("hidden", src !== "paste");
   $("srcFile").classList.toggle("hidden", src !== "file");
   $("srcDict").classList.toggle("hidden", src !== "dict");
+  $("srcLink").classList.toggle("hidden", src !== "link");
+  if (src === "link") setTimeout(() => $("linkUrl").focus(), 50);
   segThumbs($("viewNew"));
   if (ghost) { navIn($(ids[src]), how); navOut(ghost, how); } else animateIn($(ids[src]), "enter");
 }
@@ -75,20 +83,102 @@ $("newVoiceBtn").onclick = (e) => {
   });
 };
 
+/* ---------- Link → Artikel (Version 3.0) ---------- */
+let linkBusy = false;
+async function importLink(url) {
+  if (linkBusy) return;
+  url = (url || "").trim(); if (!url) return;
+  linkBusy = true; $("linkGo").disabled = true;
+  const card = $("linkCard"), done = heightFrom($("srcLink"));
+  card.classList.add("hidden");
+  $("linkStatus").innerHTML = `<span class="spin" style="display:inline-block;vertical-align:-2px"></span> Hole den Artikel …`;
+  done(360);
+  try {
+    const d = await readJson(await fetch("/api/import-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }));
+    $("text").value = d.text; $("title").value = d.title || "";
+    st.langManual = false; setNewLang(d.lang, true); updateCount();
+    const mins = Math.max(1, Math.round(d.text.length / 15 / 60)), chaps = (d.text.match(/^# /gm) || []).length;
+    $("linkMeta").textContent = [d.source, `ca. ${mins} Min. Hördauer`, chaps ? `${chaps} Kapitel` : ""].filter(Boolean).join(" · ");
+    $("linkTitle").textContent = d.title || d.source;
+    $("linkText").textContent = d.text.replace(/^# .*$/gm, "").trim().slice(0, 240) + "…";
+    const grow = heightFrom($("srcLink"));
+    $("linkStatus").textContent = ""; card.classList.remove("hidden"); grow(420); animateIn(card, "enter");
+  } catch (e) {
+    const grow = heightFrom($("srcLink"));
+    $("linkStatus").textContent = friendlyError(e); grow(360);
+  } finally { linkBusy = false; $("linkGo").disabled = false; }
+}
+$("linkForm").onsubmit = (e) => { e.preventDefault(); importLink($("linkUrl").value); };
+// Nur ein Link ins Textfeld eingefügt → Artikel holen statt die Adresse vorlesen
+$("text").addEventListener("paste", (e) => {
+  const t = (e.clipboardData?.getData("text") || "").trim();
+  if (/^https?:\/\/\S+$/.test(t) && !$("text").value.trim()) { e.preventDefault(); setSrc("link"); $("linkUrl").value = t; importLink(t); }
+});
+
 async function importFile(f) {
   setSrc("file");
   $("fileStatus").innerHTML = `<span class="spin" style="display:inline-block;vertical-align:-2px"></span> Lese ${esc(f.name)} …`;
   try {
     const r = await fetch("/api/import", { method: "POST", body: f, headers: { "X-Filename": encodeURIComponent(f.name) } });
-    const d = await readJson(r);
+    let d = await readJson(r);
+    if (d.ocr) {                                            // eingescannt → Texterkennung (Version 3.0)
+      $("fileStatus").textContent = "";
+      d = await ocrWait(d.ocr);
+      if (!d) return;                                       // abgebrochen
+    }
     $("text").value = d.text;
     $("title").value = d.title || f.name.replace(/\.[^.]+$/, "");
+    st.importOriginal = d.original || null;
+    const c = d.cleanup;                                    // Version 3.0: PDF aufgeräumt → kurz sagen, was
+    if (c && (c.kopf || c.seiten || c.getrennt || c.fussnoten || c.punkte || c.tabellen)) {
+      toast("Aufgeräumt: " + [c.kopf && `${c.kopf} Kopf-/Fußzeilen`, c.seiten && `${c.seiten} Seitenzahlen`,
+        c.getrennt && `${c.getrennt} getrennte Wörter`, c.fussnoten && `${c.fussnoten} Fußnoten ans Kapitelende`, c.punkte && `${c.punkte} Listenpunkte`, c.tabellen && `${c.tabellen} Tabellen übersprungen`].filter(Boolean).join(", "));
+    }
     st.langManual = false;
     setNewLang(d.lang, true);
     $("fileStatus").textContent = "";
-    setSrc("paste"); updateCount();
+    setSrc("paste"); updateCount(); draftSave();
   } catch (err) { $("fileStatus").textContent = friendlyError(err); }   // eigener Satz vom Server, übersetzbar
 }
+let ocrJob = null;
+function ocrShow(job) {
+  const box = $("ocrBox"), pct = job && job.total ? (job.done / job.total) * 100 : 0;
+  if (job && box.classList.contains("hidden")) { const grow = heightFrom($("srcFile")); box.classList.remove("hidden"); grow(); animateIn(box, "enter"); }
+  if (!job) {
+    if (!box.classList.contains("hidden") && !box.dataset.closing) {
+      box.dataset.closing = "1";
+      collapseOut(box).then(() => {                         // danach zurücksetzen, damit sie beim nächsten Scan wieder aufgeht
+        box.classList.add("hidden"); box.getAnimations().forEach((x) => x.cancel());
+        box.style.overflow = box.style.pointerEvents = ""; delete box.dataset.closing; $("ocrFill").style.width = "0";
+      });
+    }
+    return;
+  }
+  $("ocrPages").textContent = job.total ? `Seite ${job.done} von ${job.total}` : "";
+  $("ocrFill").style.width = `${pct}%`;
+}
+async function ocrWait(job) {
+  ocrJob = job.id; ocrShow(job);
+  let fails = 0;
+  try {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 400));
+      if (ocrJob !== job.id) return null;                   // abgebrochen
+      try { job = await api(`/api/import/ocr/${job.id}`); fails = 0; }
+      catch (e) { if (++fails > 15) throw e; continue; }   // kurzer Aussetzer → weiter fragen
+      ocrShow(job);
+      if (job.status === "ready") { $("ocrFill").style.width = "100%"; return job.result; }
+      if (job.status === "error") throw new Error(job.error);
+      if (job.status === "cancelled") return null;
+    }
+  } finally { if (ocrJob === job.id) ocrJob = null; setTimeout(() => ocrShow(null), 250); }
+}
+$("ocrCancel").onclick = () => {
+  const id = ocrJob; if (!id) return;
+  ocrJob = null; ocrShow(null);
+  api(`/api/import/ocr/${id}`, { method: "DELETE" }).catch(() => {});
+  $("fileStatus").textContent = "Texterkennung abgebrochen.";
+};
 $("pickFile").onclick = $("pickFile2").onclick = () => $("file").click();
 $("file").onchange = (e) => { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ""; };
 const wrap = $("newWrap");
@@ -106,8 +196,10 @@ $("createBtn").onclick = async () => {
   try {
     const lang = $("newLang").value;
     const d = await api("/api/docs", { method: "POST", body: JSON.stringify({
-      title: $("title").value, text: $("text").value, lang, voice: st.newVoice || st.defaults[lang] }) });
-    $("title").value = ""; $("text").value = ""; st.langManual = false; $("langHint").classList.add("hidden"); updateCount();
+      title: $("title").value, text: $("text").value, lang, voice: st.newVoice || st.defaults[lang],
+      original: st.importOriginal || undefined }) });           // PDF: Original für „Original wiederherstellen“
+    st.importOriginal = null;
+    $("title").value = ""; $("text").value = ""; st.langManual = false; $("langHint").classList.add("hidden"); updateCount(); draftClear();
     st.libLand = { id: d.id, t: performance.now() };
     await refreshLibrary();
     openDoc(d.id);
@@ -146,7 +238,8 @@ $("dictBtn").onclick = async () => {
   clearInterval(dict.timer);
   const blob = await dict.stop(); dict = null; releaseMic();
   btn.classList.remove("on"); btn.disabled = true; btn.setAttribute("aria-label", "Diktat starten");
-  $("dictHint").textContent = "Wandle in Text um … (beim ersten Mal wird das Sprachmodell geladen)";
+  let first = true; try { first = !localStorage.getItem("vorleser.sttReady"); } catch {}
+  $("dictHint").textContent = first ? "Wandle in Text um … (beim ersten Mal wird das Sprachmodell geladen)" : "Wandle in Text um …";
   try {
     const headers = st.langManual ? { "X-Lang": $("newLang").value } : {};
     const r = await fetch("/api/transcribe", { method: "POST", body: blob, headers });
@@ -154,9 +247,41 @@ $("dictBtn").onclick = async () => {
     const ta = $("text");
     ta.value = (ta.value.trim() ? ta.value.trimEnd() + "\n\n" : "") + d.text;
     if (!st.langManual && st.langs[d.lang]) setNewLang(d.lang, true);
-    updateCount(); setSrc("paste");
+    try { localStorage.setItem("vorleser.sttReady", "1"); } catch {}
+    updateCount(); setSrc("paste"); draftSave();
     $("dictHint").textContent = "Tippen und losreden. Längere Pausen werden zu Absätzen. Läuft lokal mit Whisper.";
   } catch (e) { $("dictHint").textContent = friendlyError(e); }
   finally { btn.disabled = false; $("dictTime").textContent = "0:00"; }
 };
 
+
+/* Entwurf behalten: Text im Feld überlebt Schließen/Neustart (Tester-Rückmeldung, Version 3.0) */
+let draftT = 0;
+function draftSave() {
+  clearTimeout(draftT);
+  draftT = setTimeout(() => {
+    try {
+      const d = { title: $("title").value, text: $("text").value };
+      if (d.text.trim() || d.title.trim()) localStorage.setItem("vorleser.draft", JSON.stringify(d));
+      else localStorage.removeItem("vorleser.draft");
+    } catch {}
+  }, 400);
+}
+function draftRestore() {
+  if ($("text").value.trim()) return;
+  try {
+    const d = JSON.parse(localStorage.getItem("vorleser.draft") || "null");
+    if (d?.text) { $("title").value = d.title || ""; $("text").value = d.text; updateCount(); }
+  } catch {}
+}
+function draftClear() { clearTimeout(draftT); try { localStorage.removeItem("vorleser.draft"); } catch {} }
+$("text").addEventListener("input", draftSave);
+$("title").addEventListener("input", draftSave);
+/* Datei per Strg+V / ⌘V einfügen (im Explorer/Finder kopiert) – wie Hineinziehen */
+document.addEventListener("paste", (e) => {
+  if (view !== "new") return;
+  const f = e.clipboardData?.files?.[0];
+  if (!f) return;
+  e.preventDefault();
+  importFile(f);
+}, true);

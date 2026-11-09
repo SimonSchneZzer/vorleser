@@ -24,6 +24,8 @@ import bugreport
 import meldungen
 import clone_setup
 import exporter
+import importers
+import ocr
 import paths
 import settings
 import storage
@@ -38,6 +40,17 @@ DOCS_DIR = paths.DATA_DIR / "docs"
 STATIC_DIR = paths.STATIC_DIR
 HOST, PORT = "127.0.0.1", int(os.environ.get("VORLESER_PORT", "8765"))
 MAX_UPLOAD = 300 * 1024 * 1024
+_quick: dict[str, dict] = {}            # markierter Text (nur im Speicher)
+STATS_FILE = paths.DATA_DIR / "hoerzeit.json"   # Hör-Rückblick (3.0)
+_stats_lock = threading.Lock()
+
+
+def _stats_load() -> dict:
+    try:
+        data = json.loads(STATS_FILE.read_text("utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
 
 # Zugriffsschutz: Jede Webseite im Browser kann Anfragen an 127.0.0.1 schicken. Deshalb verlangt /api/* einen
 # Zufallsschlüssel pro Start – die eigene Oberfläche bekommt ihn als Cookie (SameSite=Strict, fremde Seiten
@@ -234,7 +247,10 @@ class Handler(BaseHTTPRequestHandler):
                   {"Cache-Control": "no-store", "Set-Cookie": cookie})
 
     def static(self, name):
-        ctype = {"css": "text/css", "js": "text/javascript"}[name.rsplit(".", 1)[1]] + "; charset=utf-8"
+        ext = name.rsplit(".", 1)[1]
+        if ext == "m4a":                                    # Atmosphäre-Klänge (Version 3.0)
+            return self.send(200, (STATIC_DIR / name).read_bytes(), "audio/mp4", {"Cache-Control": "max-age=86400"})
+        ctype = {"css": "text/css", "js": "text/javascript"}[ext] + "; charset=utf-8"
         self.send(200, (STATIC_DIR / name).read_bytes(), ctype, {"Cache-Control": "no-cache"})
 
     # -- Einstellungen --
@@ -268,14 +284,40 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_import(self):
         name = unquote(self.headers.get("X-Filename") or "datei.txt")
-        res = import_file(name, self.raw_body())
+        data = self.raw_body()
+        try:
+            res = import_file(name, data)
+        except importers.BrauchtTexterkennung:       # eingescannt → Texterkennung im Hintergrund (Version 3.0)
+            if not ocr.verfuegbar():
+                raise ImportFailed(importers.PDF_SCAN + " " + ocr.OCR_FEHLT)
+            stem = Path(name).stem
+
+            def fertig(seiten):
+                r = importers.pdf_mit_texterkennung(data, stem, seiten)
+                r["lang"] = detect_language(r["text"])
+                r["ocr"] = True
+                return r
+            return self.json({"ocr": ocr.start(data, name, fertig)})
+        res["lang"] = detect_language(res["text"])
+        self.json(res)
+
+    def ocr_status(self, jid):
+        self.json(ocr.status(jid))
+
+    def ocr_cancel(self, jid):
+        ocr.abbrechen(jid)
+        self.json({"ok": True})
+
+    def import_link(self):
+        from importers import import_url
+        res = import_url(str(self.body().get("url") or ""))
         res["lang"] = detect_language(res["text"])
         self.json(res)
 
     # -- Dokumente --
     def list_docs(self):
         def summary(doc):                          # + wie viele Abschnitte schon fertig erzeugt sind (heller Balken)
-            return {**doc_summary(doc), "prepared": sum(tts.is_cached(c["text"], doc["voice"]) for c in doc["chunks"])}
+            return {**doc_summary(doc), "prepared": sum(tts.is_cached(c["text"], doc["voice"], doc["id"]) for c in doc["chunks"])}
         docs = []
         with _doc_lock:
             for p in DOCS_DIR.glob("*.json"):
@@ -305,6 +347,9 @@ class Handler(BaseHTTPRequestHandler):
             "chunks": chunks, "chapters": chapters,
             "progress": {"chunk": 0, "offset": 0.0, "updated": None},
         }
+        orig = data.get("original")
+        if isinstance(orig, str) and orig.strip() and len(orig) < 20_000_000:
+            doc["original"] = orig          # Version 3.0: PDF vor dem Aufräumen („Original wiederherstellen“)
         if data.get("sample"):              # Beispieltext aus dem Rundgang (wird beim erneuten Rundgang wiederverwendet)
             doc["sample"] = True
         with _doc_lock:
@@ -314,7 +359,99 @@ class Handler(BaseHTTPRequestHandler):
     def get_doc(self, doc_id):
         with _doc_lock:
             doc = load_doc(doc_id)
-        self.json(doc)
+        orig = doc.pop("original", None)           # kann MB groß sein → nur bei Bedarf (/original)
+        self.json({**doc, "hasOriginal": bool(orig)})
+
+    # -- Hör-Rückblick (Version 3.0, Etappe 3): nur echte Hörzeit, lokal in data/hoerzeit.json --
+    def stats_add(self):
+        p = self.body()
+        secs = float(p.get("secs") or 0)
+        doc = str(p.get("doc") or "")
+        if not (0 < secs <= 600) and not p.get("finished"):
+            raise ValueError(meldungen.ANFRAGE)
+        day = time.strftime("%Y-%m-%d")
+        with _stats_lock:
+            data = _stats_load()
+            d = data.setdefault(day, {"secs": 0, "docs": {}, "finished": []})
+            if secs > 0:
+                d["secs"] = round(d["secs"] + secs, 1)
+                d["docs"][doc] = round(d["docs"].get(doc, 0) + secs, 1)
+            if p.get("finished") and doc and doc not in d["finished"]:
+                d["finished"].append(doc)
+            for old in sorted(data)[:-400]:            # gut ein Jahr reicht
+                data.pop(old, None)
+            tmp = STATS_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data), "utf-8")
+            tmp.replace(STATS_FILE)
+        self.json({"ok": True})
+
+    def stats_week(self):
+        """Woche Mo–So: last=1 → die vergangene Woche (Montagskarte), sonst die laufende."""
+        q = parse_qs(urlparse(self.path).query)
+        import datetime as dt
+        today = dt.date.today()
+        monday = today - dt.timedelta(days=today.weekday()) - dt.timedelta(days=7 if q.get("last") == ["1"] else 0)
+        with _stats_lock:
+            data = _stats_load()
+        days, per_doc, finished = [], {}, set()
+        for k in range(7):
+            day = (monday + dt.timedelta(days=k)).isoformat()
+            d = data.get(day, {})
+            days.append({"date": day, "secs": d.get("secs", 0)})
+            for doc_id, sec in d.get("docs", {}).items():
+                per_doc[doc_id] = per_doc.get(doc_id, 0) + sec
+            finished.update(d.get("finished", []))
+        top = max(per_doc.items(), key=lambda x: x[1], default=(None, 0))[0]
+        title = None
+        if top:
+            try:
+                with _doc_lock:
+                    title = load_doc(top)["title"]
+            except Exception:
+                title = None
+        self.json({"week": monday.isoformat(), "days": days, "total": round(sum(x["secs"] for x in days)),
+                   "finished": len(finished), "top": title})
+
+    # -- Lesezeichen (Version 3.0, Etappe 3): gehören zum Text --
+    def bm_add(self, doc_id):
+        p = self.body()
+        with _doc_lock:
+            doc = load_doc(doc_id)
+            i = int(p.get("chunk", -1))
+            if not 0 <= i < len(doc["chunks"]):
+                raise KeyError("Abschnitt")
+            bms = doc.setdefault("bookmarks", [])
+            if not any(b["chunk"] == i for b in bms):
+                bms.append({"id": uuid.uuid4().hex[:12], "chunk": i, "text": doc["chunks"][i]["text"][:160],
+                            "note": str(p.get("note") or "")[:2000], "created": time.time()})
+                bms.sort(key=lambda b: b["chunk"])
+                save_doc(doc)
+        self.json({"bookmarks": doc["bookmarks"]})
+
+    def bm_patch(self, doc_id, bid):
+        note = str(self.body().get("note") or "")[:2000]
+        with _doc_lock:
+            doc = load_doc(doc_id)
+            b = next((b for b in doc.get("bookmarks", []) if b["id"] == bid), None)
+            if not b:
+                raise KeyError("Lesezeichen")
+            b["note"] = note
+            save_doc(doc)
+        self.json({"bookmarks": doc["bookmarks"]})
+
+    def bm_delete(self, doc_id, bid):
+        with _doc_lock:
+            doc = load_doc(doc_id)
+            doc["bookmarks"] = [b for b in doc.get("bookmarks", []) if b["id"] != bid]
+            save_doc(doc)
+        self.json({"bookmarks": doc["bookmarks"]})
+
+    def get_original(self, doc_id):
+        with _doc_lock:
+            doc = load_doc(doc_id)
+        if not doc.get("original"):
+            raise KeyError("Original")
+        self.json({"text": doc["original"]})
 
     def patch_doc(self, doc_id):
         data = self.body()
@@ -376,6 +513,15 @@ class Handler(BaseHTTPRequestHandler):
             doc["progress"] = {**doc["progress"], "chunk": new_idx,
                                "offset": doc["progress"]["offset"] if same else 0.0}
             doc["chunks"], doc["chapters"] = chunks, chapters
+            # Lesezeichen (3.0): über ihren Ausschnitt wiederfinden; Abschnitt weg → Lesezeichen weg
+            keep = []
+            for bm in doc.get("bookmarks", []):
+                head = bm.get("text", "")[:60]
+                hit = next((i for i, c in enumerate(chunks) if head and c["text"].startswith(head)), None)
+                if hit is not None and all(k["chunk"] != hit for k in keep):
+                    keep.append({**bm, "chunk": hit, "text": chunks[hit]["text"][:160]})
+            if "bookmarks" in doc:
+                doc["bookmarks"] = sorted(keep, key=lambda b: b["chunk"])
             if isinstance(data.get("title"), str) and data["title"].strip():
                 doc["title"] = data["title"].strip()
             doc["edited"] = time.time()
@@ -394,13 +540,140 @@ class Handler(BaseHTTPRequestHandler):
         freed = storage.delete_doc_audio(doc) if doc else 0   # erzeugtes Audio + Wortmarken mitlöschen
         self.json({"ok": True, "freed": freed})
 
+    # -- Markierten Text vorlesen (Version 3.0): nur im Speicher, „In Bibliothek sichern“ macht einen Text daraus --
+    def quick_create(self):
+        data = self.body()
+        text = (data.get("text") or "").strip()
+        if not text:
+            raise ValueError("Kein Text")
+        lang = detect_language(text)
+        ids = [v["id"] for v in tts.voices_for(lang)]
+        voice = data.get("voice") if data.get("voice") in ids else tts.default_voice(lang)
+        if not voice:
+            raise ValueError("Für diese Sprache ist gerade keine Stimme verfügbar")
+        chunks, _ = chunk_text(text, lang)
+        if not chunks:
+            raise ValueError("Kein vorlesbarer Text gefunden")
+        qid = uuid.uuid4().hex
+        with _doc_lock:
+            _quick[qid] = {"text": text, "lang": lang, "voice": voice, "chunks": chunks}
+            while len(_quick) > 5:                       # nur die letzten paar behalten
+                _quick.pop(next(iter(_quick)))
+        self.json(self._quick_info(qid, _quick[qid]))
+
+    def _quick_info(self, qid, q):
+        ids = [v["id"] for v in tts.voices_for(q["lang"])]
+        fast = next((v for v in ids if not v.startswith("clone:")), None)
+        slow = q["voice"].startswith("clone:")
+        return {"id": qid, "lang": q["lang"], "voice": q["voice"], "count": len(q["chunks"]), "preview": q["text"][:160],
+                "texts": [c["text"] for c in q["chunks"]],             # für die Mitlesezeile im Mini-Player
+                "slow": slow, "fast": fast if slow else None,
+                "voiceName": next((v.get("name") or v["id"] for v in tts.voices_for(q["lang"]) if v["id"] == q["voice"]), q["voice"])}
+
+    def quick_info(self, qid):
+        with _doc_lock:
+            q = _quick.get(qid)
+        if not q:
+            raise KeyError("Text")
+        self.json(self._quick_info(qid, q))
+
+    def quick_voice(self, qid):
+        voice = self.body().get("voice")
+        with _doc_lock:
+            q = _quick.get(qid)
+            if not q or voice not in [v["id"] for v in tts.voices_for(q["lang"])]:
+                raise KeyError("Stimme")
+            q["voice"] = voice
+        self.json(self._quick_info(qid, q))
+
+    def mini(self):
+        """Mini-Player für markierten Text (eigenes rahmenloses Fenster der Desktop-App)."""
+        cookie = f"{cookie_name(self._port())}={TOKEN}; Path=/; HttpOnly; SameSite=Strict"
+        self.send(200, (STATIC_DIR / "mini.html").read_bytes(), "text/html; charset=utf-8",
+                  {"Cache-Control": "no-store", "Set-Cookie": cookie})
+
+    # -- Aussprache-Wörterbuch (Version 3.0) --
+    def lex_get(self):
+        self.json({"entries": tts.lexikon()})
+
+    def lex_put(self):
+        entries = self.body().get("entries")
+        if not isinstance(entries, list):
+            raise ValueError(meldungen.ANFRAGE)
+        self.json({"entries": tts.lexikon_speichern(entries)})
+
+    def lex_probe(self):
+        """Probe: wie klingt die Schreibweise? (Standardstimme der Sprache des Worts, ohne Ersatzstimme)"""
+        p = self.body()
+        sprich = str(p.get("sprich") or "").strip()[:200]
+        if not sprich:
+            raise ValueError("Kein Text")
+        lang = p.get("lang") if p.get("lang") in LANGS else "de"
+        voice = tts.default_voice(lang)
+        if voice and voice.startswith("clone:"):          # Probe soll schnell sein
+            voice = next((v["id"] for v in tts.voices_for(lang) if not v["id"].startswith("clone:")), voice)
+        data, mime, used = tts.synthesize(sprich, voice, lang, fallback=False)
+        self.send(200, data, mime, {"Cache-Control": "no-store", "X-Voice-Used": used})
+
+    def lex_affected(self):
+        """Wie viele schon erzeugte Abschnitte enthalten das Wort? (für „… werden neu kalibriert“)"""
+        import re as _re
+        p = self.body()
+        wort = str(p.get("wort") or "").strip()
+        only = p.get("doc") if _re.fullmatch(r"[0-9a-f]{32}", str(p.get("doc") or "")) else None
+        lang = p.get("lang") if p.get("lang") in LANGS else None
+        if not wort:
+            self.json({"count": 0}); return
+        rx = _re.compile(r"(?<!\w)" + _re.escape(wort) + r"(?!\w)")
+        n = 0
+        with _doc_lock:
+            for path in DOCS_DIR.glob("*.json"):
+                try:
+                    doc = json.loads(path.read_text("utf-8"))
+                except Exception:
+                    continue
+                if only and doc.get("id") != only:
+                    continue
+                if lang and tts._voice_lang(doc.get("voice", "")) not in (lang, None):   # Eintrag gilt nur für seine Sprache
+                    continue
+                n += sum(1 for c in doc.get("chunks", []) if rx.search(c["text"]) and tts.is_cached(c["text"], doc["voice"], doc["id"]))
+        self.json({"count": n})
+
+    def quick_audio(self, qid, idx):
+        with _doc_lock:
+            q = _quick.get(qid)
+        if not q or int(idx) >= len(q["chunks"]):
+            raise KeyError("Abschnitt")
+        data, mime, used = tts.synthesize(q["chunks"][int(idx)]["text"], q["voice"], q["lang"])
+        self.send(200, data, mime, {"Cache-Control": "no-store", "X-Voice-Used": used})
+
+    def quick_marks(self, qid, idx):
+        with _doc_lock:
+            q = _quick.get(qid)
+        if not q or int(idx) >= len(q["chunks"]):
+            raise KeyError("Abschnitt")
+        self.json({"marks": tts.get_marks(q["chunks"][int(idx)]["text"], q["voice"], q["lang"])})
+
+    def quick_save(self, qid):
+        with _doc_lock:
+            q = _quick.get(qid)
+        if not q:
+            raise KeyError("Text")
+        chunks, chapters = chunk_text(q["text"], q["lang"])
+        doc = {"id": uuid.uuid4().hex, "title": q["text"].lstrip("# ").split("\n", 1)[0][:60], "created": time.time(),
+               "lang": q["lang"], "voice": q["voice"], "chunks": chunks, "chapters": chapters,
+               "progress": {"chunk": 0, "offset": 0.0, "updated": None}}
+        with _doc_lock:
+            save_doc(doc)
+        self.json(doc_summary(doc), 201)
+
     def audio(self, doc_id, idx):
         with _doc_lock:
             doc = load_doc(doc_id)
         idx = int(idx)
         if idx >= len(doc["chunks"]):
             raise KeyError("Abschnitt")
-        data, mime, used = tts.synthesize(doc["chunks"][idx]["text"], doc["voice"], doc["lang"])
+        data, mime, used = tts.synthesize(doc["chunks"][idx]["text"], doc["voice"], doc["lang"], doc_id=doc["id"])
         self.send(200, data, mime, {"Cache-Control": "no-store", "X-Voice-Used": used})
 
     def marks(self, doc_id, idx):
@@ -409,7 +682,7 @@ class Handler(BaseHTTPRequestHandler):
         idx = int(idx)
         if idx >= len(doc["chunks"]):
             raise KeyError("Abschnitt")
-        self.json({"marks": tts.get_marks(doc["chunks"][idx]["text"], doc["voice"], doc["lang"])})
+        self.json({"marks": tts.get_marks(doc["chunks"][idx]["text"], doc["voice"], doc["lang"], doc_id=doc["id"])})
 
     # -- Export --
     def export_status(self, doc_id):
@@ -419,7 +692,12 @@ class Handler(BaseHTTPRequestHandler):
     def export_start(self, doc_id):
         with _doc_lock:
             doc = load_doc(doc_id)
-        self.json(exporter.start(doc, self.body().get("format", "m4b")))
+        b = self.body()
+        try:
+            rate = float(b.get("rate") or 1)
+        except (TypeError, ValueError):
+            rate = 1.0
+        self.json(exporter.start(doc, b.get("format", "m4b"), ambient=bool(b.get("ambient")), rate=rate))
 
     def export_cancel(self, doc_id):
         exporter.cancel(doc_id)
@@ -448,7 +726,7 @@ class Handler(BaseHTTPRequestHandler):
         with _doc_lock:
             doc = load_doc(doc_id)
         job = exporter.status(doc_id, "prepare")
-        cached = [tts.is_cached(c["text"], doc["voice"]) for c in doc["chunks"]]
+        cached = [tts.is_cached(c["text"], doc["voice"], doc["id"]) for c in doc["chunks"]]
         done, total = sum(cached), len(cached)
         status = "running" if job.get("status") == "running" else "ready" if done == total else job.get("status", "none")
         self.json({**job, "status": status, "done": done, "total": total, "cached": cached})
@@ -460,7 +738,7 @@ class Handler(BaseHTTPRequestHandler):
         with _doc_lock:
             doc = load_doc(doc_id)
         texts = [c["text"] for c in doc["chunks"]]
-        self.json({"total": len(texts), "voices": {v: sum(tts.is_cached(t, v) for t in texts) for v in voices}})
+        self.json({"total": len(texts), "voices": {v: sum(tts.is_cached(t, v, doc["id"]) for t in texts) for v in voices}})
 
     def jobs(self):
         self.json({"jobs": exporter.running()})
@@ -469,6 +747,38 @@ class Handler(BaseHTTPRequestHandler):
         with _doc_lock:
             doc = load_doc(doc_id)
         self.json(exporter.start(doc, "prepare"))
+
+    def prepare_pending(self):
+        """Texte, deren Vorab-Erzeugen beim letzten Beenden unterbrochen wurde (Karte „Weitermachen?“)."""
+        items = []
+        for doc_id in exporter.pending_ids():
+            try:
+                with _doc_lock:
+                    doc = load_doc(doc_id)
+            except Exception:
+                exporter.set_pending(doc_id, False)   # Text gelöscht/kaputt → vergessen
+                continue
+            if exporter.status(doc_id, "prepare").get("status") == "running":
+                continue
+            done = sum(tts.is_cached(c["text"], doc["voice"], doc["id"]) for c in doc["chunks"])
+            if done >= len(doc["chunks"]):
+                exporter.set_pending(doc_id, False)
+                continue
+            items.append({"doc": doc_id, "title": doc["title"], "done": done, "total": len(doc["chunks"])})
+        self.json({"items": items})
+
+    def prepare_resume(self):
+        started = []
+        for it in exporter.pending_ids():
+            try:
+                with _doc_lock:
+                    doc = load_doc(it)
+            except Exception:
+                exporter.set_pending(it, False)
+                continue
+            exporter.start(doc, "prepare")
+            started.append(it)
+        self.json({"started": started})
 
     def prepare_cancel(self, doc_id):
         exporter.cancel(doc_id, "prepare")
@@ -576,7 +886,8 @@ class Handler(BaseHTTPRequestHandler):
 D = r"([0-9a-f]{32})"
 ROUTES = [
     (r"/|/index\.html", "GET", Handler.index),
-    (r"/(app\.css|i18n\.js|js/[a-z0-9-]+\.js)", "GET", Handler.static),
+    (r"/mini", "GET", Handler.mini),
+    (r"/(app\.css|i18n\.js|js/[a-z0-9-]+\.js|klang/[a-z]+\.m4a)", "GET", Handler.static),
     (r"/api/settings", "GET", Handler.settings_get),
     (r"/api/settings", "PATCH", Handler.settings_patch),
     (r"/api/voices/preview", "GET", Handler.preview),
@@ -584,6 +895,25 @@ ROUTES = [
     (r"/api/voices", "GET", Handler.voices),
     (r"/api/detect", "POST", Handler.detect),
     (r"/api/import", "POST", Handler.do_import),
+    (r"/api/quick", "POST", Handler.quick_create),
+    (rf"/api/quick/{D}/audio/(\d+)", "GET", Handler.quick_audio),
+    (rf"/api/quick/{D}/save", "POST", Handler.quick_save),
+    (rf"/api/quick/{D}/marks/(\d+)", "GET", Handler.quick_marks),
+    (rf"/api/quick/{D}", "GET", Handler.quick_info),
+    (rf"/api/quick/{D}/voice", "POST", Handler.quick_voice),
+    (r"/api/import-url", "POST", Handler.import_link),
+    (rf"/api/import/ocr/{D}", "GET", Handler.ocr_status),
+    (rf"/api/import/ocr/{D}", "DELETE", Handler.ocr_cancel),
+    (r"/api/aussprache", "GET", Handler.lex_get),
+    (r"/api/aussprache", "PUT", Handler.lex_put),
+    (r"/api/aussprache/probe", "POST", Handler.lex_probe),
+    (r"/api/aussprache/betroffen", "POST", Handler.lex_affected),
+    (rf"/api/docs/{D}/original", "GET", Handler.get_original),
+    (r"/api/hoerzeit", "POST", Handler.stats_add),
+    (r"/api/hoerzeit/woche", "GET", Handler.stats_week),
+    (rf"/api/docs/{D}/bookmarks", "POST", Handler.bm_add),
+    (rf"/api/docs/{D}/bookmarks/([0-9a-f]{{12}})", "PATCH", Handler.bm_patch),
+    (rf"/api/docs/{D}/bookmarks/([0-9a-f]{{12}})", "DELETE", Handler.bm_delete),
     (r"/api/cache", "GET", Handler.cache_info),
     (r"/api/cache", "DELETE", Handler.cache_clear),
     (r"/api/quit", "POST", Handler.quit),
@@ -605,6 +935,8 @@ ROUTES = [
     (rf"/api/docs/{D}/prepared", "GET", Handler.prepared_by_voice),
     (rf"/api/docs/{D}/prepare", "POST", Handler.prepare_start),
     (rf"/api/docs/{D}/prepare", "DELETE", Handler.prepare_cancel),
+    (r"/api/prepare/pending", "GET", Handler.prepare_pending),
+    (r"/api/prepare/resume", "POST", Handler.prepare_resume),
     (r"/api/transcribe", "POST", Handler.transcribe),
     (r"/api/clones", "POST", Handler.clone_create),
     (r"/api/clones/([a-z0-9-]+)", "DELETE", Handler.clone_delete),
@@ -659,10 +991,17 @@ def write_token_file() -> None:
         print(f"[server] Schlüsseldatei nicht geschrieben: {e!r}", flush=True)
 
 
+class _Server(ThreadingHTTPServer):
+    # Standard sind 5 wartende Verbindungen – beim Seitenaufbau holt der Browser gut ein Dutzend Dateien gleichzeitig.
+    # War der Server kurz beschäftigt, wurden die übrigen abgewiesen und einzelne Skripte fehlten („… is not defined“).
+    request_queue_size = 64
+    daemon_threads = True
+
+
 def bind(port: int = PORT) -> ThreadingHTTPServer:
     """Server-Socket öffnen (OSError, wenn der Port belegt ist)."""
     global SERVER
-    SERVER = ThreadingHTTPServer((HOST, port), Handler)
+    SERVER = _Server((HOST, port), Handler)
     write_token_file()
     return SERVER
 

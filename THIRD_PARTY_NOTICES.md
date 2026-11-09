@@ -18,6 +18,9 @@ Paketen bei (in der App unter `_internal/<paket>.dist-info/`) und sind auf den g
 | PyAV | BSD-3-Clause | https://github.com/PyAV-Org/PyAV |
 | FFmpeg (über imageio-ffmpeg) | GPL/LGPL (je nach Build) | https://ffmpeg.org · https://github.com/imageio/imageio-ffmpeg |
 | pywebview (App-Fenster) | BSD-3-Clause | https://github.com/r0x0r/pywebview |
+| PyObjC inkl. Vision/Quartz (macOS: Fenster, Menüleiste, Texterkennung) | MIT | https://github.com/ronaldoussoren/pyobjc |
+| pypdfium2 / PDFium (Windows: Scan-Seiten rendern für die Texterkennung) | Apache-2.0 bzw. BSD-3-Clause | https://github.com/pypdfium2-team/pypdfium2 |
+| PyWinRT (Windows: Texterkennung über Windows.Media.Ocr) | MIT | https://github.com/pywinrt/pywinrt |
 | pypdf (PDF-Import) | BSD-3-Clause | https://github.com/py-pdf/pypdf |
 | Beautiful Soup, soupsieve | MIT | https://www.crummy.com/software/BeautifulSoup/ |
 | lxml | BSD-3-Clause | https://lxml.de |
@@ -29,6 +32,18 @@ Paketen bei (in der App unter `_internal/<paket>.dist-info/`) und sind auf den g
 | uv (Installation der eigenen Stimme) | MIT / Apache-2.0 | https://github.com/astral-sh/uv |
 | Python | PSF-2.0 | https://www.python.org |
 | PyInstaller (Bootloader) | GPL-2.0 mit Ausnahme für gebaute Apps | https://pyinstaller.org |
+
+## Klänge (Atmosphäre)
+Die Klang-Schleifen in `static/klang/` sind gekürzt, lautstärke-angeglichen und nahtlos geschnitten. Die Originale stehen unter
+**CC0 1.0 (gemeinfrei)**, Quelle BigSoundBank (Joseph Sardin, https://bigsoundbank.com). Eine Nennung ist freiwillig.
+
+| Datei | Original |
+|---|---|
+| `regen.m4a` | Summer Rain on Terrace (#1019) |
+| `kamin.m4a` | Fireplace #4 (#2856) |
+| `cafe.m4a` | Coffee Shop at the Capucins (#2561) |
+| `wald.m4a` | Forêt et ruisseau #1 (#2713) |
+| `rauschen.m4a` | selbst erzeugt (braunes Rauschen), kein Fremdmaterial |
 
 ## Stimmen
 | Stimme | Lizenz |

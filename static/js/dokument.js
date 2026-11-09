@@ -27,7 +27,7 @@ function showDoc(doc) {
   renderDocOver();
   setVoicePill($("voiceAv"), $("voiceLbl"), doc.voice);
   $("chapterBtn").classList.toggle("hidden", !doc.chapters.length);
-  $("posR").textContent = `von ${doc.chunks.length}`;
+  posRender();
   $("ticks").innerHTML = doc.chapters.filter((c) => c.chunk > 0).map((c) => `<span class="tick" style="left:${(c.chunk / doc.chunks.length) * 100}%"></span>`).join("");
 
   const box = $("docText"); box.innerHTML = "";
@@ -37,7 +37,10 @@ function showDoc(doc) {
     let s;
     if (c.h) { s = document.createElement("h2"); frag.appendChild(s); p = null; }
     else {
-      if (c.par || !p) { p = document.createElement("p"); frag.appendChild(p); }
+      if (c.par || !p) {
+        p = document.createElement("p"); frag.appendChild(p);
+        if (c.li) p.className = c.li === "n" ? "li num" : "li";     // Listenpunkt (Version 3.0)
+      }
       else p.appendChild(document.createTextNode(" "));
       s = document.createElement("span"); p.appendChild(s);
     }
@@ -45,6 +48,7 @@ function showDoc(doc) {
     return s;
   });
   box.appendChild(frag);
+  requestAnimationFrame(() => window.bmRender?.());          // Lesezeichen (3.0)
   st.readySet = new Set();
   st.lastError = null;
   if (switching) {
@@ -58,13 +62,28 @@ function showDoc(doc) {
   prefetch();
   updateStatus(); updatePrep(); updateMediaSession();
 }
-$("docText").onclick = (e) => { const s = e.target.closest(".chunk"); if (s) jumpTo(+s.dataset.i, 0, true); };
+// Gezogen = markiert → nicht springen (das Menü zum Kopieren/Aussprechen kommt, einstellungen.js); nur echter Klick springt
+let downAt = null;
+$("docText").addEventListener("mousedown", (e) => { downAt = [e.clientX, e.clientY, e.detail]; });
+$("docText").onclick = (e) => {
+  const moved = downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4;
+  if (moved || e.detail > 1) return;                      // ziehen oder Doppelklick (Wort markieren)
+  const s = e.target.closest(".chunk"); if (s) jumpTo(+s.dataset.i, 0, true);
+};
 function renderDocOver() {
   const doc = st.doc; if (!doc) return;
   const chars = doc.chunks.reduce((s, c) => s + c.text.length, 0);
   $("docOver").textContent = [doc.chapters.length ? `${doc.chapters.length} Kapitel` : nAbschn(doc.chunks.length),
     `ca. ${fmtDuration(chars / 15)} Hördauer`,
-    doc.progress.updated ? `zuletzt gehört ${new Date(doc.progress.updated * 1000).toLocaleDateString(LOC())}` : ""].filter(Boolean).join(" · ");
+    doc.progress.updated ? `zuletzt gehört ${new Date(doc.progress.updated * 1000).toLocaleString(LOC(), { dateStyle: "medium", timeStyle: "short" })}` : ""].filter(Boolean).join(" · ");   // mit Uhrzeit (Tester-Rückmeldung)
+}
+/** „Abschnitt 6 von 6“ links (statt „Abschn. 6 … von 6“, das verwirrte – Tester-Rückmeldung), rechts die Restzeit. */
+function posRender() {
+  if (!st.doc) return;
+  const n = st.doc.chunks.length, i = Math.min(st.idx, n - 1);
+  $("posL").textContent = `Abschnitt ${i + 1} von ${n}`;
+  const rest = st.doc.chunks.slice(i).reduce((a, c) => a + c.text.length, 0) / 15 / (+$("rate").value || 1);
+  $("posR").textContent = rest < 30 ? "fast fertig" : `noch ca. ${fmtDuration(rest)}`;
 }
 function fmtDuration(sec) { const m = Math.max(1, Math.round(sec / 60)); return m < 60 ? `${m} Min.` : `${Math.floor(m / 60)} Std. ${m % 60 ? `${m % 60} Min.` : ""}`.trim(); }
 function currentChapter() {
@@ -161,6 +180,7 @@ function play() {
     updateStatus();
   } else {
     const off = st.pendingFrac != null ? { frac: st.pendingFrac } : st.pendingOffset; st.pendingOffset = 0;
+    if (window.recapStart?.(off)) return;                 // 3.0: „Was bisher geschah“ nach langer Pause
     playFrom(st.idx, off);
   }
 }
@@ -194,9 +214,21 @@ function seekBy(sec) {
   if (t > audio.duration) return jumpTo(st.idx + 1, 0);
   audio.currentTime = Math.max(0, t);
 }
+// Literaturverzeichnis: beim Durchhören auslassen (Einstellung, Standard an) – gezielt hineinspringen geht weiterhin
+const REF_CHAPTER = /^(references|literatur(verzeichnis)?|bibliogra(phy|fie)|quellen(verzeichnis)?|works cited|sources)$/i;
+function nextIdx(i) {
+  if (st.settings?.skipRefs === false) return i;
+  const chs = st.doc.chapters || [], k = chs.findIndex((c) => c.chunk === i);
+  if (k < 0 || !REF_CHAPTER.test(chs[k].title.trim())) return i;
+  const after = chs.slice(k + 1).find((c) => !REF_CHAPTER.test(c.title.trim()));
+  toast(after ? "Literaturverzeichnis übersprungen" : "Literaturverzeichnis ausgelassen – Text fertig gehört");
+  return after ? after.chunk : st.doc.chunks.length;
+}
 audio.addEventListener("ended", () => {
   if (!st.doc) return;
-  if (st.idx < st.doc.chunks.length - 1) playFrom(st.idx + 1);
+  if (window.recapNext?.()) return;                       // 3.0: Wiederholung vorbei → genau an der alten Stelle weiter
+  const next = st.idx < st.doc.chunks.length - 1 ? nextIdx(st.idx + 1) : st.doc.chunks.length;
+  if (next < st.doc.chunks.length) playFrom(next);
   else { st.wantPlay = false; setPlayIcon(false); saveProgress(true, 0, 1); setStatus("Fertig gehört"); updateBar(); refreshLibrary(); }
 });
 audio.addEventListener("timeupdate", () => { updateBar(); if (st.wantPlay && Date.now() - st.lastSave > SAVE_EVERY_MS) saveProgress(); });
@@ -394,9 +426,10 @@ function mlShow(i, toks, k, ghost, swapOk = true) {
   const spans = row.querySelectorAll(".mw"), j = k - first, el = spans[j];
   for (let n = 0; n < spans.length; n++) spans[n].className = ghost ? "mw" : n < j ? "mw said" : n === j && markMode() === "word" ? "mw cur" : "mw";
   // Kurzer Satz mittig; langer rutscht so nach, dass das Wort bei ~40 % steht (nie über die Enden hinaus)
-  const Wn = win.clientWidth, rw = row.scrollWidth, x = el.offsetLeft + el.offsetWidth / 2;
+  // Ränder blenden aus (Maske 6 %) → Satzanfang/-ende nie in die Blende schieben, sonst steht das Wort „hinten“ im Nebel
+  const Wn = win.clientWidth, rw = row.scrollWidth, x = el.offsetLeft + el.offsetWidth / 2, pad = Math.round(Wn * 0.07);
   row.classList.toggle("snap", fresh);
-  row.style.transform = `translateX(${rw <= Wn ? (Wn - rw) / 2 : -Math.max(0, Math.min(x - Wn * 0.4, rw - Wn))}px)`;
+  row.style.transform = `translateX(${rw <= Wn - 2 * pad ? (Wn - rw) / 2 : -Math.max(-pad, Math.min(x - Wn * 0.4, rw - Wn + pad))}px)`;
   if (fresh) { void row.offsetWidth; row.classList.remove("snap"); }
   const word = markMode() === "word";
   boxIn(row, "mlBox", "wbox", !ghost && word ? el.getBoundingClientRect() : null, !fresh);
@@ -425,8 +458,10 @@ function placeWordBox(el, animate = true) {
 }
 function replaceMarks() {                  // Wort- und Satz-Box neu an den Text legen (ohne Gleiten)
   const W = st.words;
+  if (!$("reader").offsetWidth) return;     // Textansicht ausgeblendet (z. B. Einstellungen): alle Maße 0 → nicht messen
   if (W && W.cur >= 0) placeWordBox(W.list[W.cur]?.el, false);
   if (W && W.curSent >= 0) placeSentBoxes(W.list.filter((x) => x.sent === W.curSent).map((x) => x.el), false);
+  window.bmPlace?.();                       // Lesezeichen (3.0) mitwandern lassen
 }
 new ResizeObserver(replaceMarks).observe($("reader"));   // Umbruch geändert (Fenster, Seitenleiste, Schriftgröße)
 // Lese-Schrift (Literata) kommt oft erst nach dem Setzen der Boxen: Die Wörter verschieben sich, der Leser bleibt aber

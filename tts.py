@@ -530,11 +530,157 @@ def _synth_clone(text: str, slug: str, lang: str, low: bool = False) -> bytes:
     if not ref.exists():
         raise Meldung("Die eigene Stimme wurde nicht gefunden")
     wav = _clone_worker.synth(text, lang, ref, low=low)
+    if _clone_too_short(text, wav):
+        # Chatterbox bricht manchmal mitten im Satz ab (z. B. vor Aufzählungen) → Text fehlt im Audio, die Wort-
+        # markierung rast drüber. Erst einmal neu würfeln (das Modell sampelt zufällig), sonst Satz für Satz.
+        print(f"[clone] Audio zu kurz ({_wav_secs(wav):.1f} s für {len(text.split())} Wörter) – neuer Versuch", flush=True)
+        again = _clone_worker.synth(text, lang, ref, low=low)
+        if not _clone_too_short(text, again):
+            wav = again
+        else:
+            import textproc
+            parts = [p for p in textproc.split_sentences(text, lang) if p.strip()]
+            if len(parts) > 1:
+                print(f"[clone] immer noch zu kurz – erzeuge {len(parts)} Sätze einzeln", flush=True)
+                wav = _concat_wavs([_clone_worker.synth(p, lang, ref, low=low) for p in parts])
+            elif _wav_secs(again) > _wav_secs(wav):
+                wav = again
     return to_opus(wav)
 
 
-def cache_path(text: str, voice_id: str) -> Path:
-    key = hashlib.sha1(f"{voice_id}\0{text}".encode()).hexdigest()
+CLONE_WORDS_PER_SEC = 2.3      # typisches Sprechtempo der eigenen Stimme (gemessen: Median 2,28)
+
+
+def _wav_secs(wav: bytes) -> float:
+    try:
+        with wave.open(io.BytesIO(wav)) as w:
+            return w.getnframes() / float(w.getframerate() or 1)
+    except Exception:
+        return 0.0
+
+
+def _clone_too_short(text: str, wav: bytes) -> bool:
+    """Deutlich kürzer als für den Text plausibel? (Unter ~45 % der erwarteten Dauer; kurze Texte schwanken zu stark.)"""
+    words = len(text.split())
+    return words >= 6 and _wav_secs(wav) < 0.45 * words / CLONE_WORDS_PER_SEC
+
+
+def _concat_wavs(wavs: list[bytes]) -> bytes:
+    """WAVs gleichen Formats aneinanderhängen, mit kurzer Pause zwischen den Sätzen."""
+    out = io.BytesIO()
+    with wave.open(io.BytesIO(wavs[0])) as first:
+        params = first.getparams()
+    gap = b"\0" * int(params.framerate * 0.25) * params.sampwidth * params.nchannels
+    with wave.open(out, "wb") as w:
+        w.setparams(params)
+        for n, data in enumerate(wavs):
+            with wave.open(io.BytesIO(data)) as r:
+                if n:
+                    w.writeframes(gap)
+                w.writeframes(r.readframes(r.getnframes()))
+    return out.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+# Aussprache-Wörterbuch (Version 3.0, Etappe 2). Ersetzt Wörter VOR dem Vorlesen; die Ersetzung steckt im
+# Cache-Schlüssel → ändert sich ein Eintrag, werden betroffene Abschnitte automatisch neu erzeugt („neu kalibriert“).
+# --------------------------------------------------------------------------- #
+LEX_FILE = DATA_DIR / "aussprache.json"
+# Vorbelegung je Sprache – ein Eintrag gilt nur für Texte in seiner Sprache (ohne „lang“: für alle)
+LEX_DEFAULT = [{"wort": w, "sprich": s, "lang": "de"} for w, s in [
+    ("z. B.", "zum Beispiel"), ("d. h.", "das heißt"), ("u. a.", "unter anderem"), ("bzw.", "beziehungsweise"),
+    ("usw.", "und so weiter"), ("ggf.", "gegebenenfalls"), ("inkl.", "inklusive"), ("vgl.", "vergleiche"),
+    ("evtl.", "eventuell"), ("bspw.", "beispielsweise"), ("zzgl.", "zuzüglich"), ("u. U.", "unter Umständen"),
+    ("o. Ä.", "oder Ähnliches")]] + [{"wort": w, "sprich": s, "lang": "en"} for w, s in [
+    ("e.g.", "for example"), ("i.e.", "that is"), ("etc.", "et cetera"), ("vs.", "versus"), ("approx.", "approximately"),
+    ("incl.", "including"), ("esp.", "especially"), ("a.k.a.", "also known as"), ("cf.", "compare"),
+    ("Vorleser", "Fore-lay-zer")]]                  # sonst „Worlieser“ (Tester-Rückmeldung)
+_lex = {"mtime": None, "entries": [], "rx": []}
+
+
+def lexikon() -> list[dict]:
+    """Einträge {wort, sprich, doc?} – doc = nur in diesem Text. Fehlt die Datei: Vorbelegung."""
+    try:
+        mt = LEX_FILE.stat().st_mtime
+    except OSError:
+        mt = 0
+    if _lex["mtime"] != mt:
+        entries = LEX_DEFAULT
+        if mt:
+            try:
+                data = json.loads(LEX_FILE.read_text("utf-8"))
+                entries = [e for e in data if isinstance(e, dict) and str(e.get("wort", "")).strip() and str(e.get("sprich", "")).strip()]
+            except (OSError, ValueError):
+                entries = LEX_DEFAULT
+        _lex.update(mtime=mt, entries=entries,
+                    rx=[(re.compile(r"(?<!\w)" + re.escape(e["wort"].strip()) + r"(?!\w)"), e["sprich"].strip(), e.get("doc"), e.get("lang"))
+                        for e in entries])
+    return [dict(e) for e in _lex["entries"]]
+
+
+def lexikon_speichern(entries: list[dict]) -> list[dict]:
+    clean = []
+    for e in entries[:2000]:
+        w, sp = str(e.get("wort", "")).strip()[:120], str(e.get("sprich", "")).strip()[:200]
+        if w and sp:
+            clean.append({"wort": w, "sprich": sp, **({"doc": e["doc"]} if re.fullmatch(r"[0-9a-f]{32}", str(e.get("doc") or "")) else {}),
+                          **({"lang": e["lang"]} if e.get("lang") in LANGS else {})})
+    tmp = LEX_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(clean, ensure_ascii=False, indent=1), "utf-8")
+    tmp.replace(LEX_FILE)
+    _lex["mtime"] = None
+    return lexikon()
+
+
+# Nur für die Stimme (Anzeige bleibt): Zeichen, die sonst vorgelesen werden oder stören (Tester-Rückmeldung 9.11.2026)
+_EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\u20E3]")
+_DEKOR = re.compile(r"[*•◦▪▫■□●○◆◇►▶➢➤✓✔✗✘‣⁃→←↑↓⇒⇐⇔↔⟶⟵|\uE000-\uF8FF]")
+_LINIE = re.compile(r"[-=_~*#]{3,}")
+_URL = re.compile(r"\b(?:https?://)?(?:www\.)?((?:[\w-]+\.)+[a-z]{2,})(?:[/?#][^\s]*?)?(?=[.,;:!?)\]]*(?:\s|$))", re.I)
+_ABK = re.compile(r"(?<![\w.])([a-zäöü])\.(?=[A-Za-zÄÖÜäöü]\.)")      # z.B., d.h., u.U., o.Ä. – nicht U.S.A.
+
+
+def _fuer_stimme(text: str, lang: str | None = None) -> str:
+    """Links → Adresse ohne Pfad, Emojis/Aufzählungszeichen/Pfeile/Trennlinien weg, „z.B.“ → „z. B.“ (fürs Wörterbuch)."""
+    text = _URL.sub(lambda m: m.group(1) if ("://" in m.group(0) or m.group(0).lower().startswith("www.")) else m.group(0), text)
+    text = _EMOJI.sub("", text)
+    text = _DEKOR.sub(" ", text)
+    text = _LINIE.sub(" ", text)
+    if lang != "en":                                   # „z.B.“ → „z. B.“ nur deutsch („e.g.“ bleibt)
+        text = _ABK.sub(r"\1. ", text)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
+_voice_lang_cache: dict[str, str | None] = {}
+
+
+def _voice_lang(voice_id: str) -> str | None:
+    """Sprache einer Stimme – steckt bei Edge/Piper im Namen (de-DE / de_DE), sonst aus der Stimmenliste (eigene Stimme).
+    Bewusst NUR aus der Stimme: Schlüssel im Zwischenspeicher und gesprochener Text müssen überall gleich herauskommen."""
+    m = re.match(r"(?:edge|piper):([a-z]{2})[-_]", voice_id or "")
+    if m:
+        return m.group(1)
+    if voice_id not in _voice_lang_cache:
+        v = voice_by_id(voice_id)
+        _voice_lang_cache[voice_id] = v["lang"] if v else None
+    return _voice_lang_cache[voice_id]
+
+
+def spoken(text: str, doc_id: str | None = None, lang: str | None = None) -> str:
+    """Text, wie er gesprochen wird (aufbereitet, Wörterbuch der passenden Sprache angewendet)."""
+    text = _fuer_stimme(text, lang)
+    lexikon()
+    for rx, sp, doc, elang in _lex["rx"]:
+        if doc and doc != doc_id:
+            continue
+        if elang and lang and elang != lang:
+            continue
+        text = rx.sub(sp, text)
+    return text
+
+
+def cache_path(text: str, voice_id: str, doc_id: str | None = None) -> Path:
+    key = hashlib.sha1(f"{voice_id}\0{spoken(text, doc_id, _voice_lang(voice_id))}".encode()).hexdigest()
     ext = "mp3" if voice_id.startswith("edge:") else "webm"
     return CACHE_DIR / f"{key}.{ext}"
 
@@ -564,12 +710,15 @@ def warm_clone_preview(voice_id: str, first_lang: str = "de") -> None:
         _warming.discard(voice_id)
 
 
-def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: bool = False) -> tuple[bytes, str, str]:
+def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: bool = False,
+               doc_id: str | None = None) -> tuple[bytes, str, str]:
     """Liefert (audio, mime, tatsächlich genutzte Stimme).
-    fallback=False: bei Fehler Exception statt Ersatzstimme (z. B. für Hörproben)."""
+    fallback=False: bei Fehler Exception statt Ersatzstimme (z. B. für Hörproben). doc_id: für Wörterbuch-Einträge
+    „nur in diesem Text“."""
     global _edge_down_until
     voice_id = normalize_voice_id(voice_id)
-    path = cache_path(text, voice_id)
+    path = cache_path(text, voice_id, doc_id)
+    say = spoken(text, doc_id, _voice_lang(voice_id))
     if path.exists():
         os.utime(path)  # für "zuletzt benutzt" beim Aufräumen
         return path.read_bytes(), MIME[path.suffix[1:]], voice_id
@@ -580,9 +729,9 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
         if time.time() < _edge_down_until:
             if not fallback:
                 raise Meldung(EDGE_WEG)
-            return _fallback(text, lang, voice_id)
+            return _fallback(text, lang, voice_id, doc_id)
         try:
-            data, marks = _synth_edge(text, name)
+            data, marks = _synth_edge(say, name)
         except Exception as e:
             # „NoAudioReceived“ betrifft nur diese eine Stimme – keine globale Sperre.
             # z. B. „* * *“ – nur dieser Abschnitt/diese Stimme, kein Netzproblem
@@ -592,11 +741,11 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
             print(f"[edge] {name}: {type(e).__name__}" + ("" if voice_only or not fallback else f" – Piper übernimmt für {EDGE_COOLDOWN}s"), flush=True)
             if not fallback:
                 raise Meldung(NICHTS_VORLESBAR if voice_only else EDGE_WEG) from e
-            return _fallback(text, lang, voice_id)
+            return _fallback(text, lang, voice_id, doc_id)
         # außerhalb des Edge-Blocks: volle Platte ist kein Edge-Ausfall (sonst 60 s Sperre + Ersatzstimme)
         _write_atomic(path.with_suffix(".marks.json"), json.dumps(marks, ensure_ascii=False).encode())
     elif engine == "piper" and name in _piper_files():
-        data = _synth_piper(text, name)
+        data = _synth_piper(say, name)
     elif engine == "clone" and clone_available():
         with _inflight_lock:                       # wird derselbe Abschnitt gerade erzeugt? → darauf warten statt doppelt
             ev = _inflight.get(path)
@@ -610,12 +759,12 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
                     return path.read_bytes(), MIME[path.suffix[1:]], voice_id
                 time.sleep(0.1)
         try:
-            data = _synth_clone(text, name, lang, low=low)
+            data = _synth_clone(say, name, lang, low=low)
         except Exception as e:
             print(f"[clone] Fehler ({e}) – Ersatzstimme", flush=True)
             if not fallback:
                 raise
-            return _fallback(text, lang, voice_id)
+            return _fallback(text, lang, voice_id, doc_id)
         finally:
             if owner:
                 with _inflight_lock:
@@ -624,13 +773,13 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
     else:                                          # Piper-Stimme gelöscht / Klon entfernt
         if not fallback:
             raise Meldung(STIMME_FEHLT)
-        return _fallback(text, lang, voice_id)
+        return _fallback(text, lang, voice_id, doc_id)
     print(f"[{engine}] {len(text):4d} Zeichen in {time.time() - t0:.2f}s", flush=True)
 
     _write_atomic(path, data)
     schedule_prune()
     if engine == "clone" and text not in PREVIEW_TEXT.values():   # Wortmarken schon mal vorbereiten
-        threading.Thread(target=get_marks, args=(text, voice_id, lang), daemon=True).start()
+        threading.Thread(target=get_marks, args=(text, voice_id, lang), kwargs={"doc_id": doc_id}, daemon=True).start()
     return data, MIME[path.suffix[1:]], voice_id
 
 
@@ -645,15 +794,15 @@ def _write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
-def _fallback(text: str, lang: str, failed: str) -> tuple[bytes, str, str]:
+def _fallback(text: str, lang: str, failed: str, doc_id: str | None = None) -> tuple[bytes, str, str]:
     if failed.startswith("clone:"):          # Klon kaputt → normale Standardstimme
         fb = default_voice(lang)
         if fb and not fb.startswith("clone:"):
-            return synthesize(text, fb, lang)
+            return synthesize(text, fb, lang, doc_id=doc_id)
     fb = fallback_voice(lang)
     if not fb or fb == failed:
         raise Meldung(KEINE_STIMME)
-    return synthesize(text, fb, lang)
+    return synthesize(text, fb, lang, doc_id=doc_id)
 
 
 # --------------------------------------------------------------------------- #
@@ -666,10 +815,10 @@ _last_prune = 0.0
 _marks_lock = threading.Lock()
 
 
-def get_marks(text: str, voice_id: str, lang: str | None = None, compute: bool = True) -> list | None:
+def get_marks(text: str, voice_id: str, lang: str | None = None, compute: bool = True, doc_id: str | None = None) -> list | None:
     """Wortmarken eines erzeugten Abschnitts.
     Edge liefert sie direkt mit; für eigene Stimme und Piper bestimmt Whisper sie aus dem Audio."""
-    audio_path = cache_path(text, normalize_voice_id(voice_id))
+    audio_path = cache_path(text, normalize_voice_id(voice_id), doc_id)
     p = audio_path.with_suffix(".marks.json")
     try:
         return json.loads(p.read_text("utf-8"))
@@ -694,8 +843,8 @@ def get_marks(text: str, voice_id: str, lang: str | None = None, compute: bool =
         return None
 
 
-def is_cached(text: str, voice_id: str) -> bool:
-    return cache_path(text, normalize_voice_id(voice_id)).exists()
+def is_cached(text: str, voice_id: str, doc_id: str | None = None) -> bool:
+    return cache_path(text, normalize_voice_id(voice_id), doc_id).exists()
 
 
 def cache_stats() -> dict:

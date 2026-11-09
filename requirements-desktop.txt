@@ -1,3 +1,12 @@
 pywebview>=6.2
 pyinstaller>=6.22
 pillow   # nur zum Umwandeln des Icons beim Bauen
+# Texterkennung für eingescannte PDFs (Version 3.0): Mac = Apple Vision, Windows = Windows.Media.Ocr + PDFium zum Rendern
+pyobjc-framework-Vision>=13.0 ; sys_platform == 'darwin'
+pypdfium2>=4.30 ; sys_platform == 'win32'
+winrt-Windows.Media.Ocr>=3.0 ; sys_platform == 'win32'
+winrt-Windows.Graphics.Imaging>=3.0 ; sys_platform == 'win32'
+winrt-Windows.Storage.Streams>=3.0 ; sys_platform == 'win32'
+winrt-Windows.Globalization>=3.0 ; sys_platform == 'win32'
+winrt-Windows.Foundation>=3.0 ; sys_platform == 'win32'
+winrt-Windows.Foundation.Collections>=3.0 ; sys_platform == 'win32'

@@ -20,11 +20,26 @@ DEFAULTS = {
     "favorites": None,         # Voice-IDs fürs Player-Menü (None = noch nie gesetzt → Vorschlag)
     "ahead": "normal",         # wie viel im Voraus erzeugt wird: low (1) | normal (3) | high (10) | all (ganzer Text)
     "cacheMB": int(os.environ.get("VORLESER_CACHE_MB", "500")),
+    "background": True,        # Fenster schließen → Vorleser läuft in der Menüleiste weiter (für ⌃⌥V), Version 3.0
+    "bgHintSeen": False,       # Hinweis beim ersten Schließen schon gezeigt?
+    "recap": True,             # „Was bisher geschah“: nach > 1 Tag Pause die letzten zwei Absätze wiederholen
+    "skipRefs": True,          # Literaturverzeichnis beim Durchhören auslassen (Version 3.0)
+    # Tastenkürzel „Markierten Text vorlesen“ (Version 3.0) – plattformneutral: KeyboardEvent.code + Zusatztasten
+    "hotkey": {"code": "KeyV", "ctrl": True, "alt": True, "shift": False, "meta": False},
+    "ambient": "aus",          # Atmosphäre unter der Stimme: aus | regen | kamin | cafe | wald | rauschen
+    "ambientVol": 35,          # Lautstärke der Atmosphäre in Prozent (0–100)
 }
 CHOICES = {"theme": ("light", "dark", "system"), "mark": ("section", "sentence", "word"), "uiLang": ("de", "en"),
-           "ahead": ("low", "normal", "high", "all")}
+           "ahead": ("low", "normal", "high", "all"), "ambient": ("aus", "regen", "kamin", "cafe", "wald", "rauschen")}
 DEFAULT_FAVORITES = ["edge:de-DE-SeraphinaMultilingualNeural", "edge:de-DE-ConradNeural", "edge:de-DE-KatjaNeural",
                      "edge:en-US-AvaMultilingualNeural", "edge:en-US-AndrewMultilingualNeural", "edge:en-GB-SoniaNeural"]
+
+
+def valid_hotkey(v) -> bool:
+    """Buchstabe/Ziffer/F-Taste und mindestens Strg/⌃, Alt/⌥ oder ⌘ – sonst würde eine normale Taste abgefangen."""
+    return (isinstance(v, dict) and isinstance(v.get("code"), str)
+            and re.fullmatch(r"Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])", v["code"]) is not None
+            and any(v.get(m) is True for m in ("ctrl", "alt", "meta")))
 
 
 def load() -> dict:
@@ -52,6 +67,12 @@ def update(patch: dict) -> dict:
             cur[k] = v.upper()
         elif k == "cacheMB" and isinstance(v, (int, float)) and 50 <= v <= 100_000:
             cur[k] = int(v)
+        elif k in ("background", "bgHintSeen", "recap", "skipRefs") and isinstance(v, bool):
+            cur[k] = v
+        elif k == "ambientVol" and isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100:
+            cur[k] = int(v)
+        elif k == "hotkey" and valid_hotkey(v):
+            cur[k] = {"code": v["code"], **{m: bool(v.get(m)) for m in ("ctrl", "alt", "shift", "meta")}}
         elif k == "onboarded" and isinstance(v, bool):
             cur[k] = v
         elif k == "favorites" and isinstance(v, list):

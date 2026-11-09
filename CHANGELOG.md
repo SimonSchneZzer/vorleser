@@ -4,6 +4,42 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.0
+Vorleser 3.0: read selected text from any app, bookmarks, ambience sounds, a sleep timer – and much more.
+
+**Listen anywhere**
+- **Read selected text from any app:** select text in your browser, mail or a PDF and press **Control + Option + V**
+  (Mac) or **Ctrl + Alt + V** (Windows) – a small player reads it with a live word highlight. You can change the
+  shortcut in Settings › App. On the Mac it also works via right-click › Services › "Mit Vorleser vorlesen" and from
+  the menu bar icon; closing the window keeps Vorleser running there.
+- **Links:** paste a link to an article – Vorleser fetches just the article text.
+- **Scanned PDFs:** text is now recognized locally on your computer (no internet needed), with progress and cancel.
+
+**While listening**
+- **Bookmarks:** hover to the left of a paragraph to set one, add a note (typed or dictated), find them in the
+  chapter menu and export them as a text file.
+- **Sleep timer:** stops at the end of a sentence and fades out gently.
+- **Ambience:** soft rain, fireplace, café, forest or noise beneath the voice – optionally in the exported audiobook.
+- **Recap:** after a longer break, the last two paragraphs before your spot are read again (can be turned off).
+- **Weekly recap:** on Mondays, a small card shows how much you listened.
+- **Search in the text** with Ctrl/⌘ + F.
+- **Speed:** from 0.5× to 15× – and the export now uses the speed you choose.
+- **Reference lists** ("References", "Literatur") are skipped when listening through (can be turned off).
+
+**Better text**
+- **Cleaner PDFs:** running headers, page numbers, hyphenation and footnotes are tidied up; tables are skipped with a
+  short note; chapters appear where the heading really is.
+- **Lists, Markdown and symbols:** list items get their own pause and look like a list; bullets, emojis, arrows and
+  links are no longer read out character by character.
+- **Pronunciation dictionary:** select a word and choose "Pronounce it like this …" – for German and English texts.
+- **New editor:** Enter starts a new paragraph, one click makes a line a chapter heading, plus find & replace, an
+  outline and "Restore original" for PDFs.
+
+**Smaller things**
+- Updated tour, right-click menu in the library, drafts are kept, files can be pasted with Ctrl/⌘ + V, "last played"
+  shows the time, the window can be made smaller, and many small fixes (favorite stars, English texts, layout).
+- **Windows:** installing your own voice no longer fails with "os error 448".
+
 ## 2.10.3
 Clearer messages when something goes wrong – and nothing gets stuck silently anymore.
 

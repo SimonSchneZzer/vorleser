@@ -47,6 +47,39 @@ def test_klon_status_form():
 # --------------------------------------------------------------------------- #
 # Updater
 # --------------------------------------------------------------------------- #
+@pytest.mark.skipif(sys.platform == "win32", reason="legt eine Verknüpfung an – unter Windows nur mit Sonderrechten")
+def test_windows_python_ohne_verknuepfung(monkeypatch, tmp_path):
+    """Rückmeldung 8.11.2026 (Windows 11, os error 448): Die Junction cpython-3.11-… scheitert; danach scheiterte jeder
+    Versuch. Jetzt: Verknüpfungen weg, Python über den vollen Pfad ansprechen."""
+    py = tmp_path / "clone-python"
+    real = py / "cpython-3.11.18-windows-x86_64-none"
+    monkeypatch.setattr(clone_setup, "PY_DIR", py)
+    monkeypatch.setattr(clone_setup, "CLONE_ENV", tmp_path / "env")
+    monkeypatch.setattr(paths, "IS_WIN", True); monkeypatch.setattr(paths, "IS_MAC", False); monkeypatch.setattr(paths, "FROZEN", True)
+    monkeypatch.setattr(clone_setup, "_uv", lambda: "uv")
+    monkeypatch.setattr(clone_setup, "_has_nvidia", lambda: False)
+    monkeypatch.setattr(clone_setup, "_model_mb", lambda: 1)
+    calls = []
+
+    class Stopp(Exception):
+        pass
+
+    def run(phase, args, totals, order, watch=(), env_extra=None):
+        calls.append((args, env_extra))
+        if args[1:3] == ["python", "install"]:
+            real.mkdir(parents=True); (real / "python.exe").write_text("")
+            (py / "cpython-3.11-windows-x86_64-none").symlink_to(real)        # „halbe“ Verknüpfung (am Mac: Symlink)
+            raise clone_setup.Meldung(clone_setup.PHASE_FEHLER["python"])
+        if args[1] == "venv":
+            raise Stopp                                                         # weiter interessiert hier nicht
+    monkeypatch.setattr(clone_setup, "_run", run)
+    clone_setup._install()                                                      # fängt den Stopp selbst ab
+    venv = [a for a, _ in calls if a[1] == "venv"]
+    assert venv and venv[0][3] == str(real / "python.exe")
+    assert not (py / "cpython-3.11-windows-x86_64-none").exists()            # Verknüpfung entfernt, Python bleibt
+    assert real.exists() and calls[-1][1] == {"UV_PYTHON_PREFERENCE": "managed"}
+
+
 def test_versionen_vergleichen():
     assert updater._ver("2.0.10") > updater._ver("2.0.9")
     assert updater._ver("v2.1.0") > updater._ver("2.0.99")

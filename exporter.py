@@ -1,6 +1,7 @@
 """Ganzen Text als Hörbuchdatei exportieren: MP3 oder M4B, jeweils mit Kapitelmarken."""
 from __future__ import annotations
 
+import json
 import re
 import tempfile
 import threading
@@ -9,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import meldungen
+import paths
+import settings
 import tts
 
 EXPORT_DIR = tts.DATA_DIR / "exports"
@@ -32,11 +35,11 @@ def synth_strict(doc: dict, i: int, low: bool = False, stop=lambda: False) -> by
     text = doc["chunks"][i]["text"]
     for wait in (*RETRY_WAIT, None):
         try:
-            data, _, _ = tts.synthesize(text, doc["voice"], doc["lang"], fallback=False, low=low)
+            data, _, _ = tts.synthesize(text, doc["voice"], doc["lang"], fallback=False, low=low, doc_id=doc.get("id"))
             return data
         except meldungen.Meldung as e:
             if str(e) == tts.NICHTS_VORLESBAR:      # „* * *“ o. Ä.: diese eine Stelle wie beim Vorlesen überbrücken
-                return tts.synthesize(text, doc["voice"], doc["lang"], fallback=True, low=low)[0]
+                return tts.synthesize(text, doc["voice"], doc["lang"], fallback=True, low=low, doc_id=doc.get("id"))[0]
             if wait is None or str(e) != tts.EDGE_WEG:
                 raise
             print(f"[export] Abschnitt {i + 1}: {e} – neuer Versuch in {wait} s", flush=True)
@@ -58,6 +61,31 @@ def _cancelled(key: str) -> bool:
 
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
+
+# „Vorab erzeugen“ unterbrochen? Die Datei hält Texte, deren Vorab-Erzeugen läuft; endet der Auftrag normal (fertig,
+# abgebrochen, Fehler), fliegt der Eintrag raus. Wird die App mittendrin beendet, bleibt er → nach dem Start fragt
+# eine Karte „Weitermachen?“ (Board 20).
+PENDING_FILE = tts.DATA_DIR / "prepare-pending.json"
+_pending_lock = threading.Lock()
+
+
+def pending_ids() -> list[str]:
+    try:
+        ids = json.loads(PENDING_FILE.read_text("utf-8"))
+        return [i for i in ids if isinstance(i, str)] if isinstance(ids, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def set_pending(doc_id: str, on: bool) -> None:
+    with _pending_lock:
+        ids = [i for i in pending_ids() if i != doc_id] + ([doc_id] if on else [])
+        try:
+            tmp = PENDING_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(ids), "utf-8")
+            tmp.replace(PENDING_FILE)
+        except OSError as e:
+            print(f"[vorab] Merkliste nicht schreibbar: {e}", flush=True)
 
 
 def export_path(doc_id: str, fmt: str) -> Path:
@@ -82,7 +110,23 @@ def status(doc_id: str, kind: str = "export") -> dict:
     return job
 
 
-def start(doc: dict, fmt: str) -> dict:
+TEMPO_MIN, TEMPO_MAX = 0.5, 15.0
+
+
+def _atempo(rate: float) -> str:
+    """ffmpeg-Filter für Tempo `rate` – atempo in Stufen von höchstens 2× bzw. 0,5× (gleichmäßiger Klang)."""
+    if abs(rate - 1) < 1e-3:
+        return ""
+    steps, r = [], rate
+    while r > 2:
+        steps.append(2.0); r /= 2
+    while r < 0.5:
+        steps.append(0.5); r /= 0.5
+    steps.append(r)
+    return ",".join(f"atempo={x:.4f}" for x in steps)
+
+
+def start(doc: dict, fmt: str, ambient: bool = False, rate: float = 1.0) -> dict:
     if fmt not in FORMATS and fmt != "prepare":
         raise ValueError("Format muss mp3, m4b, wav oder prepare sein")
     key = doc["id"] + ("#prep" if fmt == "prepare" else "")
@@ -92,8 +136,12 @@ def start(doc: dict, fmt: str) -> dict:
             return dict(cur)
         _jobs[key] = {"status": "running", "format": fmt, "done": 0,
                       "total": len(doc["chunks"]), "phase": "Vertonen", "started": time.time()}
+    if fmt == "prepare":
+        set_pending(doc["id"], True)
+    amb = _ambient() if ambient and fmt != "prepare" else None
     target = _prepare if fmt == "prepare" else _run
-    threading.Thread(target=target, args=(doc, fmt), daemon=True).start()
+    kw = {} if fmt == "prepare" else {"ambient": amb, "rate": max(TEMPO_MIN, min(TEMPO_MAX, float(rate or 1)))}
+    threading.Thread(target=target, args=(doc, fmt), kwargs=kw, daemon=True).start()
     return status(doc["id"], "prepare" if fmt == "prepare" else "export")
 
 
@@ -123,12 +171,19 @@ def delete_exports(doc_id: str) -> None:
 
 def _prepare(doc: dict, _fmt: str) -> None:
     """Alle Abschnitte erzeugen – im Hintergrund, mit niedriger Priorität (Vorlesen geht vor)."""
+    try:
+        _prepare_run(doc)
+    finally:                                  # normales Ende (auch Abbruch/Fehler) → nicht mehr „unterbrochen“
+        set_pending(doc["id"], False)
+
+
+def _prepare_run(doc: dict) -> None:
     key = doc["id"] + "#prep"
     try:
         for i, ch in enumerate(doc["chunks"]):
-            if not tts.is_cached(ch["text"], doc["voice"]):
+            if not tts.is_cached(ch["text"], doc["voice"], doc["id"]):
                 synth_strict(doc, i, low=True, stop=lambda: _cancelled(key))
-            done = sum(tts.is_cached(c["text"], doc["voice"]) for c in doc["chunks"])   # echte Zahl, nicht Schleifenzähler
+            done = sum(tts.is_cached(c["text"], doc["voice"], doc["id"]) for c in doc["chunks"])   # echte Zahl, nicht Schleifenzähler
             if not _update(key, done=done):
                 _update(key, status="cancelled")
                 return
@@ -152,7 +207,16 @@ def _meta_escape(s: str) -> str:
     return re.sub(r"([=;#\\\n])", r"\\\1", s)
 
 
-def _run(doc: dict, fmt: str) -> None:
+def _ambient() -> tuple[Path, float] | None:
+    """Gewählter Atmosphäre-Klang (Einstellungen) als (Datei, Lautstärke 0–1) – oder None, wenn aus."""
+    s = settings.load()
+    path = paths.STATIC_DIR / "klang" / f"{s['ambient']}.m4a"
+    if s["ambient"] == "aus" or not s["ambientVol"] or not path.exists():
+        return None
+    return path, s["ambientVol"] / 100
+
+
+def _run(doc: dict, fmt: str, ambient: tuple[Path, float] | None = None, rate: float = 1.0) -> None:
     doc_id = doc["id"]
     chunks = doc["chunks"]
     is_edge = doc["voice"].startswith("edge:")
@@ -201,9 +265,9 @@ def _run(doc: dict, fmt: str) -> None:
             meta = [";FFMETADATA1", f"title={_meta_escape(doc['title'])}",
                     f"album={_meta_escape(doc['title'])}", "artist=Vorleser", "genre=Audiobook"]
             chapters = doc.get("chapters") or []
-            for n, ch in enumerate(chapters):
-                start = starts[ch["chunk"]] if ch["chunk"] < len(starts) else total
-                end = starts[chapters[n + 1]["chunk"]] if n + 1 < len(chapters) else total
+            for n, ch in enumerate(chapters):                  # Zeiten im fertigen (ggf. schnelleren) Hörbuch
+                start = (starts[ch["chunk"]] if ch["chunk"] < len(starts) else total) / rate
+                end = (starts[chapters[n + 1]["chunk"]] if n + 1 < len(chapters) else total) / rate
                 meta += ["[CHAPTER]", "TIMEBASE=1/1000", f"START={int(start * 1000)}",
                          f"END={int(end * 1000)}", f"title={_meta_escape(ch['title'])}"]
             meta_path = Path(tmpdir) / "meta.txt"
@@ -213,15 +277,32 @@ def _run(doc: dict, fmt: str) -> None:
             codec, muxer, _ = FORMATS[fmt]
             out = export_path(doc_id, fmt)
             tmp_out = out.with_suffix(f".part.{fmt}")
+            # Eingänge: 0 = Stimme (roh), [1 = Kapitel-Metadaten], [letzter = Atmosphäre als Endlosschleife]
+            inputs = ["-f", "s16le", "-ar", str(RATE), "-ac", "1", "-i", str(raw_path)]
+            if fmt != "wav":
+                inputs += ["-i", str(meta_path)]
+            out_total = total / rate
+            graph: list[str] = []
+            vsrc = "[0:a]"
+            if _atempo(rate):                     # Tempo wie beim Hören (Simon: im Export wählbar, vorausgewählt = aktuell)
+                graph.append(f"[0:a]{_atempo(rate)}[v]")
+                vsrc = "[v]"
+            src = vsrc if graph else "0:a"
+            if ambient:                           # Atmosphäre leise unter die Stimme mischen, ein-/ausblenden (nicht beschleunigt)
+                inputs += ["-stream_loop", "-1", "-i", str(ambient[0])]
+                n = 1 if fmt == "wav" else 2
+                graph += [f"[{n}:a]aformat=channel_layouts=mono,aresample={RATE},volume={ambient[1]:.3f},"
+                          f"afade=t=in:d=2,afade=t=out:st={max(0.0, out_total - 3):.2f}:d=3[amb]",
+                          f"{vsrc}[amb]amix=inputs=2:duration=first:normalize=0[mix]"]
+                src = "[mix]"
+            filt = ["-filter_complex", ";".join(graph)] if graph else []
             if fmt == "wav":                      # keine Bitrate/Kapitel; >4 GB automatisch als RF64
-                enc = ["-map", "0:a", "-c:a", codec, "-rf64", "auto",
+                enc = ["-map", src, "-c:a", codec, "-rf64", "auto",
                        "-metadata", f"title={doc['title']}", "-metadata", "artist=Vorleser"]
             else:
-                enc = ["-i", str(meta_path), "-map", "0:a", "-map_metadata", "1", "-map_chapters", "1",
-                       "-c:a", codec, "-b:a", "64k"]
+                enc = ["-map", src, "-map_metadata", "1", "-map_chapters", "1", "-c:a", codec, "-b:a", "64k"]
             try:
-                tts.ffmpeg(["-y", "-f", "s16le", "-ar", str(RATE), "-ac", "1", "-i", str(raw_path),
-                            *enc, "-f", muxer, str(tmp_out)])
+                tts.ffmpeg(["-y", *inputs, *filt, *enc, "-f", muxer, str(tmp_out)])
                 tmp_out.replace(out)
             except BaseException:
                 tmp_out.unlink(missing_ok=True)       # keine halbe Datei in exports/ liegen lassen
@@ -229,7 +310,7 @@ def _run(doc: dict, fmt: str) -> None:
             for other in FORMATS:                 # nur das jeweils letzte Export behalten
                 if other != fmt:
                     export_path(doc_id, other).unlink(missing_ok=True)
-        _update(doc_id, status="ready", phase="Fertig", duration=total)
+        _update(doc_id, status="ready", phase="Fertig", duration=total / rate)
         print(f"[export] {doc['title']} → {fmt} ({total / 60:.1f} min)", flush=True)
     except InterruptedError:
         _update(doc_id, status="cancelled", phase="Abgebrochen")

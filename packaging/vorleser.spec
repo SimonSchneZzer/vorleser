@@ -37,6 +37,16 @@ for pkg in ("piper", "faster_whisper", "imageio_ffmpeg", "edge_tts", "ctranslate
     binaries += b
     hiddenimports += h
 datas += collect_data_files("ebooklib")
+# Texterkennung (ocr.py, Version 3.0) – nur bei Bedarf importiert, daher ausdrücklich mitnehmen
+if sys.platform == "darwin":
+    hiddenimports += ["Vision", "Quartz", "objc"]
+elif sys.platform == "win32":
+    hiddenimports += ["pypdfium2", "pypdfium2.raw", "winrt.windows.media.ocr", "winrt.windows.globalization",
+                      "winrt.windows.graphics.imaging", "winrt.windows.storage.streams", "winrt.windows.foundation",
+                      "winrt.windows.foundation.collections"]
+    d, b, h = collect_all("pypdfium2_raw")
+    datas += d
+    binaries += b
 
 a = Analysis(
     [str(ROOT / "desktop.py")],
@@ -103,6 +113,14 @@ if IS_MAC:
             "NSHighResolutionCapable": True,
             "NSMicrophoneUsageDescription": "Zum Diktieren und zum Aufnehmen deiner eigenen Stimme.",
             "NSRequiresAquaSystemAppearance": False,   # Dunkelmodus erlauben
+            # Rechtsklick › Dienste › „Mit Vorleser vorlesen“ (Version 3.0) – Anbieter: ueberall._dienst_anmelden
+            "NSServices": [{
+                "NSMenuItem": {"default": "Mit Vorleser vorlesen"},
+                "NSMessage": "vorleserLesen",
+                "NSPortName": "Vorleser",
+                "NSSendTypes": ["NSStringPboardType", "public.utf8-plain-text"],
+                "NSRequiredContext": {},
+            }],
             "CFBundleDocumentTypes": [{
                 "CFBundleTypeName": "Text",
                 "CFBundleTypeRole": "Viewer",

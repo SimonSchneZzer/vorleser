@@ -13,6 +13,7 @@ import shutil
 import sys
 import threading
 import urllib.request
+from pathlib import Path
 
 import paths
 
@@ -31,6 +32,7 @@ import webview  # noqa: E402
 
 import exporter  # noqa: E402
 import server  # noqa: E402
+import ueberall  # noqa: E402
 
 TITLE = "Vorleser"
 window: webview.Window | None = None
@@ -47,6 +49,23 @@ def _existing_instance(port: int) -> bool:
 
 class Api:
     """Aus der Oberfläche aufrufbar: window.pywebview.api.<name>(…)"""
+
+    # -- Version 3.0: markierten Text vorlesen / Menüleiste (ueberall.py) --
+    def ueberall_einstellungen(self) -> None:
+        ueberall.einstellungen_oeffnen()
+
+    def ueberall_erlaubt(self) -> bool:
+        return ueberall.ist_erlaubt()
+
+    def ueberall_kuerzel_neu(self) -> str:
+        ueberall.kuerzel_neu()
+        return ueberall.kuerzel_label()
+
+    def ueberall_neustart(self) -> None:
+        ueberall.neu_starten()
+
+    def fenster_verstecken(self) -> None:
+        ueberall.fenster_verstecken()
 
     def quit_app(self) -> None:
         """„Beenden“ auf dem Start-Fehlerbildschirm – funktioniert auch, wenn der Server nicht antwortet."""
@@ -73,6 +92,20 @@ class Api:
         if not dest.lower().endswith(f".{fmt}"):
             dest += f".{fmt}"
         shutil.copyfile(src, dest)
+        return {"ok": True, "path": dest}
+
+    def save_text(self, name: str, text: str) -> dict:
+        """Textdatei „Sichern unter …“ (Lesezeichen-Export, Version 3.0)."""
+        if window is None:
+            return {"ok": False, "error": "Kein Fenster"}
+        name = re.sub(r'[\\/:*?"<>|]+', "_", str(name)).strip()[:120] or "Lesezeichen"
+        res = window.create_file_dialog(webview.SAVE_DIALOG, directory=os.path.expanduser("~/Downloads"), save_filename=f"{name}.txt")
+        if not res:
+            return {"ok": False, "cancelled": True}
+        dest = res if isinstance(res, str) else res[0]
+        if not dest.lower().endswith(".txt"):
+            dest += ".txt"
+        Path(dest).write_text(str(text), "utf-8")
         return {"ok": True, "path": dest}
 
     def reveal_data(self) -> None:
@@ -177,8 +210,15 @@ def _ask_running_to_focus(port: int) -> bool:
 
 
 def _quit() -> None:
-    if window:
-        window.destroy()
+    ueberall.beenden()                 # wirklich beenden (nicht nur in die Menüleiste verstecken)
+
+
+def _closing():
+    """Rotes X: Vorleser läuft in der Menüleiste weiter (Einstellung „Im Hintergrund weiterlaufen“) – dann NICHT
+    aufräumen. ⌘Q / Beenden: wie bisher alles stoppen."""
+    if ueberall.beim_schliessen() is False:
+        return False
+    _cleanup()
 
 
 def selftest() -> int:
@@ -242,14 +282,17 @@ def main() -> None:
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
     if paths.IS_MAC:
         _allow_microphone_macos()
+        ueberall.autoplay_erlauben()       # Mini-Player startet ohne Klick (vor dem ersten Fenster!)
 
     window = webview.create_window(TITLE, f"http://{server.HOST}:{port}/", js_api=Api(),
-                                   width=1280, height=860, min_size=(820, 560),
+                                   width=1280, height=860, min_size=(480, 420),   # kleiner ziehbar (Tester-Rückmeldung); unter 900 px klappt die Seitenleiste ein
                                    background_color="#1E2124" if _dark() else "#FAFAF9",
                                    text_select=True)
     if paths.IS_MAC:
         window.events.shown += _keep_running_in_background
-    window.events.closing += _cleanup                   # ⌘Q: macOS fragt per „closing“ und beendet dann sofort
+    if srv:
+        window.events.shown += lambda: ueberall.setup(window, port, server.TOKEN)
+    window.events.closing += _closing                   # ⌘Q: macOS fragt per „closing“ und beendet dann sofort
     window.events.closed += _cleanup
     import atexit
     atexit.register(_cleanup)

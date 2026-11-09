@@ -5,6 +5,23 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-09 · Eigene Stimme unter Windows 11: Python ohne uv-Verzeichnis-Verknüpfung
+**Kontext:** Rückmeldung (2.10.3, Windows 11 Build 26200): „Python konnte nicht installiert werden“. uv legt neben
+`cpython-3.11.18-…` eine Junction `cpython-3.11-…` an („minor version link“, seit uv 0.8, nicht abschaltbar). Windows
+verweigerte das Durchlaufen: os error 448 „nicht vertrauenswürdiger Bereitstellungspunkt“. Die halb angelegte Junction
+ließ danach jeden weiteren Versuch scheitern – „noch einmal versuchen“ half nie.
+**Entscheidung:** Unter Windows (App) Python mit `uv python install` holen, Junctions/Symlinks in `clone-python` vorher und
+nachher löschen, Fehler der Installation ignorieren, wenn das echte Python da ist, und die Umgebung mit dem **vollen Pfad**
+zur python.exe anlegen (`UV_PYTHON_PREFERENCE=managed`). `clone_setup._verknuepfungen_weg`, `_managed_python`.
+**Folgen:** Kein Junction-Zugriff mehr in unserem Ablauf. Am Mac unverändert. Am Mac nicht nachstellbar – auf Windows prüfen.
+
+## 2026-11-08 · Ansichtswechsel: Glas-Leiste von Anfang an unscharf
+**Kontext:** Wechsel Einstellungen → Text: der Titel unter der oberen Glas-Leiste war ~0,4 s scharf, dann sprang die
+Unschärfe ein. Ursache: `navIn` blendete die ganze Ansicht mit `opacity` + `filter: blur()` ein; ein Vorfahr mit
+Filter/Deckkraft macht ihn zur „Backdrop Root“ – WebKit rendert den `backdrop-filter` der Leiste währenddessen nicht.
+**Entscheidung:** Ansichten mit Glas-Leiste werden kinderweise animiert; die Leiste selbst gleitet/blendet ohne Filter.
+**Folgen:** Gleiches Bild wie vorher, nur ohne Sprung. Regel in CLAUDE.md (Stolperfallen).
+
 ## 2026-11-08 · Fehlerbehandlung: feste Meldungen, nichts hängt still
 **Kontext:** Audit der ganzen App (Oberfläche, Backend, Download-Seite). Fundament ok (Catch-all im Server, Zeitlimits,
 atomares Schreiben), aber: rohe Exception-Texte in der UI („[Errno 28] …“, „'list' object has no attribute …“), kein

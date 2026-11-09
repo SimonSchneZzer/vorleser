@@ -73,7 +73,8 @@ function onbSync() {
     const col = dark ? p.dark : p.light, on = preset === p;
     const ink = contrast("#FFFFFF", col) >= contrast("#111111", col) ? "#FFFFFF" : "#111111";
     return `<button class="sw${on ? " on" : ""}" data-acc="${p.light}" aria-label="Akzentfarbe ${p.name}" style="background:${col}">${on ? `<svg class="i" style="stroke:${ink}"><use href="#i-check"/></svg>` : ""}</button>`;
-  }).join("");
+  }).join("") + ownSwatchHtml(s, dark, "oPick");
+  ownSwatchWire("oPick", onbSync);
   requestAnimationFrame(() => segThumbs(onbEl));
 }
 
@@ -124,41 +125,62 @@ function demoDoc() {
     chunks: c.map(([text, h, par]) => ({ text, h: !!h, par: !!par })),
     chapters: [{ title: c[0][0], chunk: 0 }, { title: c[4][0], chunk: 4 }],
     progress: { chunk: 3, offset: 0, updated: now }, created: now,
+    bookmarks: [{ id: "demo00000001", chunk: 5, note: "", created: now }],   // Rundgang zeigt ein gesetztes Lesezeichen
   };
 }
 
 const ILL = Object.fromEntries(SLIDES.map((s, i) => [["create", "listen", "edit", "voice", "export", "tips"][i], s.il]));
-ILL.three = () => `<div class="three"><span class="thumb3"></span>${["i-doc", "i-file", "i-mic"].map((ic, k) => `<span class="t3" style="--k:${k}">${icon(ic)}</span>`).join("")}</div>
+ILL.hotkey = () => `<div class="hk-il"><span class="key">⌃</span><span class="key">⌥</span><span class="key">V</span>
+  <span class="hk-mini"><i>${icon("i-play")}</i><u>${[0, 1, 2, 3, 4].map((k) => `<b style="--k:${k}"></b>`).join("")}</u></span></div>`;
+ILL.lib = () => `<div class="libc"><b>${L("Willkommen beim Vorleser", "Welcome to Vorleser")}</b><small>DE · 2 ${L("Kapitel", "chapters")}</small><i><u></u></i></div>`;
+ILL.say = () => `<div class="sayw">${L("Das schrieb", "That's what")} <span class="sel">${L("Kafka", "Goethe")}</span> …</div>
+  <div class="saypop">${L("So spricht man das aus …", "Pronounce it like this …")}</div>`;
+ILL.atmo = () => `<div class="atmo-il"><span class="aw">${[14, 26, 18, 30, 12, 22, 16].map((h, k) => `<i style="--k:${k};height:${h}px"></i>`).join("")}</span>
+  <span class="ac">${L("Regen", "Rain")}</span><span class="am">${icon("i-moon")}<b>30:00</b></span></div>`;
+ILL.four = () => `<div class="three four"><span class="thumb3"></span>${["i-doc", "i-file", "i-mic", "i-link"].map((ic, k) => `<span class="t3" style="--k:${k}">${icon(ic)}</span>`).join("")}</div>
   <div class="three-sub"><i></i></div>`;
 ILL.chapters = () => `<div class="chap"><div class="cbar"><i class="cfill"></i><span class="ctick" style="left:36%"></span><span class="ctick" style="left:70%"></span><span class="cknob"></span></div>
   <div class="clist">${[L("1. Willkommen", "1. Welcome"), L("2. Kapitel zwei", "2. Chapter two"), L("3. Kapitel drei", "3. Chapter three")].map((t, k) => `<span style="--k:${k}">${t}</span>`).join("")}</div></div>`;
-const TOUR = [
-  { view: "read", target: "#newBtn", il: "create", t: "Neuen Text anlegen",
-    p: "Hier fängt alles an: Text einfügen, eine Datei hineinziehen oder diktieren." },
-  { view: "new", via: "#newBtn", target: "#viewNew .seg", il: "three", t: "Drei Wege zum Text",
-    p: "Einfügen, Datei (EPUB, PDF, TXT …) oder Diktieren. Kapitel und Sprache erkennt der Vorleser selbst." },
-  { view: "read", target: "#chapterBtn", il: "chapters", t: "Kapitel",
-    p: "Springe direkt zu einem Kapitel. Die kleinen Striche auf dem Fortschrittsbalken zeigen, wo sie beginnen." },
+const TOUR_ALL = [
+  { target: "#newBtn", il: "create", t: "Neuen Text anlegen",
+    p: "Hier fängt alles an: Text einfügen, eine Datei hineinziehen, diktieren oder einen Link angeben." },
+  { view: "new", via: "#newBtn", target: "#viewNew .seg", il: "four", t: "Vier Wege zum Text",
+    p: "Einfügen, Datei (EPUB, PDF, TXT …), Diktieren oder ein Link zu einem Artikel. Kapitel und Sprache erkennt der Vorleser selbst." },
+  { view: "new", fill: true, target: "#createBtn", il: "listen", t: "Vorbereiten",
+    p: "Ist der Text drin, legt „Vorbereiten“ ihn in deiner Bibliothek an und macht ihn bereit zum Hören – hier mit einem Beispieltext." },
+  { view: "read", via: "#createBtn", target: () => $("library").querySelector(`a[data-id="${st.docs.find((d) => d.sample)?.id || "demo"}"]`)?.closest("li") || $("library").firstElementChild, il: "lib", t: "In deiner Bibliothek",
+    p: "Gespeichert – der Text liegt jetzt in deiner Bibliothek. Der Balken zeigt, wie weit du bist; ein Klick macht genau dort weiter." },
+  { view: "read", chap: true, target: "#chapterMenu", il: "chapters", t: "Kapitel & Lesezeichen",
+    p: "Springe direkt zu einem Kapitel – oder zu deinen Lesezeichen. Eines setzt du, indem du links neben einen Absatz fährst; im Beispieltext ist schon eins gesetzt." },
+  { view: "read", target: () => st.spans[3], il: "say", t: "Markieren & Aussprache",
+    p: "Markiere eine Stelle mit der Maus: Du kannst sie kopieren oder festlegen, wie sie ausgesprochen wird – etwa Namen oder Abkürzungen." },
+  { view: "read", target: () => [$("atmoBtn"), $("sleepBtn")], il: "atmo", t: "Atmosphäre & Schlaf-Timer",
+    p: "Leiser Regen, Kaminfeuer oder Café unter der Stimme – und ein Schlaf-Timer, der am Satzende sanft ausblendet." },
   { view: "read", target: "#moreMenu", more: true, il: "edit", t: "Bearbeiten & mehr",
     p: "Unter „…“ bearbeitest du den Text (Taste E) oder lässt alles vorab erzeugen. Dein Lesezeichen bleibt beim Bearbeiten erhalten." },
   { view: "read", target: "#exportBtn", il: "export", t: "Als Hörbuch exportieren",
-    p: "Speichert den ganzen Text als M4B mit Kapiteln, als MP3 oder als WAV – für Handy, Auto oder Hörbuch-App." },
+    p: "Speichert den ganzen Text als M4B mit Kapiteln, als MP3 oder als WAV – für Handy, Auto oder Hörbuch-App. Auf Wunsch mit Atmosphäre." },
   { view: "settings", tab: "voices", via: "#settingsBtn", target: () => (st.features.clone || st.features.cloneSetup ? $("newCloneBtn") : $("voiceLib")), il: "voice", t: "Deine eigene Stimme",
     p: "Nimm 15–30 Sekunden auf – danach liest der Vorleser mit deiner Stimme. Mit ★ machst du Stimmen zu Favoriten." },
-  { view: "read", target: null, il: "tips", t: "Fertig!",
-    p: "Das war's. Den Rundgang findest du jederzeit unter Einstellungen › App.", by: true },
+  { view: "settings", tab: "app", when: () => st.features.desktop && ["mac", "win"].includes(st.features.os), target: "#hkRow", il: "hotkey", t: "Überall vorlesen",
+    p: () => st.features.os === "win"
+      ? `Markiere Text in einer beliebigen App – Browser, Mail, PDF – und drück ${hkLang()}. Vorleser liest ihn in einem kleinen Fenster vor, solange Vorleser geöffnet ist.`
+      : `Markiere Text in einer beliebigen App – Browser, Mail, PDF – und drück ${hkLang()}. Vorleser liest ihn in einem kleinen Fenster vor, auch wenn das Hauptfenster zu ist.` },
+  { view: "settings", tab: "app", target: () => $("tourBtn")?.closest(".sto-row"), il: "tips", t: "Fertig!",
+    p: "Das war's. Hier unter Einstellungen › App kannst du den Rundgang jederzeit neu starten.", by: true },
 ];
+let TOUR = TOUR_ALL;
 
 const gt = { i: 0, prev: null, wordsTimer: null, token: 0 };
 function gtStart(fromOnboarding, startAt = 0) {
   hideTip(); closePops(true);
   if (st.wantPlay) pause();
   gt.prev = { id: st.doc && !st.doc.demo ? st.doc.id : null, onboarding: fromOnboarding };
-  gt.cardPos = null;
-  st.demoEntry = st.docs.some((d) => d.sample) ? null : { ...demoDoc(), count: 7, chapters: 2 };   // keine Doppelung in der Bibliothek
+  gt.cardPos = null; gtSpotCur.to = null;                  // erstes Ziel ohne Gleiten
+  TOUR = TOUR_ALL.filter((s) => !s.when || s.when());
+  st.demoEntry = null;                                   // Beispieltext erscheint erst nach „Vorbereiten“ (Schritt 3 → 4)
   renderLibrary();
   stop();
-  showDoc(demoDoc());
   gt.i = 0; gt.pct = 0;
   $("gt").classList.remove("hidden", "leaving");
   $("gtSpot").classList.add("enter");
@@ -176,6 +198,7 @@ function gtEnd() {
   setTimeout(async () => {
     $("gt").classList.add("hidden"); $("gt").classList.remove("leaving");
     stop(); st.doc = null; st.words = null;
+    if ($("text").value === gtDemoText()) { $("text").value = ""; $("title").value = ""; updateCount(); }   // Feld wieder leer
     const sampleId = await ensureSample();                 // Beispieltext bleibt (auch bei Abbruch) in der Bibliothek
     st.demoEntry = null;
     renderLibrary();
@@ -185,16 +208,20 @@ function gtEnd() {
     else showNew();
   }, 500);
 }
+/** Beispieltext als Klartext („# Überschrift“, Absätze per Leerzeile) – wie ihn der Server zerlegt. */
+function gtDemoText() {
+  let text = "", prevHead = true;
+  for (const c of demoDoc().chunks) {
+    text += c.h ? `${text ? "\n\n" : ""}# ${c.text}` : (c.par || prevHead ? `\n\n${c.text}` : ` ${c.text}`);
+    prevHead = c.h;
+  }
+  return text.trim();
+}
 /** Beispieltext als echten Text speichern, falls noch keiner in der Bibliothek ist. Liefert dessen ID. */
 async function ensureSample() {
   const have = st.docs.find((d) => d.sample);
   if (have) return have.id;
-  const d = demoDoc();
-  let text = "", prevHead = true;
-  for (const c of d.chunks) {                              // wie der Server: Überschriften „# …“, Absätze per Leerzeile
-    text += c.h ? `${text ? "\n\n" : ""}# ${c.text}` : (c.par || prevHead ? `\n\n${c.text}` : ` ${c.text}`);
-    prevHead = c.h;
-  }
+  const d = demoDoc(), text = gtDemoText();
   try {
     const res = await api("/api/docs", { method: "POST", body: JSON.stringify({ text: text.trim(), title: d.title, lang: d.lang, sample: true }) });
     await refreshLibrary();
@@ -203,7 +230,16 @@ async function ensureSample() {
 }
 function gtTarget(step) {
   const t = typeof step.target === "function" ? step.target() : step.target ? document.querySelector(step.target) : null;
-  return t && t.offsetWidth ? t : null;
+  if (Array.isArray(t)) {                                // mehrere Knöpfe → ein Spotlight um alle
+    const els = t.filter((e) => e?.offsetWidth);
+    if (!els.length) return null;
+    return { getBoundingClientRect: () => {
+      const rs = els.map((e) => e.getBoundingClientRect());
+      const l = Math.min(...rs.map((r) => r.left)), tp = Math.min(...rs.map((r) => r.top)), r = Math.max(...rs.map((r) => r.right)), b = Math.max(...rs.map((r) => r.bottom));
+      return { left: l, top: tp, right: r, bottom: b, width: r - l, height: b - tp };
+    } };
+  }
+  return t && (t.offsetWidth || t.getClientRects?.().length) ? t : null;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Warten, bis Seiten-/Reiter-Animationen fertig sind (sonst misst das Spotlight verschobene Positionen). */
@@ -219,8 +255,8 @@ function gtCardHTML(i) {
     <button class="gt-x" id="gtX" aria-label="Rundgang beenden" data-tip="Rundgang beenden · Esc">${icon("i-x")}</button>
     <div class="gt-step">
       ${step.il ? `<div class="gt-stage"><div class="il" data-noi18n>${ILL[step.il]()}</div></div>` : ""}
-      <div class="gt-body"><div class="num">${i + 1} / ${TOUR.length}</div><h3>${esc(step.t)}</h3><p>${esc(step.p)}</p>${step.by ? `<p class="gt-by">Gebaut von ${BYNAME}</p>` : ""}
-        <div class="gt-foot"><span class="spacer"></span>
+      <div class="gt-body"><div class="num">${i + 1} / ${TOUR.length}</div><h3>${esc(step.t)}</h3><p>${esc(typeof step.p === "function" ? step.p() : step.p)}</p>${step.by ? `<p class="gt-by">Gebaut von ${BYNAME}</p>` : ""}
+        <div class="gt-foot"><span class="gt-keys">${i === TOUR.length - 1 ? "" : `<kbd>↵</kbd> weiter`}</span><span class="spacer"></span>
           ${i > 0 ? `<button class="btn" id="gtBack">Zurück</button>` : ""}
           <button class="btn primary" id="gtNext">${i === TOUR.length - 1 ? "Los geht's" : "Weiter"}</button></div></div></div>` };
 }
@@ -248,7 +284,9 @@ async function gtShow(i) {
   card.classList.remove("nav");
   clearInterval(gt.wordsTimer);
   closePops(true);
-  const needSwitch = (step.view === "settings" && view !== "settings") || (step.view === "new" && view !== "new");
+  const needSwitch = (step.view === "settings" && view !== "settings") || (step.view === "new" && view !== "new")
+    || (step.view === "read" && view !== "read" && !!step.via);         // „Vorbereiten“ → Beispieltext entsteht
+  if (i < TOUR.findIndex((s) => s.via === "#createBtn") && st.demoEntry) { st.demoEntry = null; renderLibrary(); }   // zurück vor „Vorbereiten“
   const { pct, html } = gtCardHTML(i);
   card.innerHTML = html;
   requestAnimationFrame(() => requestAnimationFrame(() => { if ($("gtProg")) $("gtProg").style.width = `${pct}%`; }));
@@ -274,8 +312,22 @@ async function gtShow(i) {
     if (view !== "settings") { showView("settings"); wait = 450; }
     if (setTab !== step.tab) { document.querySelector(`#setTabs [data-tab="${step.tab}"]`).click(); wait = 450; }
   } else if (step.view === "new" && view !== "new") { showNew(); setSrc("paste"); wait = 450; }
-  else if (step.view === "read" && view !== "read") { showDoc(st.doc?.demo ? st.doc : demoDoc()); wait = 450; }
+  else if (step.view === "read" && view !== "read") {
+    if (!st.demoEntry && !st.docs.some((d) => d.sample)) {   // „Vorbereiten“: jetzt wirklich speichern – und sichtbar hereinkommen
+      if (!(await ensureSample())) st.demoEntry = { ...demoDoc(), count: 7, chapters: 2 };   // offline/Fehler: nur anzeigen
+      if (my !== gt.token) return;
+      renderLibrary();
+      const li = $("library").querySelector(`a[data-id="${st.docs.find((d) => d.sample)?.id || "demo"}"]`)?.closest("li") || $("library").firstElementChild;
+      li?.animate?.([{ opacity: 0, transform: "translateY(-8px) scale(.98)" }, { opacity: 1, transform: "none" }],
+        { duration: 450, easing: EASE_OUT });
+    }
+    showDoc(st.doc?.demo ? st.doc : demoDoc()); wait = 450;
+  }
+  if (step.fill && $("text").value !== gtDemoText()) {    // Beispieltext ins Feld, damit „Vorbereiten“ aktiv ist
+    $("title").value = demoDoc().title; $("text").value = gtDemoText(); updateCount();
+  }
   if (step.more) { $("moreBtn").click(); wait = Math.max(wait, 260); }
+  if (step.chap && $("chapterMenu").classList.contains("hidden")) { $("chapterBtn").click(); wait = Math.max(wait, 260); }
   // 3) Spotlight aufs Ziel
   await sleep(Math.min(wait, 120)); await gtSettled();
   if (my !== gt.token) { card.classList.remove("nav"); return; }
@@ -291,21 +343,24 @@ async function gtShow(i) {
 function gtPlace(override) {
   const step = TOUR[gt.i];
   if (!override && step.more && $("moreMenu").classList.contains("hidden")) $("moreBtn").click();   // Menü ggf. wieder öffnen
+  if (!override && step.chap && $("chapterMenu").classList.contains("hidden")) $("chapterBtn").click();
   const el = override || gtTarget(step), spot = $("gtSpot"), card = $("gtCard");
   const vw = window.innerWidth, vh = window.innerHeight, pad = 8, gap = 16;
   const cw = card.offsetWidth, ch = card.offsetHeight;
   if (!el) {                                           // kein Ziel → Karte mittig, Spotlight schrumpft weg
     spot.classList.add("none");
-    Object.assign(spot.style, { translate: `${vw / 2}px ${vh / 2}px`, width: "0px", height: "0px", borderRadius: "50%" });
+    gtSpotTo({ x: vw / 2, y: vh / 2, w: 0, h: 0, r: 0 });
     gtMoveCard((vw - cw) / 2, (vh - ch) / 2);
     return;
   }
   spot.classList.remove("none");
   el.scrollIntoView?.({ block: "nearest" });
   const r0 = el.getBoundingClientRect();
-  const r = { left: Math.max(6, r0.left - pad), top: Math.max(6, r0.top - pad), right: Math.min(vw - 6, r0.right + pad), bottom: Math.min(vh - 6, r0.bottom + pad) };
+  // Rand nur so weit, wie auf BEIDEN Seiten Platz ist – sonst sitzt der Rahmen am Fensterrand schief (z. B. „Einstellungen“ unten)
+  const px = Math.max(0, Math.min(pad, r0.left - 6, vw - 6 - r0.right)), py = Math.max(0, Math.min(pad, r0.top - 6, vh - 6 - r0.bottom));
+  const r = { left: r0.left - px, top: r0.top - py, right: r0.right + px, bottom: r0.bottom + py };
   r.width = r.right - r.left; r.height = r.bottom - r.top;
-  Object.assign(spot.style, { translate: `${r.left}px ${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, borderRadius: `${Math.min(18, r.height / 2)}px` });
+  gtSpotTo({ x: r.left, y: r.top, w: r.width, h: r.height, r: Math.min(18, r.height / 2) });
   let x, y;                                            // Karte: rechts, unten, oben, links – was zuerst passt
   if (r.right + gap + cw < vw - 8 && r.width < vw * 0.5) { x = r.right + gap; y = r.top + r.height / 2 - ch / 2; }
   else if (r.bottom + gap + ch < vh - 8) { x = r.left + r.width / 2 - cw / 2; y = r.bottom + gap; }
@@ -313,6 +368,31 @@ function gtPlace(override) {
   else if (r.left - gap - cw > 8) { x = r.left - gap - cw; y = r.top + r.height / 2 - ch / 2; }
   else { x = (vw - cw) / 2; y = vh - ch - 16; }
   gtMoveCard(Math.max(12, Math.min(vw - cw - 12, x)), Math.max(12, Math.min(vh - ch - 12, y)));
+}
+/* Abdunkeln mit Loch fürs Ziel. Früher: box-shadow 0 0 0 200vmax am Spotlight – eine riesige Fläche (×25 Bildschirm), die
+   WebKit in Kacheln zerlegt und beim Verschieben neu malt; Kacheln kamen manchmal einen Frame zu spät → kurz hell (Blitzen).
+   Jetzt: SVG in Fenstergröße (Pfad mit Loch, evenodd) + Rahmen, beide Bild für Bild aus derselben Bewegung. */
+const gtSpotCur = { x: 0, y: 0, w: 0, h: 0, r: 0, raf: 0, from: null, to: null, t0: 0 };
+function gtSpotDraw(s) {
+  const vw = innerWidth, vh = innerHeight, { x, y, w, h } = s, r = Math.min(s.r, w / 2, h / 2);
+  const hole = w > 0 && h > 0
+    ? `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z` : "";
+  $("gtDimPath").setAttribute("d", `M0 0H${vw}V${vh}H0Z${hole}`);
+  Object.assign($("gtSpot").style, { translate: `${x}px ${y}px`, width: `${w}px`, height: `${h}px`, borderRadius: `${r}px` });
+}
+function gtSpotTo(to) {
+  const g = gtSpotCur;
+  if (!g.to || reducedMotion.matches) { Object.assign(g, to); g.to = to; cancelAnimationFrame(g.raf); g.raf = 0; return gtSpotDraw(g); }
+  if (["x", "y", "w", "h", "r"].every((k) => Math.abs(g.to[k] - to[k]) < 0.5)) { if (!g.raf) gtSpotDraw(g); return; }   // gleiches Ziel (z. B. Fenster größer): nur neu zeichnen
+  g.from = { x: g.x, y: g.y, w: g.w, h: g.h, r: g.r }; g.to = to; g.t0 = performance.now();
+  const ease = (t) => 1 - Math.pow(1 - t, 4);              // wie --ease-out
+  const step = (now) => {
+    const k = Math.min(1, (now - g.t0) / 500), e = ease(k);
+    for (const p of ["x", "y", "w", "h", "r"]) g[p] = g.from[p] + (g.to[p] - g.from[p]) * e;
+    gtSpotDraw(g);
+    g.raf = k < 1 ? requestAnimationFrame(step) : 0;
+  };
+  cancelAnimationFrame(g.raf); g.raf = requestAnimationFrame(step);
 }
 /** Karte verschieben – nur wenn sich wirklich etwas ändert (sonst „zuckt“ sie beim Nachjustieren). */
 function gtMoveCard(x, y) {

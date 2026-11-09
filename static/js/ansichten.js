@@ -13,8 +13,14 @@ const NAV_MOVE = { down: ["translateY(26px)", "translateY(-26px)"], up: ["transl
 function navIn(el, how) {
   if (!el?.animate || !how) return;
   const rm = reducedMotion.matches;
-  el.animate([{ opacity: 0, transform: rm ? "none" : NAV_MOVE[how][0], filter: rm ? "none" : "blur(4px)" },
-    { opacity: 1, transform: "none", filter: "blur(0)" }], { duration: 360, easing: EASE_OUT, fill: "backwards" });
+  const kf = (blur) => [{ opacity: 0, transform: rm ? "none" : NAV_MOVE[how][0], ...(blur ? { filter: rm ? "none" : "blur(4px)" } : {}) },
+    { opacity: 1, transform: "none", ...(blur ? { filter: "blur(0)" } : {}) }];
+  const opt = { duration: 360, easing: EASE_OUT, fill: "backwards" };
+  // Glas-Leisten (backdrop-filter) dürfen keinen Vorfahren mit filter/opacity haben – sonst rendert WebKit die Unschärfe
+  // erst nach der Animation (Titel unter der Leiste kurz scharf). Darum die Kinder einzeln animieren, die Leiste ohne Filter.
+  const kids = [...el.children], glass = kids.filter((c) => c.matches(".topbar"));
+  if (!glass.length) return void el.animate(kf(true), opt);
+  for (const c of kids) c.animate(kf(!glass.includes(c)), opt);
 }
 /** Abbild von el (an gleicher Stelle, gleicher Scroll-Stand) – damit der alte Inhalt hinausgleiten kann. */
 function ghostOf(el) {
@@ -63,7 +69,19 @@ function showView(name) {
   }
   view = name;
   for (const [k, id] of Object.entries(VIEWS)) $(id).classList.toggle("hidden", k !== name);
-  if (changed) { navIn($(VIEWS[name]), how); navOut(ghost, how); }
+  if (changed) {
+    navIn($(VIEWS[name]), how); navOut(ghost, how);
+    // Markierungen erst nach dem Hereingleiten neu anlegen – mitten in der Bewegung gemessen sitzen sie daneben
+    if (name === "read") {
+      const rd = $("reader"); rd.classList.add("marks-wait");
+      setTimeout(() => {
+        rd.classList.remove("marks-wait");
+        if (view !== "read") return;
+        window.replaceMarks?.();
+        for (const m of rd.querySelectorAll(":scope > #wbox, :scope > #sboxes")) m.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: EASE });
+      }, 400);
+    }
+  }
   navRank = viewRank(name);
   hideTip();
   requestAnimationFrame(() => { segThumbs(); moveInk(); });
@@ -170,21 +188,33 @@ function libSync() {
   const s = a.querySelector(".st"); if (s.textContent !== state) s.textContent = state;
 }
 let libMenuFor = null;
+/** „…“-Menü eines Bibliothekseintrags – am Knopf oder (Rechtsklick) an der Maus. */
+function libMenuOpen(dots, at) {
+  const m = $("libMenu"), was = libMenuFor === dots.dataset.dots && !m.classList.contains("hidden") && !m.classList.contains("leaving");
+  closePops(true);
+  if (was && !at) return;
+  libMenuFor = dots.dataset.dots;
+  dots.classList.add("open"); dots.closest("li").classList.add("menu-open");
+  openPop(m);
+  const r = at ? { left: at.x, right: at.x, top: at.y, bottom: at.y } : dots.getBoundingClientRect();
+  const below = r.bottom + 6 + m.offsetHeight < window.innerHeight - 8;
+  m.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 12))}px`;
+  m.style.top = below ? `${r.bottom + 6}px` : `${r.top - 6 - m.offsetHeight}px`;
+  m.style.setProperty("--origin", below ? "top left" : "bottom left");
+}
+// Rechtsklick auf einen Eintrag = dasselbe Menü wie „…“ (Tester-Rückmeldung)
+$("library").addEventListener("contextmenu", (e) => {
+  const dots = e.target.closest("li")?.querySelector("[data-dots]");
+  if (!dots) return;
+  e.preventDefault();
+  getSelection()?.removeAllRanges();                      // Mac markiert beim Rechtsklick sonst das Wort
+  libMenuOpen(dots, { x: e.clientX, y: e.clientY });
+});
 $("library").onclick = async (e) => {
   const dots = e.target.closest("[data-dots]");
   if (dots) {
     e.preventDefault(); e.stopPropagation();
-    const m = $("libMenu"), was = libMenuFor === dots.dataset.dots && !m.classList.contains("hidden") && !m.classList.contains("leaving");
-    closePops(true);
-    if (was) return;
-    libMenuFor = dots.dataset.dots;
-    dots.classList.add("open"); dots.closest("li").classList.add("menu-open");
-    openPop(m);
-    const r = dots.getBoundingClientRect();
-    const below = r.bottom + 6 + m.offsetHeight < window.innerHeight - 8;
-    m.style.left = `${Math.min(r.left, window.innerWidth - m.offsetWidth - 12)}px`;
-    m.style.top = below ? `${r.bottom + 6}px` : `${r.top - 6 - m.offsetHeight}px`;
-    m.style.setProperty("--origin", below ? "top left" : "bottom left");
+    libMenuOpen(dots);
     return;
   }
   const a = e.target.closest("a[data-id]");
@@ -212,7 +242,11 @@ async function deleteDoc(id) {
   const li = $("library").querySelector(`a[data-id="${id}"]`)?.closest("li");
   st.docs = st.docs.filter((x) => x.id !== id);         // falls zwischendurch neu gezeichnet wird: bleibt weg
   await collapseOut(li);
-  if (cur) { st.doc = null; showNew(); }
+  if (cur) {                                            // nur von der Textseite weg – in Einstellungen/Neuer Text bleiben
+    st.doc = null;
+    if (view === "read" || view === "edit") showNew();
+    else { setPlayer(false); mlSync(); }
+  }
   await refreshLibrary();
   toast("Gelöscht");
 }

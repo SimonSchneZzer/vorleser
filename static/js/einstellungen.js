@@ -100,7 +100,157 @@ $("setTabs").onclick = (e) => {
   if (ghost) { navIn($(TABS[setTab]), how); navOut(ghost, how); }
   moveInk();
   renderSettings();
+  if (setTab === "voices") { vlKeep = false; lexLoad(); }
 };
+/* ---------- Aussprache-Wörterbuch (Version 3.0, Board 09/09b) ---------- */
+const lex = { entries: null, lang: null };              // lang: welche Sprache die Liste gerade zeigt
+async function lexLoad() {
+  try { lex.entries = (await api("/api/aussprache")).entries; } catch (e) { return toastErr(e); }
+  lexRender();
+}
+function lexRender() {
+  if (!lex.entries) return;
+  lex.lang = lex.lang || (UI_LANG === "en" ? "en" : "de");
+  $("lexLang").querySelectorAll("[data-lexlang]").forEach((b) => b.classList.toggle("on", b.dataset.lexlang === lex.lang));
+  requestAnimationFrame(() => segThumbs($("lexBox")));
+  const rows = lex.entries.map((e, i) => [e, i]).filter(([e]) => !e.lang || e.lang === lex.lang);   // ohne Sprache: in beiden
+  $("lexList").innerHTML = rows.map(([e, i]) => `<div class="lex-row"><b data-noi18n>${esc(e.wort)}</b>
+      <span class="sp" data-noi18n>→ „${esc(e.sprich)}“</span><span class="sc">${e.doc ? "nur ein Text" : "alle Texte"}</span>
+      <button class="ib lex-play" data-play="${i}" aria-label="Probe">▶</button><button class="ib lex-del" data-del="${i}" aria-label="Eintrag löschen">✕</button></div>`).join("")
+    || `<div class="lex-empty">Noch keine Einträge.</div>`;
+}
+$("lexLang").onclick = (e) => {
+  const b = e.target.closest("[data-lexlang]"); if (!b || b.dataset.lexlang === lex.lang) return;
+  const grow = heightFrom($("lexBox"));
+  lex.lang = b.dataset.lexlang; lexRender(); grow();
+};
+async function lexStore(entries, msg) {
+  try { lex.entries = (await api("/api/aussprache", { method: "PUT", body: JSON.stringify({ entries }) })).entries; }
+  catch (e) { return toastErr(e); }
+  lexRender(); if (!st.wantPlay) clearCache();             // Abschnitte holen sich das neu erzeugte Audio
+  if (msg) toast(msg);
+}
+async function lexProbe(sprich, lang) {
+  if (!sprich) return;
+  try {
+    const r = await fetch("/api/aussprache/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sprich, lang }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+    pvAudio.src = URL.createObjectURL(await r.blob()); pvAudio.play().catch(() => {});
+  } catch (e) { toastErr(e); }
+}
+$("lexList").onclick = (e) => {
+  const p = e.target.closest("[data-play]"), d = e.target.closest("[data-del]");
+  if (p) { const en = lex.entries[+p.dataset.play]; lexProbe(en.sprich, en.lang || lex.lang); }
+  if (d) {
+    const row = d.closest(".lex-row"), i = +d.dataset.del;
+    collapseOut(row).then(() => lexStore(lex.entries.filter((_, k) => k !== i)));
+  }
+};
+function lexEditOpen(on) {
+  $("lexBox").classList.toggle("adding", on);
+  if (on) { $("lexWort").value = ""; $("lexSprich").value = ""; setTimeout(() => $("lexWort").focus(), 120); }
+}
+$("lexAdd").onclick = () => lexEditOpen(true);
+/* Rechtsklick im Lesetext → „So spricht man das aus …“ (Board 09b) */
+const lexPop = { word: "", doc: false, x: 0, y: 0 };
+function lexWordAt(e) {
+  const sel = String(getSelection() || "").trim();
+  if (sel && sel.length <= 60 && !/\n/.test(sel)) return sel;   // markiert (z. B. „z. B.“) → genau das
+  const r = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+  const node = r?.startContainer; if (!node || node.nodeType !== 3) return "";
+  const t = node.textContent, i = r.startOffset;
+  let a = i, b = i;
+  while (a > 0 && /[\p{L}\p{N}'’-]/u.test(t[a - 1])) a--;
+  while (b < t.length && /[\p{L}\p{N}'’-]/u.test(t[b])) b++;
+  return t.slice(a, b);
+}
+function lexPlace(el, x, y) {
+  el.classList.remove("hidden");
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, x))}px`;
+  el.style.top = `${Math.max(8, Math.min(innerHeight - h - 8, y))}px`;
+  animateIn(el, "enter");
+}
+function lexClose() { ["lexMenu", "lexPop"].forEach((id) => $(id).classList.add("hidden")); }
+/** Menü öffnen: „So spricht man das aus …“ nur für kurze, einzeilige Stellen; Kopieren immer. */
+function lexMenuOpen(word, x, y) {
+  Object.assign(lexPop, { word, x, y });
+  $("lexMenuSay").classList.toggle("hidden", word.length > 60 || /\n/.test(word));
+  lexClose(); lexPlace($("lexMenu"), x, y);
+}
+// Mit der Maus markiert → gleich das Menü am Ende der Markierung (statt an die Stelle zu springen)
+$("docText").addEventListener("mouseup", (e) => {
+  if (e.button !== 0 || st.doc?.demo) return;
+  setTimeout(() => {                                     // Markierung steht erst nach dem mouseup fest
+    const sel = getSelection(), w = String(sel || "").trim();
+    if (!w || sel.isCollapsed || !$("docText").contains(sel.anchorNode)) return;
+    const rs = sel.getRangeAt(0).getClientRects(), r = rs[rs.length - 1];
+    lexMenuOpen(w, r ? r.right - 20 : e.clientX, (r ? r.bottom : e.clientY) + 8);
+  }, 0);
+});
+$("docText").addEventListener("contextmenu", (e) => {
+  const w = lexWordAt(e); if (!w || st.doc?.demo) return;      // sonst normales Menü
+  e.preventDefault();
+  lexMenuOpen(w, e.clientX, e.clientY);
+});
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest("#lexMenu, #lexPop")) lexClose(); }, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") lexClose(); });
+$("lexMenuCopy").onclick = () => {
+  const w = lexPop.word;
+  (navigator.clipboard?.writeText(w) || Promise.reject()).catch(() => document.execCommand("copy"));   // Fallback: Markierung kopieren
+  lexClose(); toast("Kopiert");
+};
+$("lexMenuSay").onclick = async () => {
+  lexClose();
+  if (!lex.entries) { try { lex.entries = (await api("/api/aussprache")).entries; } catch {} }
+  const known = (lex.entries || []).find((x) => x.wort === lexPop.word && (!x.lang || x.lang === (st.doc?.lang || "de")) && (!x.doc || x.doc === st.doc?.id));
+  $("lexPopWord").textContent = lexPop.word; $("lexPopSay").value = known?.sprich || "";
+  lexScope(!!known?.doc);
+  lexPlace($("lexPop"), lexPop.x - 40, lexPop.y + 12);
+  setTimeout(() => $("lexPopSay").focus(), 60);
+};
+async function lexScope(onlyDoc) {
+  lexPop.doc = onlyDoc;
+  $("lexPopAll").classList.toggle("on", !onlyDoc); $("lexPopDoc").classList.toggle("on", onlyDoc);
+  $("lexPopNote").textContent = "";
+  try {
+    const r = await api("/api/aussprache/betroffen", { method: "POST", body: JSON.stringify({ wort: lexPop.word, doc: onlyDoc ? st.doc?.id : null, lang: st.doc?.lang }) });
+    $("lexPopNote").textContent = r.count ? `${r.count} schon erzeugte Abschnitte enthalten dieses Wort – sie werden beim nächsten Abspielen neu erzeugt.` : "Noch kein erzeugter Abschnitt betroffen.";
+  } catch {}
+}
+$("lexPopAll").onclick = () => lexScope(false);
+$("lexPopDoc").onclick = () => lexScope(true);
+$("lexPopProbe").onclick = () => lexProbe($("lexPopSay").value.trim() || lexPop.word, st.doc?.lang);
+$("lexPopCancel").onclick = lexClose;
+$("lexPopSave").onclick = async () => {
+  const sprich = $("lexPopSay").value.trim(); if (!sprich) return;
+  const rest = (lex.entries || []).filter((x) => !(x.wort === lexPop.word && (!x.lang || x.lang === (st.doc?.lang || "de")) && (lexPop.doc ? x.doc === st.doc?.id : !x.doc)));
+  const n = parseInt($("lexPopNote").textContent, 10) || 0;
+  lexClose();
+  await lexStore([...rest, { wort: lexPop.word, sprich, lang: st.doc?.lang || "de", ...(lexPop.doc && st.doc ? { doc: st.doc.id } : {}) }],
+    n ? `Aussprache gespeichert · ${n} Abschnitte werden neu kalibriert` : "Aussprache gespeichert");
+  markReady?.();
+};
+$("lexCancel").onclick = () => lexEditOpen(false);
+$("lexProbe").onclick = () => lexProbe($("lexSprich").value.trim(), lex.lang);
+$("lexSave").onclick = async () => {
+  const wort = $("lexWort").value.trim(), sprich = $("lexSprich").value.trim();
+  if (!wort || !sprich) return;
+  await lexStore([...(lex.entries || []), { wort, sprich, lang: lex.lang || "de" }], "Aussprache gespeichert");
+  lexEditOpen(false);
+};
+/** „Eigene Farbe“ (Farbwähler) – in Einstellungen und Einrichtung gleich. */
+function ownSwatchHtml(s, dark, id) {
+  const ownCol = presetOf(s.accent) ? null : accentFor(s.accent, dark);
+  return `<label class="sw own${ownCol ? " set on" : ""}" title="Eigene Farbe${ownCol ? ` (${esc(s.accent)})` : ""}" style="${ownCol ? `--own:${ownCol}` : ""}">
+      <input type="color" id="${id}" value="${s.accent.toLowerCase()}" aria-label="Eigene Farbe wählen">
+      ${ownCol ? `<svg class="i" style="stroke:${contrast("#FFFFFF", ownCol) >= contrast("#111111", ownCol) ? "#FFFFFF" : "#111111"}"><use href="#i-check"/></svg>` : `<span class="plus"><svg class="i"><use href="#i-plus"/></svg></span>`}
+    </label>`;
+}
+function ownSwatchWire(id, after) {
+  $(id).oninput = (e) => { st.settings.accent = e.target.value.toUpperCase(); applyTheme(); };
+  $(id).onchange = (e) => saveSettings({ accent: e.target.value.toUpperCase() }).then(() => after?.());
+}
 function openSettingsTab(tab, lang) {
   if (lang) libLang = lang;
   showView("settings");
@@ -113,23 +263,20 @@ const MARK_HINT = {
 };
 function renderSettings() {
   const s = st.settings; if (!s) return;
+  window.atmoRender?.();
+  $("refsSw").classList.toggle("on", s.skipRefs !== false); $("refsSw").setAttribute("aria-checked", String(s.skipRefs !== false));
+  $("recapSw").classList.toggle("on", s.recap !== false); $("recapSw").setAttribute("aria-checked", String(s.recap !== false));
   const dark = isDark(s);
   // Darstellung
   document.querySelectorAll("#modeSeg [data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === s.theme));
   document.querySelectorAll("#uiSeg [data-ui]").forEach((b) => b.classList.toggle("on", b.dataset.ui === (s.uiLang || "de")));
   const preset = presetOf(s.accent);
-  const ownCol = preset ? null : accentFor(s.accent, dark);
   $("swatches").innerHTML = PRESETS.map((p) => {
     const col = dark ? p.dark : p.light, on = preset === p;
     const ink = contrast("#FFFFFF", col) >= contrast("#111111", col) ? "#FFFFFF" : "#111111";
     return `<button class="sw${on ? " on" : ""}" data-acc="${p.light}" aria-label="Akzentfarbe ${p.name}" aria-pressed="${on}" title="${p.name}" style="background:${col}">${on ? `<svg class="i" style="stroke:${ink}"><use href="#i-check"/></svg>` : ""}</button>`;
-  }).join("") +
-    `<label class="sw own${ownCol ? " set on" : ""}" title="Eigene Farbe${ownCol ? ` (${esc(s.accent)})` : ""}" style="${ownCol ? `--own:${ownCol}` : ""}">
-      <input type="color" id="accPick" value="${s.accent.toLowerCase()}" aria-label="Eigene Farbe wählen">
-      ${ownCol ? `<svg class="i" style="stroke:${contrast("#FFFFFF", ownCol) >= contrast("#111111", ownCol) ? "#FFFFFF" : "#111111"}"><use href="#i-check"/></svg>` : `<span class="plus"><svg class="i"><use href="#i-plus"/></svg></span>`}
-    </label>`;
-  $("accPick").oninput = (e) => { st.settings.accent = e.target.value.toUpperCase(); applyTheme(); };
-  $("accPick").onchange = (e) => saveSettings({ accent: e.target.value.toUpperCase() });
+  }).join("") + ownSwatchHtml(s, dark, "accPick");
+  ownSwatchWire("accPick");
   document.querySelectorAll("#markSeg [data-mark]").forEach((b) => b.classList.toggle("on", b.dataset.mark === s.mark));
   $("markHint").textContent = MARK_HINT[s.mark];
   document.querySelectorAll("#aheadSeg [data-ahead]").forEach((b) => b.classList.toggle("on", b.dataset.ahead === (s.ahead || "normal")));
@@ -151,7 +298,7 @@ const AHEAD_HINT = {
   low: "Nur der nächste Abschnitt. Spart Rechenzeit – bei der eigenen Stimme kann es zwischen Abschnitten kurz stocken.",
   normal: "Die nächsten 3 Abschnitte (etwa eine Minute). Reicht für Online-Stimmen fast immer.",
   high: "Die nächsten 10 Abschnitte (einige Minuten). Gut für die eigene Stimme – weniger Pausen.",
-  all: "Beim Abspielen wird der ganze Text im Hintergrund erzeugt – wie „Vorab erzeugen“, nur automatisch.",
+  all: "Beim Abspielen wird der ganze Text im Hintergrund erzeugt. Danach läuft er ohne Wartezeit – auch offline.",
 };
 $("aheadSeg").onclick = (e) => {
   const b = e.target.closest("[data-ahead]"); if (!b) return;
@@ -203,23 +350,30 @@ function renderVoiceLib() {
   const order = REGION_ORDER[libLang] || [];
   const regions = [...new Set(edge.map((v) => v.region))].sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
   for (const r of regions) {
-    const vs = edge.filter((v) => v.region === r).sort((a, b) => (isFav(b.id) - isFav(a.id)) || a.name.localeCompare(b.name));
+    const vs = edge.filter((v) => v.region === r).sort((a, b) => vlKeep && vlOrder
+      ? (vlOrder.get(a.id) ?? 1e9) - (vlOrder.get(b.id) ?? 1e9) || a.name.localeCompare(b.name)
+      : (isFav(b.id) - isFav(a.id)) || a.name.localeCompare(b.name));
     groups.push([REGION_NAME[r] || r, `${vs.length} Stimme${vs.length === 1 ? "" : "n"}`, vs]);
   }
+  vlOrder = new Map(groups.flatMap(([, , vs]) => vs).map((v, i) => [v.id, i]));
   $("voiceLib").innerHTML = groups.length
     ? `<div class="box">${groups.map(([t, sub, vs]) => `<div class="vl-group"><span>${esc(t)}</span><span>${esc(sub)}</span></div>${vs.map(row).join("")}`).join("")}</div>`
     : `<div class="box"><div class="vp-empty" style="padding:18px">Keine Stimme gefunden.</div></div>`;
   requestAnimationFrame(() => segThumbs($("tabVoices")));
 }
-$("libLang").onclick = (e) => { const b = e.target.closest("[data-ll]"); if (b) { libLang = b.dataset.ll; renderVoiceLib(); } };
-$("libFilter").onclick = (e) => { const b = e.target.closest("[data-f]"); if (b) { libFilter = b.dataset.f; renderVoiceLib(); } };
-$("vlSearch").oninput = renderVoiceLib;
+// Stern-Klick: Reihenfolge bleibt stehen (sonst rutscht die Stimme unter der Maus weg und der nächste Klick trifft die
+// Nachbarin – Tester-Rückmeldung). Neu sortiert (Favoriten zuerst) wird erst bei Sprache/Filter/Suche/Reiterwechsel.
+let vlOrder = null, vlKeep = false;
+$("libLang").onclick = (e) => { const b = e.target.closest("[data-ll]"); if (b) { libLang = b.dataset.ll; vlKeep = false; renderVoiceLib(); } };
+$("libFilter").onclick = (e) => { const b = e.target.closest("[data-f]"); if (b) { libFilter = b.dataset.f; vlKeep = false; renderVoiceLib(); } };
+$("vlSearch").oninput = () => { vlKeep = false; renderVoiceLib(); };
 $("voiceLib").onclick = async (e) => {
   const pv = e.target.closest("[data-prev]");
   if (pv) return previewVoice(pv.dataset.prev, libLang, pv);
   const fv = e.target.closest("[data-fav]");
   if (fv) {
     const id = fv.dataset.fav, favs = st.settings.favorites || [];
+    vlKeep = true;
     await saveSettings({ favorites: favs.includes(id) ? favs.filter((x) => x !== id) : [...favs, id] });
     $("voiceLib").querySelector(`[data-fav="${CSS.escape(id)}"].on`)?.classList.add("pop");   // nur beim Klick aufploppen, nicht bei jedem Neuzeichnen
     return;
@@ -322,6 +476,7 @@ function fillStorage(r, fresh) {
 }
 function renderAppTab() {
   if (st.features.desktop) $("appNote").textContent = "Schließt das Fenster und stoppt alles im Hintergrund";
+  ueRenderRows();
   updRender();
 }
 $("tabStorage").addEventListener("click", async (e) => {
@@ -528,3 +683,5 @@ $("cacheClear").onclick = async () => {
   renderStorage(); markReady(); refreshLibrary().catch(() => {});
 };
 
+
+$("refsSw").onclick = () => saveSettings({ skipRefs: st.settings?.skipRefs === false });

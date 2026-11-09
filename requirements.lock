@@ -126,28 +126,40 @@ pyinstaller-hooks-contrib==2026.9
 pyobjc-core==13.0 ; sys_platform == 'darwin'
     # via
     #   pyobjc-framework-cocoa
+    #   pyobjc-framework-coreml
     #   pyobjc-framework-quartz
     #   pyobjc-framework-security
     #   pyobjc-framework-uniformtypeidentifiers
+    #   pyobjc-framework-vision
     #   pyobjc-framework-webkit
     #   pywebview
 pyobjc-framework-cocoa==13.0 ; sys_platform == 'darwin'
     # via
+    #   pyobjc-framework-coreml
     #   pyobjc-framework-quartz
     #   pyobjc-framework-security
     #   pyobjc-framework-uniformtypeidentifiers
+    #   pyobjc-framework-vision
     #   pyobjc-framework-webkit
     #   pywebview
+pyobjc-framework-coreml==13.0 ; sys_platform == 'darwin'
+    # via pyobjc-framework-vision
 pyobjc-framework-quartz==13.0 ; sys_platform == 'darwin'
-    # via pywebview
+    # via
+    #   pyobjc-framework-vision
+    #   pywebview
 pyobjc-framework-security==13.0 ; sys_platform == 'darwin'
     # via pywebview
 pyobjc-framework-uniformtypeidentifiers==13.0 ; sys_platform == 'darwin'
     # via pywebview
+pyobjc-framework-vision==13.0 ; sys_platform == 'darwin'
+    # via -r requirements-desktop.txt
 pyobjc-framework-webkit==13.0 ; sys_platform == 'darwin'
     # via pywebview
 pypdf==6.21.4
     # via -r requirements.txt
+pypdfium2==5.15.1 ; sys_platform == 'win32'
+    # via -r requirements-desktop.txt
 pytest==9.2.0
     # via -r requirements-dev.txt
 pythonnet==3.2.1 ; sys_platform == 'win32'
@@ -188,5 +200,40 @@ typing-extensions==4.16.0
     #   httpx2
     #   huggingface-hub
     #   pywebview
+    #   winrt-runtime
+winrt-runtime==4.1.0 ; sys_platform == 'win32'
+    # via
+    #   winrt-windows-foundation
+    #   winrt-windows-foundation-collections
+    #   winrt-windows-globalization
+    #   winrt-windows-graphics-imaging
+    #   winrt-windows-media-ocr
+    #   winrt-windows-storage-streams
+winrt-windows-foundation==4!10.0.28000.2957 ; sys_platform == 'win32'
+    # via
+    #   -r requirements-desktop.txt
+    #   winrt-windows-foundation-collections
+    #   winrt-windows-globalization
+    #   winrt-windows-graphics-imaging
+    #   winrt-windows-media-ocr
+    #   winrt-windows-storage-streams
+winrt-windows-foundation-collections==4!10.0.28000.2957 ; sys_platform == 'win32'
+    # via
+    #   -r requirements-desktop.txt
+    #   winrt-windows-foundation
+    #   winrt-windows-globalization
+    #   winrt-windows-graphics-imaging
+    #   winrt-windows-media-ocr
+    #   winrt-windows-storage-streams
+winrt-windows-globalization==4!10.0.28000.2957 ; sys_platform == 'win32'
+    # via -r requirements-desktop.txt
+winrt-windows-graphics-imaging==4!10.0.28000.2957 ; sys_platform == 'win32'
+    # via -r requirements-desktop.txt
+winrt-windows-media-ocr==4!10.0.28000.2957 ; sys_platform == 'win32'
+    # via -r requirements-desktop.txt
+winrt-windows-storage-streams==4!10.0.28000.2957 ; sys_platform == 'win32'
+    # via
+    #   -r requirements-desktop.txt
+    #   winrt-windows-graphics-imaging
 yarl==1.25.1
     # via aiohttp

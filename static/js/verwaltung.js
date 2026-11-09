@@ -8,12 +8,51 @@ const updLaterKey = "vorleser.updLater";
 function updDismissed(v) {
   try { const d = JSON.parse(localStorage.getItem(updLaterKey) || "null"); return d && d.v === v && Date.now() < d.until; } catch { return false; }
 }
-function updShow(on) {
-  const el = $("upd");
+/* ===================================================================== */
+/* Karten unten rechts (Board 21): EIN Platz, wartende Karten als Stapel dahinter.                      */
+/* Jede Karte MUSS eine Stufe haben – dringend (läuft gerade), aktion (Entscheidung), info (zur Kenntnis). */
+/* Vorne: Karten mit Fortschritt (sticky), dann höhere Stufe, bei gleicher Stufe die ältere.              */
+/* ===================================================================== */
+const CARD_LEVELS = ["dringend", "aktion", "info"];
+const cardStack = { list: [], n: 0 };
+function cardEl(el, on) {                                 // eine Karte weich ein-/ausblenden
   if (on) { el.classList.remove("hidden", "leaving"); return; }
   if (el.classList.contains("hidden") || el.classList.contains("leaving")) return;
   el.classList.add("leaving");
-  setTimeout(() => { el.classList.add("hidden"); el.classList.remove("leaving"); }, 250);
+  setTimeout(() => { if (el.classList.contains("leaving")) { el.classList.add("hidden"); el.classList.remove("leaving"); } }, 250);
+}
+function cardPut(id, el, level, sticky = false) {
+  if (!CARD_LEVELS.includes(level)) throw new Error(`Karte „${id}“ ohne gültige Stufe (${level})`);
+  const c = cardStack.list.find((x) => x.id === id);
+  if (c) Object.assign(c, { el, level, sticky }); else cardStack.list.push({ id, el, level, sticky, at: ++cardStack.n });
+  cardLayout();
+}
+function cardDrop(id) {
+  const c = cardStack.list.find((x) => x.id === id); if (!c) return;
+  cardStack.list = cardStack.list.filter((x) => x !== c);
+  delete c.el.dataset.more; cardEl(c.el, false);
+  cardLayout();
+}
+function cardOrder() {
+  return [...cardStack.list].sort((a, b) => (b.sticky - a.sticky) || CARD_LEVELS.indexOf(a.level) - CARD_LEVELS.indexOf(b.level) || a.at - b.at);
+}
+function cardLayout() {
+  const q = cardOrder(), top = q[0], more = q.length - 1;
+  for (const c of q) if (c !== top) { delete c.el.dataset.more; cardEl(c.el, false); }
+  if (top) { if (more > 0) top.el.dataset.more = more; else delete top.el.dataset.more; cardEl(top.el, true); }
+  requestAnimationFrame(() => {                           // Stapel dahinter: gleiche Größe wie die vordere Karte
+    const h = top && !top.el.classList.contains("hidden") ? top.el.offsetHeight : 0;
+    ["cardPeek1", "cardPeek2"].forEach((id, i) => {
+      const p = $(id); if (h) p.style.height = `${h}px`;
+      p.classList.toggle("on", !!h && more > i);
+    });
+  });
+}
+function updShow(on) {                                    // Update-Karte meldet sich beim Stapel an bzw. ab
+  const el = $("upd");
+  if (!on) return cardDrop("update");
+  const busy = el.classList.contains("busy");
+  cardPut("update", el, busy ? "dringend" : el.classList.contains("news") ? "info" : "aktion", busy);
 }
 /* ---------- Name → Sprechblase mit GitHub / LinkedIn (überall, wo der Name steht) ---------- */
 const BYNAME = $("verTxt").closest(".r").querySelector("[data-by]").outerHTML;
@@ -154,6 +193,131 @@ $("updGo").onclick = async () => {
   upd.timer = setTimeout(updRefresh, 400);
 };
 $("updPage").onclick = (e) => { e.preventDefault(); openExternal(upd.s?.page || "https://simonschnezzer.github.io/vorleser-download/"); };
+/* ---------- Vorab erzeugen unterbrochen (Board 20): nach dem Start fragen ---------- */
+const prepResume = { items: [] };
+async function prepPendingCheck() {
+  let r; try { r = await api("/api/prepare/pending"); } catch { return; }
+  const items = prepResume.items = r.items || [];
+  if (!items.length) return cardDrop("prep");
+  const one = items[0];
+  $("prepCardTitle").textContent = items.length > 1 ? "Vorab erzeugen nicht fertig" : "Vorab erzeugen unterbrochen";
+  $("prepCardText").textContent = items.length > 1
+    ? `${items.length} Texte wurden beim letzten Mal nicht fertig vorbereitet. Im Hintergrund weitermachen?`
+    : `„${one.title}“: ${one.done} von ${one.total} Abschnitten sind fertig. Im Hintergrund weitermachen?`;
+  cardPut("prep", $("prepCard"), "aktion");
+}
+$("prepCardLater").onclick = () => cardDrop("prep");     // fertige Abschnitte bleiben; beim nächsten Start wieder fragen
+$("prepCardGo").onclick = async () => {
+  cardDrop("prep");
+  try { await api("/api/prepare/resume", { method: "POST" }); } catch (e) { return toastErr(e); }
+  jobsPoll(); if (st.doc) updatePrep(true);
+};
+setTimeout(prepPendingCheck, 1500);                      // kurz nach dem Start (Update-Karte hat Vorrang über den Stapel)
+/* ---------- Version 3.0: markierten Text vorlesen / Menüleiste (ueberall.py) ---------- */
+const ueMac = /Mac/.test(navigator.platform || navigator.userAgent);
+const ueBridge = () => window.pywebview?.api;
+/* Tastenkürzel (Version 3.0): anzeigen + ändern („neue Kombination drücken“) */
+const HK_DEF = { code: "KeyV", ctrl: true, alt: true, shift: false, meta: false };
+const hkGet = () => st.settings?.hotkey || HK_DEF;
+const hkKey = (hk) => hk.code.replace(/^Key|^Digit/, "");
+function hkParts(hk = hkGet()) {
+  return ueMac ? [hk.ctrl && "⌃", hk.alt && "⌥", hk.shift && "⇧", hk.meta && "⌘", hkKey(hk)].filter(Boolean)
+    : [hk.ctrl && "Strg", hk.alt && "Alt", hk.shift && "Umschalt", hk.meta && "Win", hkKey(hk)].filter(Boolean);
+}
+/** Ausgeschrieben für Sätze: „Control + Option + V“ (Mac) bzw. „Strg + Alt + V“ */
+function hkLang(hk = hkGet()) {
+  return (ueMac ? [hk.ctrl && "Control", hk.alt && "Option", hk.shift && "Shift", hk.meta && "Command", hkKey(hk)]
+    : [hk.ctrl && "Strg", hk.alt && "Alt", hk.shift && "Umschalt", hk.meta && "Win", hkKey(hk)]).filter(Boolean).join(" + ");
+}
+function hkRender() { $("hkKeys").innerHTML = hkParts().map((k) => `<kbd>${esc(k)}</kbd>`).join(""); }
+let hkCapture = null;
+function hkStop() {
+  if (!hkCapture) return;
+  document.removeEventListener("keydown", hkCapture, true); hkCapture = null;
+  $("hkRow").classList.remove("capture"); $("hkChange").textContent = "Ändern"; hkRender();
+}
+$("hkChange").onclick = () => {
+  if (hkCapture) return hkStop();
+  $("hkRow").classList.add("capture"); $("hkChange").textContent = "Abbrechen";
+  $("hkKeys").innerHTML = `<span class="hk-wait">Neue Kombination drücken …</span>`;
+  hkCapture = async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === "Escape") return hkStop();
+    if (["Control", "Alt", "Shift", "Meta", "OS"].includes(e.key)) return;     // nur Zusatztaste – weiter warten
+    const hk = { code: e.code, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey };
+    if (!/^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2]))$/.test(hk.code) || !(hk.ctrl || hk.alt || hk.meta)) {
+      $("hkKeys").innerHTML = `<span class="hk-wait bad">Buchstabe, Ziffer oder F-Taste mit ${ueMac ? "⌃, ⌥ oder ⌘" : "Strg oder Alt"}</span>`;
+      return;
+    }
+    hkStop();
+    await saveSettings({ hotkey: hk });
+    try { await ueBridge()?.ueberall_kuerzel_neu(); } catch {}
+    hkRender(); toast(`Tastenkürzel: ${hkParts(hk).join(ueMac ? "" : "+")}`);
+  };
+  document.addEventListener("keydown", hkCapture, true);
+};
+async function ueRenderRows() {
+  const on = !!(st.features.desktop && (ueMac || st.features.os === "win"));   // Windows: Kürzel ja, Menüleiste/Erlaubnis nein
+  document.querySelectorAll(".ue-only").forEach((r) => r.classList.toggle("hidden", !on));
+  $("bgRow").classList.toggle("hidden", !on || !ueMac);
+  if (!on) return;
+  if (!ueMac) { if (!hkCapture) hkRender(); $("hkAllow").classList.add("hidden"); $("hkNote").textContent = "In jeder App: Text markieren, dann das Tastenkürzel (solange Vorleser offen ist)"; return; }
+  const bg = st.settings?.background !== false;
+  $("bgSw").classList.toggle("on", bg); $("bgSw").setAttribute("aria-checked", String(bg));
+  if (!hkCapture) hkRender();
+  let ok = true; try { ok = await ueBridge()?.ueberall_erlaubt(); } catch {}
+  $("hkAllow").classList.toggle("hidden", ok !== false);
+  $("hkNote").textContent = ok === false ? "Braucht einmal deine Erlaubnis (Bedienungshilfen)" : "In jeder App: Text markieren, dann das Tastenkürzel";
+}
+$("bgSw").onclick = () => saveSettings({ background: !(st.settings?.background !== false) }).then(ueRenderRows);
+$("hkAllow").onclick = () => ueberallErlaubnis();
+function ueDialog({ icon, title, text, path = false, no, yes, onNo, onYes }) {
+  const d = $("ueDlg");
+  $("ueIcon").innerHTML = icon; $("ueTitle").textContent = title; $("ueText").textContent = text;
+  $("uePath").classList.toggle("hidden", !path); $("uePath").classList.remove("ue-go");
+  if (path) { void $("uePath").offsetWidth; $("uePath").classList.add("ue-go"); }   // Schalter springt einmal auf Grün
+  $("ueNo").textContent = no; $("ueYes").textContent = yes;
+  $("ueYes").disabled = false; clearTimeout(ueRestartT);   // nach „Später“ beim Warten: wieder klickbar
+  $("ueNo").classList.toggle("hidden", !no);
+  $("ueNo").onclick = () => { d.close(); onNo?.(); };
+  $("ueYes").onclick = () => onYes ? onYes() : d.close();
+  if (!d.open) d.showModal();
+}
+// Board 24: erstes Schließen → erklären, dann verstecken
+window.ueberallSchliessHinweis = () => ueDialog({
+  icon: icon("i-wave"), title: "Vorleser läuft in der Menüleiste weiter",
+  text: `So funktioniert ${hkLang()} auch mit geschlossenem Fenster. Öffnen und Beenden über das Symbol oben rechts in der Menüleiste. Ausschalten in Einstellungen › App.`,
+  no: "Einstellungen", yes: "Verstanden",
+  onNo: () => { saveSettings({ bgHintSeen: true }); openSettingsTab("app"); },
+  onYes: () => { $("ueDlg").close(); saveSettings({ bgHintSeen: true }); ueBridge()?.fenster_verstecken(); },
+});
+let ueRestartT = 0;
+// Board 25: Erlaubnis fehlt / wurde entzogen (z. B. nach einem Update)
+window.ueberallErlaubnis = () => ueDialog({
+  icon: icon("i-wave"), title: "Vorleser braucht einmal deine Erlaubnis", path: true,
+  text: `Damit ${hkLang()} markierten Text aus anderen Apps holen kann. Die Erlaubnis fehlt oder wurde ausgeschaltet (zum Beispiel nach einem Update). Bis dahin: Text kopieren und im Menüleisten-Symbol „Zwischenablage vorlesen“ wählen.`,
+  no: "Später", yes: "Einstellungen öffnen",
+  onYes: () => {
+    ueBridge()?.ueberall_einstellungen();
+    $("ueText").textContent = "Warte auf die Erlaubnis … Schalte Vorleser in der Liste ein – das wird sofort erkannt.";
+    $("ueYes").disabled = true;
+    clearTimeout(ueRestartT);
+    // Rückfall: nur wenn die Erlaubnis nach 20 s noch nicht erkannt wurde, Neustart anbieten (normal ist keiner nötig)
+    ueRestartT = setTimeout(async () => {
+      if (!$("ueDlg").open || !$("ueYes").disabled || (await ueBridge()?.ueberall_erlaubt())) return;
+      $("ueText").textContent = "Schon eingeschaltet? Manchmal erkennt macOS die Erlaubnis erst nach einem Neustart von Vorleser.";
+      $("ueYes").textContent = "Neu starten"; $("ueYes").disabled = false;
+      $("ueYes").onclick = () => ueBridge()?.ueberall_neustart();
+    }, 20000);
+  },
+});
+window.ueberallErlaubt = () => {
+  clearTimeout(ueRestartT);
+  $("ueYes").disabled = false;
+  ueDialog({ icon: icon("i-check"), title: "Erlaubt – Vorleser erkennt das sofort",
+    text: `Kein Neustart nötig. Probier es: Text markieren, dann ${hkLang()}.`, no: "", yes: "Fertig" });
+  ueRenderRows();
+};
 function updIcon(id) { $("updIc").querySelector("use")?.setAttribute("href", `#${id}`); }
 
 /* ---------- Was ist neu (Versionsverlauf aus CHANGELOG.md) ---------- */
@@ -180,7 +344,6 @@ async function openNews() {
   $("newsDlg").showModal(); $("newsDlg").focus();                // nichts vorausgewählt (sonst leuchtet „Fehler melden“)
 }
 $("newsBtn").onclick = openNews;
-$("betaBtn").onclick = openNews;
 $("newsClose").onclick = () => $("newsDlg").close();
 $("newsBug").onclick = (e) => { e.preventDefault(); $("newsDlg").close(); openBug(); };
 
