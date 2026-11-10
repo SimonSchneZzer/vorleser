@@ -5,6 +5,16 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-10 · Beschriftungen rollen nur bei echter Änderung (auch auf Englisch); ruhigeres Schließen
+**Kontext:** Simon (englische Oberfläche): „Generating 0/266“ wurde kurz zu „Generating …“ und rollte wieder ein,
+„new“ in der Bibliothek blendete alle paar Sekunden neu ein; Diktier-Knopf öffnete ruckartig; Dialoge/Menüs zu abrupt.
+**Ursache:** `rollText` verglich mit dem *angezeigten* Text – i18n.js übersetzt erst nach dem Setzen, also war
+„Erzeuge 0/266“ ≠ „Generating 0/266“ bei jeder Abfrage (alle 2 s) eine „Änderung“; die Knopfbreite wurde vor der
+Übersetzung gemessen (deutsche Länge → „…“). Diktier-Knopf: Etikett glitt auf `max-width: 220px`, war aber ~60 px breit.
+**Entscheidung:** Vergleich mit dem zuletzt gesetzten Text, Breite nach der Übersetzung (Mikrotask) messen; Etikett
+gleitet auf seine gemessene Breite (`--fmw`); Menüs 240 ms, Dialoge 260 ms mit sanft auslaufender Kurve.
+Tests: `test_beschriftung_rollt_auf_englisch_nicht_dauernd` (schlug vorher fehl); „geschlossen“ über `isShown`.
+
 ## 2026-11-10 · Teil-Updates: Ausreißer-Vorversionen nicht mehr mitversorgen
 **Kontext:** Simon: „alle Updates in letzter Zeit 75 MB“. Das Paket deckte die letzten fünf Releases ab und enthielt
 jede Datei, die sich gegenüber *irgendeiner* davon änderte. 2.10.x hatte die Offline-Stimme (63 MB) und die
