@@ -86,6 +86,31 @@ def test_link_holt_nur_den_artikel(api, monkeypatch):
     assert "# Wo gebaut wird" in d["text"] and "Cookies" not in d["text"] and "Teilen" not in d["text"] and "Impressum" not in d["text"]
 
 
+def test_link_mit_raute_pfad_holt_den_artikel(monkeypatch):
+    """3.0.4: orf.at/#/stories/… – der Teil nach # geht nie an den Server; erst die Adresse ohne Raute laden
+    (sonst kam die Startseite mit allen Schlagzeilen). Lässt sie sich nicht laden: die ursprüngliche Adresse."""
+    import importers
+    geladen = []
+    def fetch(url):
+        geladen.append(url)
+        return (ARTIKEL, "utf-8")
+    monkeypatch.setattr(importers, "_fetch", fetch)
+    assert importers.import_url("https://orf.at/#/stories/3447805/")["title"] == "Zwölf neue Radwege"
+    assert geladen == ["https://orf.at/stories/3447805/"]
+    geladen.clear()
+    def fetch404(url):
+        geladen.append(url)
+        if "#" not in url:
+            raise importers.ImportFailed(importers.LINK_NICHT_GEFUNDEN)
+        return (ARTIKEL, "utf-8")
+    monkeypatch.setattr(importers, "_fetch", fetch404)
+    importers.import_url("https://beispiel.at/#!/app/start")
+    assert geladen == ["https://beispiel.at/app/start", "https://beispiel.at/#!/app/start"]
+    geladen.clear(); monkeypatch.setattr(importers, "_fetch", fetch)
+    importers.import_url("https://beispiel.at/artikel#abschnitt-2")              # normaler Sprunganker: unverändert
+    assert geladen == ["https://beispiel.at/artikel#abschnitt-2"]
+
+
 @pytest.mark.parametrize("url, fetch, msg", [
     ("ftp://x", None, "LINK_UNGUELTIG"),
     ("https://x.at/a", (b"<html><body><p>Nur kurz.</p></body></html>", "utf-8"), "LINK_KEIN_TEXT"),

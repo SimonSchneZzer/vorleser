@@ -145,3 +145,21 @@ def test_beschriftung_rollt_auf_englisch_nicht_dauernd(api):
     finally:
         api.json("PATCH", "/api/settings", {"uiLang": "de"})
         api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_gliederung_mit_vielen_kapiteln_ueberlappt_nicht(api):
+    """3.0.4: ~30 Überschriften (news.ORF.at-Startseite) – die Einträge der Gliederung wurden zusammengequetscht und
+    überlappten; jetzt behalten sie ihre Höhe und die Liste scrollt."""
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js("showNew(); 1"); await asyncio.sleep(0.4)
+        text = "\\n\\n".join(f"# Überschrift Nummer {i} mit etwas längerem Titel\\n\\nEin Satz darunter." for i in range(30))
+        r = await c.js(f"""(async () => {{ ntSet("{text}", "Viele"); await new Promise((r) => setTimeout(r, 300));
+            const toc = document.querySelector('#viewNew .ed-toc'), bs = [...toc.querySelectorAll('button')];
+            const hs = bs.map((b) => b.getBoundingClientRect());
+            const overlap = hs.some((h, i) => i && h.top < hs[i - 1].bottom - 0.5);
+            return {{ n: bs.length, overlap, minH: Math.min(...hs.map((h) => h.height)), scrolls: toc.scrollHeight > toc.clientHeight }}; }})()""")
+        await c.js("ntSet('', ''); 1")
+        assert r["n"] == 30 and not r["overlap"] and r["minH"] >= 24 and r["scrolls"], r
+    _im_browser(api, sz)

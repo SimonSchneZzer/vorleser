@@ -1729,3 +1729,7 @@ body.st-on .toast:not(.st-toast) { bottom: 176px; }
 .toast.err .tbtn { background: rgba(255, 255, 255, .2); color: #fff; }
 .toast.err .tbtn:hover { background: rgba(255, 255, 255, .3); }
 .right.fit-tight { gap: 4px; }
+
+/* Gliederung: Einträge nie zusammenquetschen – bei vielen Kapiteln scrollt die Liste (vorher überlappten die Zeilen,
+   news.ORF.at-Startseite mit ~30 Überschriften, 3.0.4) */
+.ed-toc > * { flex-shrink: 0; }

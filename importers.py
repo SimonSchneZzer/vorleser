@@ -157,7 +157,17 @@ def import_url(url: str) -> dict:
     u = urlparse(url)
     if u.scheme not in ("http", "https") or not u.netloc:
         raise ImportFailed(LINK_UNGUELTIG)
-    data, charset = _fetch(url)
+    data, charset = None, ""
+    # Seiten mit Raute-Pfad (z. B. orf.at/#/stories/3447805/): der Teil nach # geht nie an den Server – geladen wurde
+    # die Startseite mit allen Schlagzeilen. Erst die Adresse ohne Raute versuchen, sonst wie bisher (Simon, 3.0.4).
+    frag = u.fragment.removeprefix("!")
+    if frag.startswith("/") and len(frag) > 1:
+        try:
+            data, charset = _fetch(f"{u.scheme}://{u.netloc}{frag}")
+        except ImportFailed:
+            data = None
+    if data is None:
+        data, charset = _fetch(url)
     html = data.decode(charset, errors="replace") if charset else data
     soup = BeautifulSoup(html, "html.parser")
     og = soup.find("meta", property="og:title")

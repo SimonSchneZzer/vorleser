@@ -5,6 +5,13 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-10 · Links mit Raute-Pfad (orf.at/#/stories/…); Gliederung quetscht nicht
+**Kontext:** Simon fügte `https://orf.at/#/stories/3447805/` ein – geholt wurde die Startseite mit ~30 Schlagzeilen.
+Der Teil nach `#` geht nie an den Server (Einzelseiten-Apps leiten im Browser weiter). Die vielen Überschriften
+quetschten zudem die Gliederung (Flex-Spalte mit fester Höhe, Einträge `overflow: hidden` → auf 14 px geschrumpft).
+**Entscheidung:** `import_url` lädt bei `#/…` bzw. `#!/…` zuerst `Schema://Host/…` (ohne Raute); klappt das nicht,
+die ursprüngliche Adresse. Normale Sprunganker (`#abschnitt`) bleiben unverändert. `.ed-toc > * { flex-shrink: 0 }`.
+
 ## 2026-11-10 · Beschriftungen rollen nur bei echter Änderung (auch auf Englisch); ruhigeres Schließen
 **Kontext:** Simon (englische Oberfläche): „Generating 0/266“ wurde kurz zu „Generating …“ und rollte wieder ein,
 „new“ in der Bibliothek blendete alle paar Sekunden neu ein; Diktier-Knopf öffnete ruckartig; Dialoge/Menüs zu abrupt.
