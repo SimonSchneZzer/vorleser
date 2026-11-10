@@ -4,6 +4,16 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.5
+Smaller updates, smoother menus and better link import.
+
+- **Smaller updates:** updates from 3.0.x no longer carry the offline voice every time – about 16 MB instead of 75 MB.
+- **Links:** links like orf.at/#/stories/… now fetch the article instead of the front page.
+- **Outline:** with many chapters the outline scrolls instead of squeezing the lines together.
+- **Smoother:** menus and dialogs close more gently, the dictation button opens smoothly, and labels like
+  "Generating 0/266" or "finished" no longer flicker in the English interface.
+- **New text:** after loading a file or link, the cursor no longer keeps blinking at the start.
+
 ## 3.0.4
 One field for every new text, and a smoother app everywhere – nothing jumps anymore.
 
