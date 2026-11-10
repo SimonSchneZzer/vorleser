@@ -16,10 +16,10 @@ def test_player_rechts_laeuft_nicht_ueber_die_knoepfe(api):
         await c.cmd("Emulation.setDeviceMetricsOverride", width=1180, height=760, deviceScaleFactor=1, mobile=False)
         await _neu_laden(c)
         await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.5)
-        for breite in (1180, 1100, 1030):
+        for breite in (1180, 1100, 1030, 1005):                                   # bis kurz vor den Mini-Player (< 1000 px)
             await c.cmd("Emulation.setDeviceMetricsOverride", width=breite, height=760, deviceScaleFactor=1, mobile=False)
             await c.js("$('sleepBtn').classList.add('on'); $('sleepLbl').textContent = 'End of chapter'; $('atmoBtn').classList.add('on'); $('atmoLbl').textContent = 'Kaminfeuer'; 1")
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.5)
             r = await c.js("""(() => { const n = $('nextBtn').getBoundingClientRect().right;
                 const first = [...document.querySelector('.player .right').children].find((x) => x.getClientRects().length);
                 return { next: n, right: first.getBoundingClientRect().left }; })()""")

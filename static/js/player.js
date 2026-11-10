@@ -1273,7 +1273,7 @@ setInterval(compactSync, 500);                            // Ansichtswechsel / T
 /* Player rechts: Beschriftungen nur, solange sie passen. Feste Breiten (Container-Abfragen) reichten nicht – wie lang
    „Kapitelende“/„End of chapter“, ein Atmosphäre- oder Stimmenname ist, hängt von Sprache und Zustand ab; sonst lief die
    Gruppe nach links über Vorspulen/Weiter (Tester-Rückmeldung 3.0.2). Reihenfolge: Atmosphäre, Stimme, Schlaf-Timer. */
-const FIT_STEPS = ["fit-atmo", "fit-voice", "fit-sleep"];
+const FIT_STEPS = ["fit-atmo", "fit-voice", "fit-sleep", "fit-tight"];   // zuletzt: Knöpfe enger zusammen
 function fitRight() {
   const r = document.querySelector(".player .right"); if (!r || !r.clientWidth) return;
   const gap = parseFloat(getComputedStyle(r).columnGap) || 0;

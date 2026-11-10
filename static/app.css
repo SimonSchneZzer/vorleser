@@ -1725,3 +1725,4 @@ body.st-on .toast:not(.st-toast) { bottom: 176px; }
 .toast.show { pointer-events: auto; }
 .toast.err .tbtn { background: rgba(255, 255, 255, .2); color: #fff; }
 .toast.err .tbtn:hover { background: rgba(255, 255, 255, .3); }
+.right.fit-tight { gap: 4px; }
