@@ -126,6 +126,14 @@ def test_beschriftung_rollt_auf_englisch_nicht_dauernd(api):
         await asyncio.sleep(0.6)                                                       # alles in Ruhe
         n = await c.js("(() => { posRender(); return $('posL').getAnimations().length; })()")
         assert n == 0, "gleicher Text darf nicht neu rollen"
+        # Bibliothek neu gezeichnet (frisches Element, schon übersetzt) → Stand darf nicht neu einrollen („finished“ flackerte)
+        n = await c.js("""(async () => { const n = st.doc.chunks.length;
+            st.doc.progress = { ...st.doc.progress, chunk: n - 1, frac: 1, updated: Date.now() / 1000 };   // „fertig gehört“
+            st.docs.find((x) => x.id === st.doc.id).progress = { ...st.doc.progress };
+            libSync(); await new Promise((r) => setTimeout(r, 700));                      // Stand steht, alles ruht
+            st.libSig = 'x,y,z'; renderLibrary(); await new Promise((r) => setTimeout(r, 50));   // ganz neu gezeichnet
+            libSync(); const s = $('library').querySelector('a[data-id] .st'); return s.textContent === 'finished' ? s.getAnimations().length : 'Stand: ' + s.textContent; })()""")
+        assert n == 0, "frisch gezeichneter Eintrag darf nicht einrollen"
         # Knopf mit Beschriftung: neue Breite passt zum übersetzten Text (kein abgeschnittenes „…“)
         r = await c.js("""(async () => { const b = $('prepBtn'), l = $('prepLbl'); b.classList.remove('hidden');
             rollText(l, 'Vorab erzeugen'); await new Promise((r) => setTimeout(r, 200));

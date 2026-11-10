@@ -271,7 +271,9 @@ function rollText(el, text) {
   // angezeigten Text verglichen sah jede Abfrage wie eine Änderung aus („Erzeuge 0/266“ ≠ „Generating 0/266“) und
   // rollte alle 2 s neu, „neu“ in der Bibliothek ebenso (3.0.4). Hat jemand anderes den Text geändert, zählt das neu.
   if (el._rollSrc === text && el.textContent === el._rollShown) return;
-  if (el._rollSrc === undefined && el.textContent === text) { el._rollSrc = text; el._rollShown = text; return; }
+  // Frisches Element (z. B. Bibliothek neu gezeichnet), schon übersetzt: „finished“ ist „fertig gehört“ – nicht rollen
+  const shown = el.textContent, tr = typeof trString === "function" && UI_LANG !== "de" ? trString(text) : null;
+  if (shown === text || (tr != null && shown === tr)) { el._rollSrc = text; el._rollShown = shown; return; }
   const set = () => { el.textContent = text; el._rollSrc = text; el._rollShown = el.textContent;
     queueMicrotask(() => { el._rollShown = el.textContent; }); };   // nach der Übersetzung (MutationObserver) merken
   if (el._roll) { el._roll.cancel(); el._roll = null; set(); return; }
