@@ -21,8 +21,7 @@ function highlight(scroll) {
     if (W.curSent >= 0) placeSentBoxes(W.list.filter((x) => x.sent === W.curSent).map((x) => x.el), false);
   }
   markReady();
-  const ch = currentChapter();
-  $("chapterLbl").textContent = ch ? ch.title : "";
+  nowSync();
   posRender();
   const cur = st.spans[st.idx];
   if (scroll && cur) cur.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -111,6 +110,7 @@ function loadingVisible() {               // „Laden“ erst zeigen, wenn es l�
 function renderPlay() {
   const s = playState(), b = $("playBtn"), showLoad = loadingVisible();
   b.classList.toggle("is-playing", s === "playing" || (s === "loading" && !showLoad));
+  document.body.classList.toggle("is-playing", s === "playing");          // Wellen-Animation der kompakten Ansicht
   b.classList.toggle("is-loading", showLoad);
   const lbl = { idle: "Abspielen", loading: "Lädt … (klicken zum Stoppen)", playing: "Pause" }[s];
   b.setAttribute("aria-label", lbl);
@@ -143,6 +143,15 @@ function setStatus(html, now = false) {
   };
   if (now || !statusSt.html) apply(); else statusSt.timer = setTimeout(apply, 150);
 }
+/** Player-Zeile (3.0.1): auf der Textseite das aktuelle Kapitel (Titel steht oben), sonst der Titel als Link zum Text. */
+function nowSync() {
+  if (!st.doc) return;
+  const ch = currentChapter(), el = $("nowTitle");
+  const t = view === "read" && ch && !document.body.classList.contains("compact") ? ch.title : st.doc.title;   // kompakt: Kopfleiste fehlt
+  if (el.textContent === t) return;
+  el.textContent = t;
+  if (!reducedMotion.matches) { el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
+}
 function updateStatus(loading = false) {
   if (!st.doc) return;
   if (st.doc.demo) return setStatus(`<span class="dot"></span><span>Beispieltext</span>`);
@@ -152,23 +161,24 @@ function updateStatus(loading = false) {
     $("retryBtn").onclick = () => { const r = st.lastError?.retry; st.lastError = null; r ? r() : play(); };
     return;
   }
+  // Eine Meldung, ein Punkt (3.0.1): grau = alles gut, gelb = es wird gerade etwas getan, rot nur bei Fehlern (oben)
   let ready = 0; for (let i = st.idx + 1; i < st.doc.chunks.length; i++) if (isReady(i)) ready++;   // alle kommenden, auch nach einer Lücke
-  const nextReady = isReady(st.idx + 1);
-  const allReady = st.doc.chunks.every((_, i) => isReady(i));
-  const waiting = loadingVisible();
-  const ch = currentChapter();
-  const parts = [];
-  if (ch) parts.push(esc(ch.title));
   const last = st.idx >= st.doc.chunks.length - 1;
-  if (waiting) parts.push(st.doc.voice.startsWith("clone:") ? "Eigene Stimme erzeugt …" : "Bereite vor …");
-  else {
-    parts.push(allReady ? "Alles vorbereitet" : last ? "Letzter Abschnitt" : `${nAbschn(ready)} vorbereitet`);
-    if (!last && !allReady && ready > 0 && !nextReady) parts.push("der nächste fehlt noch");
+  const allReady = st.doc.chunks.every((_, i) => isReady(i));
+  let msg, kind = "", tip = "";
+  if (loadingVisible()) {
+    msg = st.doc.voice.startsWith("clone:") ? "Eigene Stimme erzeugt …" : "Bereite vor …"; kind = "load";
+  } else if (st.cache.get(st.idx)?.fallback) {
+    msg = "Ersatzstimme – Online-Stimme antwortet gerade nicht"; kind = "busy";
+    tip = "Die Offline-Stimme liest, bis die Online-Stimme wieder antwortet – dann wird automatisch getauscht";
+  } else if (st.wantPlay && !last && !isReady(st.idx + 1)) {
+    msg = "Nächster Abschnitt wird erzeugt …"; kind = "busy";
+  } else {
+    msg = allReady ? "Alles bereit" : last ? "Letzter Abschnitt" : ready > 0 ? `${nAbschn(ready)} bereit` : "";
+    if (!st.wantPlay) msg = ["Pausiert", st.pendingOffset > 0 ? "beim Lesezeichen" : msg].filter(Boolean).join(" · ");
   }
-  if (!st.wantPlay && st.pendingOffset > 0) parts.push("Lesezeichen");
-  const fb = st.cache.get(st.idx)?.fallback ? ` · <span class="warn" title="Online-Stimme nicht erreichbar – Piper liest offline weiter">offline: Ersatzstimme</span>` : "";
-  const dot = `<span class="dot${!last && !nextReady ? " empty" : ""}" title="${!nextReady && !last ? "Der nächste Abschnitt muss erst erzeugt werden" : "Nächste Abschnitte sind bereit"}"></span>`;
-  setStatus(`${waiting ? '<span class="spin"></span>' : dot}<span>${parts.join(" · ")}${fb}</span>`);
+  const mark = kind === "load" ? '<span class="spin"></span>' : `<span class="dot${kind ? " busy" : ""}"></span>`;
+  setStatus(`<span class="st-in${kind ? " busy" : ""}"${tip ? ` title="${tip}"` : ""}>${mark}<span>${esc(msg)}</span></span>`);
 }
 function updateMediaSession() {
   if (!("mediaSession" in navigator) || !st.doc) return;
@@ -1175,3 +1185,20 @@ document.addEventListener("keydown", (e) => {
 // Wort-Markierung baut den aktuellen Abschnitt um → Treffer neu berechnen, damit sie nicht ins Leere zeigen
 new MutationObserver(() => { if ($("findBar").classList.contains("open") && fnd.hits.length) { clearTimeout(fnd.mo); fnd.mo = setTimeout(() => findRun(true), 60); } })
   .observe($("docText"), { childList: true, subtree: true });
+
+
+/* ===================================================================== */
+/* Kompakte Ansicht (Fenster schmaler als 640 px oder niedriger als 560 px): nur noch der Player – groß, mit Wellen und
+   Mitlesezeile. Vorher drängelte sich die Oberfläche und „glitchte“ (Rückmeldung Simon). Bibliothek über ☰. */
+/* ===================================================================== */
+const compactMq = matchMedia("(max-width: 640px), (max-height: 560px)");
+function compactSync() {
+  const on = compactMq.matches && !!st.doc && view !== "edit" && view !== "settings" && view !== "new";
+  if (document.body.classList.contains("compact") === on) return;
+  document.body.classList.toggle("compact", on);
+  nowSync();
+  if (on) $("player").animate?.([{ transform: "scale(.98)" }, { transform: "none" }], { duration: 320, easing: EASE_OUT });
+  mlSync();
+}
+compactMq.addEventListener?.("change", compactSync);
+setInterval(compactSync, 500);                            // Ansichtswechsel / Text geöffnet – billig, kein Haken nötig

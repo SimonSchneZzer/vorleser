@@ -5,6 +5,16 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-09 · Ersatzstimme nur kurz, Vorladen ohne Ersatzstimme (3.0.1)
+**Kontext:** Tester-Rückmeldung: Wiedergabe stand still, danach las die Offline-Stimme weiter, obwohl Edge wieder ging.
+Log: Edge brauchte bis 29 s pro Abschnitt, dann Zeitlimit → 60 s Sperre → das Vorladen erzeugte in dieser Minute
+13 Abschnitte mit Piper, die der Player für die ganze Sitzung behielt.
+**Entscheidung:** Der gerade gebrauchte Abschnitt wartet höchstens `EDGE_GEDULD` (6 s) auf Edge, dann liest Piper;
+Edge läuft im Hintergrund weiter und legt das Ergebnis in den Cache (`_edge_auftrag`, doppelte Anfragen hängen sich an).
+Vorladen weiter vorne (`?pre=1`) nimmt nie die Ersatzstimme (Fehler → später neu). Der Player holt Ersatz-Abschnitte,
+die noch nicht laufen, nach 10 s neu. Hinweis heißt „Ersatzstimme“ statt „offline: Ersatzstimme“.
+Außerdem zurückgenommen: Literaturverzeichnis überspringen (3.0.0) – Simon will, dass alles vorgelesen wird.
+
 ## 2026-11-09 · Eigene Stimme unter Windows 11: Python ohne uv-Verzeichnis-Verknüpfung
 **Kontext:** Rückmeldung (2.10.3, Windows 11 Build 26200): „Python konnte nicht installiert werden“. uv legt neben
 `cpython-3.11.18-…` eine Junction `cpython-3.11-…` an („minor version link“, seit uv 0.8, nicht abschaltbar). Windows

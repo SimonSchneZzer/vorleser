@@ -214,3 +214,36 @@ def test_eigene_stimme_bricht_ab_wird_nachgeholt(monkeypatch, tmp_path):
 def test_eigene_stimme_normales_tempo_bleibt():
     assert not tts._clone_too_short("Ein ganz normaler Satz mit acht Wörtern drin.", _wav(3.2))
     assert not tts._clone_too_short("Kurz.", _wav(0.2))             # kurze Texte schwanken – nie nachholen
+
+
+def test_langsame_online_stimme_ersatz_nur_kurz(monkeypatch):
+    """Tester-Rückmeldung (3.0.1): Edge hing bis zu 30 s → Stille, danach 60 s Sperre und alle vorgeladenen Abschnitte
+    in der Ersatzstimme. Jetzt: gebrauchter Abschnitt wartet höchstens `geduld`, Edge läuft weiter in den Cache;
+    Vorladen (fallback=False) nimmt nie die Ersatzstimme."""
+    import threading as _th
+    import time as _t
+    los = _th.Event()
+
+    def edge(text, name):
+        los.wait(5)
+        return b"edge-audio", [[0.0, 0.1, "Hallo"]]
+    monkeypatch.setattr(tts, "_synth_edge", edge)
+    monkeypatch.setattr(tts, "_fallback", lambda *a, **k: (b"piper-audio", "audio/webm", "piper:x"))
+    monkeypatch.setattr(tts, "_edge_down_until", 0.0)
+    text, voice = f"Langsamer Abschnitt {_t.time()}.", "edge:de-DE-KatjaNeural"
+    t0 = _t.time()
+    assert tts.synthesize(text, voice, "de", geduld=0.2)[0] == b"piper-audio"
+    assert _t.time() - t0 < 1.5
+    los.set()
+    for _ in range(50):                                   # Edge schreibt im Hintergrund in den Cache
+        if tts.cache_path(text, voice).exists():
+            break
+        _t.sleep(0.05)
+    data, _, used = tts.synthesize(text, voice, "de", geduld=0.2)
+    assert data == b"edge-audio" and used == voice
+    tts.cache_path(text, voice).unlink(missing_ok=True)
+
+    monkeypatch.setattr(tts, "_edge_down_until", _t.time() + 60)    # Sperre: Vorladen bekommt Fehler statt Piper
+    with pytest.raises(meldungen.Meldung) as e:
+        tts.synthesize(f"Noch einer {_t.time()}.", voice, "de", fallback=False)
+    assert str(e.value) == tts.EDGE_WEG

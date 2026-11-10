@@ -669,23 +669,6 @@ def test_export_mit_tempo(monkeypatch):
         out.unlink(missing_ok=True)
 
 
-def test_literatur_wird_beim_durchhoeren_uebersprungen(api):
-    _, d = api.json("POST", "/api/docs", {"title": "Paper", "text": "# Intro\n\nErster Satz.\n\n# References\n\nSmith 2001.\n\n# Anhang\n\nLetzter Satz."})
-
-    async def sz(c):
-        await _neu_laden(c)
-        await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.5)
-        chs = await c.js("JSON.stringify(st.doc.chapters)")
-        assert await c.js("nextIdx(st.doc.chapters[1].chunk)") == await c.js("st.doc.chapters[2].chunk")
-        await c.js("st.settings.skipRefs = false; 1")
-        assert await c.js("nextIdx(st.doc.chapters[1].chunk)") == await c.js("st.doc.chapters[1].chunk"), chs
-        await c.js("st.settings.skipRefs = true; 1")
-    try:
-        _im_browser(api, sz)
-    finally:
-        api.call("DELETE", f"/api/docs/{d['id']}")
-
-
 def test_favoriten_stern_reihenfolge_bleibt(api):
     """Tester-Rückmeldung: Stern-Klick sortierte die Liste neu → nächster Klick traf die Nachbar-Stimme."""
     before = api.json("GET", "/api/settings")[1]["favorites"]

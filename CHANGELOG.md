@@ -4,6 +4,17 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.1
+Smoother playback when the online voice is slow, a cleaner player and a compact view for small windows.
+
+- **Online voice slow?** Playback no longer goes silent for up to 30 seconds: after a few seconds the offline voice
+  reads the current section, and Vorleser switches back to your voice as soon as it responds again.
+- **Cleaner player:** the title now sits in the top bar, the player shows the current chapter and one short status –
+  grey when all is well, yellow while something is being prepared, red only for real errors.
+- **Compact view:** in small windows, Vorleser shows just the player with a gentle animation.
+- **Reference lists are read again** – nothing is skipped anymore.
+- Editor: no more scrollbar that disappears by itself; the library collapses a bit earlier in narrow windows.
+
 ## 3.0.0
 Vorleser 3.0: read selected text from any app, bookmarks, ambience sounds, a sleep timer – and much more.
 

@@ -23,7 +23,8 @@ function showDoc(doc) {
   st.pendingFrac = !doc.progress.offset && doc.progress.frac > 0 && doc.progress.frac < 1 ? doc.progress.frac : null; st.words = null; st.srvCached = new Set();
   showView("read");
   $("docTitle").textContent = doc.title;
-  $("nowTitle").textContent = doc.title;
+  $("tbTitle").textContent = doc.title; $("tbTitle").title = doc.title;
+  nowSync();
   renderDocOver();
   setVoicePill($("voiceAv"), $("voiceLbl"), doc.voice);
   $("chapterBtn").classList.toggle("hidden", !doc.chapters.length);
@@ -99,8 +100,10 @@ function getAudio(i) {
   if (st.doc?.demo) return Promise.reject(new Error("demo"));
   if (!st.cache.has(i)) {
     const docId = st.doc.id, voice = st.doc.voice;
-    const entry = { url: null, used: null, fallback: false };
-    entry.promise = fetch(`/api/docs/${docId}/audio/${i}?v=${encodeURIComponent(voice)}`)
+    // weiter vorne: „pre“ → Server nimmt keine Ersatzstimme (die bliebe sonst für den Rest der Sitzung hängen)
+    const pre = i > st.idx + 1 ? "&pre=1" : "";
+    const entry = { url: null, used: null, fallback: false, at: Date.now() };
+    entry.promise = fetch(`/api/docs/${docId}/audio/${i}?v=${encodeURIComponent(voice)}${pre}`)
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Synthese fehlgeschlagen");
         entry.used = r.headers.get("X-Voice-Used") || voice;
@@ -121,6 +124,11 @@ async function prefetch() {
   try {
     // Aktueller + nächster Abschnitt gleichzeitig, der Rest nacheinander (bei „Viel“ nicht 10 Anfragen auf einmal)
     const doc = st.doc, from = st.idx, last = Math.min(from + ahead(), doc.chunks.length - 1);
+    // Abschnitte mit Ersatzstimme, die noch nicht laufen, nach einer Weile neu holen – antwortet Edge wieder,
+    // liest ab dort die gewählte Stimme (der Server hat das Edge-Ergebnis inzwischen meist schon im Cache)
+    for (const [i, e] of st.cache) {
+      if (e.fallback && i > st.loadedIdx && i >= from && Date.now() - e.at > 10000) { if (e.url) URL.revokeObjectURL(e.url); st.cache.delete(i); }
+    }
     await Promise.all([from, from + 1].filter((i) => i <= last).map((i) => getAudio(i).catch(() => {})));
     for (let i = from + 2; i <= last && st.doc === doc && st.idx === from; i++) await getAudio(i).catch(() => {});
     // „Ganzer Text“: Rest im Hintergrund vorab erzeugen (eigener Auftrag, lässt dem Vorlesen den Vortritt)
@@ -214,20 +222,10 @@ function seekBy(sec) {
   if (t > audio.duration) return jumpTo(st.idx + 1, 0);
   audio.currentTime = Math.max(0, t);
 }
-// Literaturverzeichnis: beim Durchhören auslassen (Einstellung, Standard an) – gezielt hineinspringen geht weiterhin
-const REF_CHAPTER = /^(references|literatur(verzeichnis)?|bibliogra(phy|fie)|quellen(verzeichnis)?|works cited|sources)$/i;
-function nextIdx(i) {
-  if (st.settings?.skipRefs === false) return i;
-  const chs = st.doc.chapters || [], k = chs.findIndex((c) => c.chunk === i);
-  if (k < 0 || !REF_CHAPTER.test(chs[k].title.trim())) return i;
-  const after = chs.slice(k + 1).find((c) => !REF_CHAPTER.test(c.title.trim()));
-  toast(after ? "Literaturverzeichnis übersprungen" : "Literaturverzeichnis ausgelassen – Text fertig gehört");
-  return after ? after.chunk : st.doc.chunks.length;
-}
 audio.addEventListener("ended", () => {
   if (!st.doc) return;
   if (window.recapNext?.()) return;                       // 3.0: Wiederholung vorbei → genau an der alten Stelle weiter
-  const next = st.idx < st.doc.chunks.length - 1 ? nextIdx(st.idx + 1) : st.doc.chunks.length;
+  const next = st.idx < st.doc.chunks.length - 1 ? st.idx + 1 : st.doc.chunks.length;
   if (next < st.doc.chunks.length) playFrom(next);
   else { st.wantPlay = false; setPlayIcon(false); saveProgress(true, 0, 1); setStatus("Fertig gehört"); updateBar(); refreshLibrary(); }
 });
@@ -398,7 +396,8 @@ function boxIn(host, id, cls, r, animate = true) {
 }
 /* ---------- Mitlesezeile: außerhalb der Textseite der gesprochene Satz über der Playbar ---------- */
 const ml = { key: "" };
-const mlOn = () => !!(st.doc && !st.doc.demo && view !== "read" && view !== "edit" && markMode() !== "section");
+const mlOn = () => !!(st.doc && !st.doc.demo && markMode() !== "section"
+  && (document.body.classList.contains("compact") || (view !== "read" && view !== "edit")));
 function mlSync() {
   const W = st.words, on = mlOn() && !!W && W.idx === st.idx && W.doc === st.doc.id, was = $("ml")._on;
   slideBar($("ml"), on, null, true);                    // erst sichtbar, dann messen

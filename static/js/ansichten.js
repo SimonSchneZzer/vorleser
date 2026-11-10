@@ -89,6 +89,7 @@ function showView(name) {
   setPlayer(!!st.doc && name !== "edit");
   const t = $("nowTitle"); t.disabled = name === "read";                 // auf der Textseite kein Link
   if (name === "read") delete t.dataset.tip; else t.dataset.tip = "Zum Text springen";
+  if (typeof nowSync === "function") nowSync();
   mlSync();
   $("side").classList.remove("open");
   closePops();

@@ -89,7 +89,8 @@
     <section class="view hidden" id="viewRead">
       <header class="topbar">
         <button class="ib menu-btn" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button>
-        <button class="pill hidden" id="chapterBtn" aria-label="Kapitel wählen" data-tip="Kapitel wählen"><svg class="i" style="width:16px;height:16px"><use href="#i-list"/></svg><span class="lbl" id="chapterLbl" data-noi18n></span><svg class="i caret"><use href="#i-down"/></svg></button>
+        <span class="tb-title" id="tbTitle" data-noi18n></span>
+        <button class="pill hidden" id="chapterBtn" aria-label="Kapitel wählen" data-tip="Kapitel wählen"><svg class="i" style="width:16px;height:16px"><use href="#i-list"/></svg><span class="lbl" id="chapterLbl">Kapitel</span><svg class="i caret"><use href="#i-down"/></svg></button>
         <span class="spacer"></span>
         <button class="pill hidden" id="prepBtn" data-tip="Erzeugt alle Abschnitte schon jetzt im Hintergrund. Danach spielt alles ohne Wartezeit – ideal für deine eigene Stimme, die pro Abschnitt etwas länger braucht."><svg class="i" style="width:16px;height:16px"><use href="#i-bolt" id="prepIc"/></svg><span class="lbl" id="prepLbl">Vorab erzeugen</span></button>
         <button class="ib hidden" id="prepX" aria-label="Vorab erzeugen abbrechen" data-tip="Vorab erzeugen abbrechen"><svg class="i" style="width:16px;height:16px"><use href="#i-x"/></svg></button>
@@ -293,7 +294,6 @@
         <div class="set-body hidden" id="tabPlay">
           <div class="set-sec">
             <div class="sto-row recap-row"><span class="nm">Atmosphäre<small>Klang leise unter der Stimme – auch im Player über <svg class="i ico-inl" aria-hidden="true"><use href="#i-wave"/></svg></small></span><select class="pill" id="atmoSel" aria-label="Atmosphäre"></select></div>
-            <div class="sto-row recap-row"><span class="nm">Literaturverzeichnis überspringen<small>Kapitel wie „Literatur“ oder „References“ beim Durchhören auslassen</small></span><button class="tg" id="refsSw" role="switch" aria-checked="true" aria-label="Literaturverzeichnis überspringen"></button></div>
             <div class="sto-row recap-row"><span class="nm">Was bisher geschah<small>Nach mehr als einem Tag Pause die letzten zwei Absätze vor deiner Stelle noch einmal vorlesen</small></span><button class="tg" id="recapSw" role="switch" aria-checked="true" aria-label="Was bisher geschah"></button></div>
           </div>
           <div class="set-sec">
@@ -427,6 +427,9 @@
     </section>
     <!-- Player: in allen Ansichten sichtbar, solange ein Text geladen ist (Wiedergabe läuft weiter) -->
     <footer class="player hidden" id="player">
+      <!-- Kompakte Ansicht (kleines Fenster): Bibliothek-Knopf + Wellen-Animation über dem Player -->
+      <button class="ib compact-menu" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button>
+      <div class="viz" id="viz" aria-hidden="true"><i style="--k:0"></i><i style="--k:1"></i><i style="--k:2"></i><i style="--k:3"></i><i style="--k:4"></i><i style="--k:5"></i><i style="--k:6"></i><i style="--k:7"></i><i style="--k:8"></i><i style="--k:9"></i><i style="--k:10"></i><i style="--k:11"></i><i style="--k:12"></i><i style="--k:13"></i><i style="--k:14"></i><i style="--k:15"></i><i style="--k:16"></i><i style="--k:17"></i><i style="--k:18"></i><i style="--k:19"></i><i style="--k:20"></i><i style="--k:21"></i><i style="--k:22"></i><i style="--k:23"></i><i style="--k:24"></i><i style="--k:25"></i><i style="--k:26"></i><i style="--k:27"></i></div>
       <!-- Mitlesezeile: außerhalb der Textseite der gesprochene Satz (Teil der Glasfläche, Ränder blenden aus) -->
       <div class="ml hidden" id="ml" aria-hidden="true"><div class="ml-win" id="mlWin" data-noi18n></div></div>
       <div class="prog-row">

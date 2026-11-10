@@ -23,7 +23,6 @@ DEFAULTS = {
     "background": True,        # Fenster schließen → Vorleser läuft in der Menüleiste weiter (für ⌃⌥V), Version 3.0
     "bgHintSeen": False,       # Hinweis beim ersten Schließen schon gezeigt?
     "recap": True,             # „Was bisher geschah“: nach > 1 Tag Pause die letzten zwei Absätze wiederholen
-    "skipRefs": True,          # Literaturverzeichnis beim Durchhören auslassen (Version 3.0)
     # Tastenkürzel „Markierten Text vorlesen“ (Version 3.0) – plattformneutral: KeyboardEvent.code + Zusatztasten
     "hotkey": {"code": "KeyV", "ctrl": True, "alt": True, "shift": False, "meta": False},
     "ambient": "aus",          # Atmosphäre unter der Stimme: aus | regen | kamin | cafe | wald | rauschen
@@ -67,7 +66,7 @@ def update(patch: dict) -> dict:
             cur[k] = v.upper()
         elif k == "cacheMB" and isinstance(v, (int, float)) and 50 <= v <= 100_000:
             cur[k] = int(v)
-        elif k in ("background", "bgHintSeen", "recap", "skipRefs") and isinstance(v, bool):
+        elif k in ("background", "bgHintSeen", "recap") and isinstance(v, bool):
             cur[k] = v
         elif k == "ambientVol" and isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100:
             cur[k] = int(v)

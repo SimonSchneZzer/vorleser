@@ -264,7 +264,6 @@ const MARK_HINT = {
 function renderSettings() {
   const s = st.settings; if (!s) return;
   window.atmoRender?.();
-  $("refsSw").classList.toggle("on", s.skipRefs !== false); $("refsSw").setAttribute("aria-checked", String(s.skipRefs !== false));
   $("recapSw").classList.toggle("on", s.recap !== false); $("recapSw").setAttribute("aria-checked", String(s.recap !== false));
   const dark = isDark(s);
   // Darstellung
@@ -684,4 +683,3 @@ $("cacheClear").onclick = async () => {
 };
 
 
-$("refsSw").onclick = () => saveSettings({ skipRefs: st.settings?.skipRefs === false });

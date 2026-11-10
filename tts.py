@@ -77,6 +77,7 @@ def cache_limit() -> int:
 EDGE_PARALLEL = 4          # gleichzeitige Anfragen an Edge
 EDGE_TIMEOUT = 40          # Sekunden pro Abschnitt
 EDGE_COOLDOWN = 60         # nach einem Fehler so lange direkt Piper nehmen
+EDGE_GEDULD = 6            # Sekunden, die der gerade gebrauchte Abschnitt auf Edge wartet, dann liest Piper (3.0.1)
 
 PREFERRED = {
     "de": ["edge:de-DE-SeraphinaMultilingualNeural", "edge:de-DE-KatjaNeural", "edge:de-DE-ConradNeural"],
@@ -312,6 +313,8 @@ _piper_load_lock = threading.Lock()
 _piper_lock = threading.Lock()          # Piper: ein Abschnitt nach dem anderen
 _edge_sem = threading.Semaphore(EDGE_PARALLEL)
 _edge_down_until = 0.0
+_edge_laeuft: dict = {}               # Cache-Pfad → laufender Edge-Auftrag (Ersatzstimme hat schon übernommen)
+_edge_laeuft_lock = threading.Lock()
 
 
 def _espeak_dir() -> Path:
@@ -711,11 +714,10 @@ def warm_clone_preview(voice_id: str, first_lang: str = "de") -> None:
 
 
 def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: bool = False,
-               doc_id: str | None = None) -> tuple[bytes, str, str]:
+               doc_id: str | None = None, geduld: float | None = None) -> tuple[bytes, str, str]:
     """Liefert (audio, mime, tatsächlich genutzte Stimme).
     fallback=False: bei Fehler Exception statt Ersatzstimme (z. B. für Hörproben). doc_id: für Wörterbuch-Einträge
-    „nur in diesem Text“."""
-    global _edge_down_until
+    „nur in diesem Text“. geduld: so viele Sekunden höchstens auf Edge warten, dann Ersatzstimme (Edge läuft weiter)."""
     voice_id = normalize_voice_id(voice_id)
     path = cache_path(text, voice_id, doc_id)
     say = spoken(text, doc_id, _voice_lang(voice_id))
@@ -730,18 +732,23 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
             if not fallback:
                 raise Meldung(EDGE_WEG)
             return _fallback(text, lang, voice_id, doc_id)
+        if fallback and geduld:
+            # Gerade gebrauchter Abschnitt: nicht bis zu 40 s still warten. Edge läuft im Hintergrund weiter und
+            # legt das Ergebnis in den Cache – beim nächsten Abruf (Austausch im Player) kommt dann die echte Stimme.
+            auftrag = _edge_auftrag(say, name, path)
+            if not auftrag["fertig"].wait(geduld):
+                print(f"[edge] {name}: nach {geduld:.0f}s noch keine Antwort – Ersatzstimme für diesen Abschnitt", flush=True)
+                return _fallback(text, lang, voice_id, doc_id)
+            if "fehler" in auftrag:
+                return _edge_fehler(auftrag["fehler"], name, fallback, text, lang, voice_id, doc_id)
+            if path.exists():
+                return path.read_bytes(), MIME[path.suffix[1:]], voice_id
+            data = auftrag["data"]                 # Schreiben fehlgeschlagen (Platte voll) – trotzdem vorlesen
+            return data, MIME[path.suffix[1:]], voice_id
         try:
             data, marks = _synth_edge(say, name)
         except Exception as e:
-            # „NoAudioReceived“ betrifft nur diese eine Stimme – keine globale Sperre.
-            # z. B. „* * *“ – nur dieser Abschnitt/diese Stimme, kein Netzproblem
-            voice_only = type(e).__name__ == "NoAudioReceived" or str(e) == "Edge lieferte kein Audio"
-            if fallback and not voice_only:
-                _edge_down_until = time.time() + EDGE_COOLDOWN
-            print(f"[edge] {name}: {type(e).__name__}" + ("" if voice_only or not fallback else f" – Piper übernimmt für {EDGE_COOLDOWN}s"), flush=True)
-            if not fallback:
-                raise Meldung(NICHTS_VORLESBAR if voice_only else EDGE_WEG) from e
-            return _fallback(text, lang, voice_id, doc_id)
+            return _edge_fehler(e, name, fallback, text, lang, voice_id, doc_id)
         # außerhalb des Edge-Blocks: volle Platte ist kein Edge-Ausfall (sonst 60 s Sperre + Ersatzstimme)
         _write_atomic(path.with_suffix(".marks.json"), json.dumps(marks, ensure_ascii=False).encode())
     elif engine == "piper" and name in _piper_files():
@@ -781,6 +788,56 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
     if engine == "clone" and text not in PREVIEW_TEXT.values():   # Wortmarken schon mal vorbereiten
         threading.Thread(target=get_marks, args=(text, voice_id, lang), kwargs={"doc_id": doc_id}, daemon=True).start()
     return data, MIME[path.suffix[1:]], voice_id
+
+
+def _ist_stimmfehler(e: BaseException) -> bool:
+    # „NoAudioReceived“ betrifft nur diese eine Stimme/diesen Abschnitt (z. B. „* * *“) – kein Netzproblem
+    return type(e).__name__ == "NoAudioReceived" or str(e) == "Edge lieferte kein Audio"
+
+
+def _edge_fehler(e, name, fallback, text, lang, voice_id, doc_id):
+    global _edge_down_until
+    voice_only = _ist_stimmfehler(e)
+    if fallback and not voice_only:
+        _edge_down_until = time.time() + EDGE_COOLDOWN
+    print(f"[edge] {name}: {type(e).__name__}" + ("" if voice_only or not fallback else f" – Piper übernimmt für {EDGE_COOLDOWN}s"), flush=True)
+    if not fallback:
+        raise Meldung(NICHTS_VORLESBAR if voice_only else EDGE_WEG) from e
+    return _fallback(text, lang, voice_id, doc_id)
+
+
+def _edge_auftrag(say: str, name: str, path: Path) -> dict:
+    """Edge-Abschnitt im eigenen Thread erzeugen und in den Cache schreiben. Läuft derselbe schon, diesen zurückgeben."""
+    with _edge_laeuft_lock:
+        auftrag = _edge_laeuft.get(path)
+        if auftrag:
+            return auftrag
+        auftrag = _edge_laeuft[path] = {"fertig": threading.Event()}
+
+    def lauf():
+        global _edge_down_until
+        t0 = time.time()
+        try:
+            data, marks = _synth_edge(say, name)
+            auftrag["data"] = data
+            print(f"[edge] {len(say):4d} Zeichen in {time.time() - t0:.2f}s", flush=True)
+            try:
+                _write_atomic(path.with_suffix(".marks.json"), json.dumps(marks, ensure_ascii=False).encode())
+                _write_atomic(path, data)
+                schedule_prune()
+            except Exception as e:
+                meldungen.loggen("edge-cache", e)
+        except Exception as e:
+            auftrag["fehler"] = e
+            print(f"[edge] {name}: {type(e).__name__} (im Hintergrund)", flush=True)
+            if not _ist_stimmfehler(e):                     # auch wenn keiner mehr wartet: Netz hakt → Sperre
+                _edge_down_until = time.time() + EDGE_COOLDOWN
+        finally:
+            with _edge_laeuft_lock:
+                _edge_laeuft.pop(path, None)
+            auftrag["fertig"].set()
+    threading.Thread(target=lauf, daemon=True, name="vorleser-edge").start()
+    return auftrag
 
 
 def _write_atomic(path: Path, data: bytes) -> None:

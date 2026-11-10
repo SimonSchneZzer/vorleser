@@ -170,8 +170,18 @@ svg.i.fill { fill: currentColor; stroke: none; }
 .now { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .now .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now .s { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.now .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex-shrink: 0; transition: background-color .3s var(--ease), box-shadow .3s var(--ease); }
-.now .dot.empty { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
+/* Status (3.0.1): eine Meldung – grau = alles gut, gelb = es wird gerade etwas getan, rot nur bei Fehlern */
+.now .s { padding-left: 4px; margin-left: -4px; }                 /* Schein um den gelben Punkt nicht abschneiden */
+.now .s .st-in { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.now .s .st-in > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.now .s .st-in.busy { color: color-mix(in srgb, #F5A524 70%, var(--muted)); }
+.now .s .st-in.busy .spin, .now .s .spin { border-top-color: #F5A524; }
+.now .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .7; flex-shrink: 0; transition: background-color .3s var(--ease), box-shadow .3s var(--ease); }
+.now .dot.busy { background: #F5A524; opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, #F5A524 22%, transparent); animation: dotPulse 1.6s ease-in-out 3; }
+@keyframes dotPulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, #F5A524 8%, transparent); } }
+#nowTitle.swap { animation: statusIn .32s cubic-bezier(.2, .9, .3, 1.15) both; }
+/* Titel des Texts in der Kopfleiste (3.0.1) */
+.tb-title { flex: 0 1 auto; min-width: 0; max-width: 42%; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 4px; }
 .now .warn { color: var(--danger); }
 .spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--acc-text); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -465,7 +475,7 @@ dialog.news:focus { outline: none; }
 .filters .search { flex: 1 1 150px; min-width: 150px; margin: 0; height: auto; min-height: 42px; }   /* eine Zeile mit den Filtern */
 
 /* ===================== Schmal ===================== */
-@media (max-width: 900px) {
+@media (max-width: 1000px) {   /* ab 1000 statt 900 px: dazwischen war neben der Seitenleiste zu wenig Platz für den Player */
   .side { position: fixed; z-index: 40; inset: 0 auto 0 0; transform: translateX(-100%); transition: transform .2s; box-shadow: var(--shadow); }
   .side.open { transform: none; }
   .menu-btn { display: inline-grid; }
@@ -731,12 +741,12 @@ dialog[open]::backdrop { animation: fadeIn .3s var(--ease) both; }
 .ed-find-in input:first-child { border-color: var(--acc); }
 .ed-find-n { font-size: 12.5px; color: var(--muted); min-width: 64px; }
 .ed-body { display: flex; gap: 18px; padding: 12px 20px 0 14px; }
-.ed-toc { width: 190px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; max-height: calc(100vh - 340px); overflow: auto; }
+.ed-toc { width: 190px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; max-height: calc(100vh - 356px); overflow: auto; }
 .ed-toc b { font-size: 11px; letter-spacing: .08em; color: var(--muted); padding: 4px 8px 6px; }
 .ed-toc span { font-size: 12.5px; color: var(--muted); padding: 0 8px; line-height: 1.45; }
 .ed-toc button { text-align: left; padding: 7px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: 13px var(--ui); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-toc button:hover { background: var(--subtle); }
-.ed-doc { flex: 1; min-width: 0; height: calc(100vh - 340px); min-height: 300px; overflow: auto; outline: none; font: 18px/1.7 var(--read); color: var(--ink2); padding: 4px 6px 40px; }
+.ed-doc { flex: 1; min-width: 0; height: calc(100vh - 356px); min-height: 260px; overflow: auto; outline: none; font: 18px/1.7 var(--read); color: var(--ink2); padding: 4px 6px 40px; }
 .ed-doc p { margin: 0 0 14px; }
 .ed-doc h2 { font: 700 22px/1.3 var(--ui); color: var(--ink); margin: 22px 0 10px; }
 .ed-doc h2:first-child { margin-top: 4px; }
@@ -1574,3 +1584,33 @@ body.scrubbing, body.scrubbing * { -webkit-user-select: none; user-select: none;
 #docText p.li::before { content: ""; position: absolute; left: .35em; top: .78em; width: .32em; height: .32em; border-radius: 50%; background: var(--muted); }
 #docText p.li.num { padding-left: 1.6em; text-indent: -1.6em; }
 #docText p.li.num::before { display: none; }
+
+/* Editor passt ins Fenster (keine Bildlaufleiste der ganzen Seite) – auch mit aufgeklapptem „Suchen & ersetzen“ */
+.ed-card:has(.ed-find.open) .ed-doc { height: calc(100vh - 404px); }
+.ed-card:has(.ed-find.open) .ed-toc { max-height: calc(100vh - 404px); }
+.ed-doc, .ed-toc { transition: height .4s var(--ease-out), max-height .4s var(--ease-out); }
+
+/* ---------- Kompakte Ansicht (kleines Fenster) ---------- */
+.viz, .compact-menu { display: none; }
+body.compact .view { visibility: hidden; }
+body.compact .player { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; justify-content: center; align-items: stretch;
+  gap: 14px; padding: 24px 22px; border: 0; border-radius: 0; background: var(--bg); box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none; background-image: radial-gradient(120% 70% at 50% 18%, var(--tint), transparent 70%); }
+body.compact .compact-menu { display: inline-grid; position: absolute; top: 14px; left: 14px; }
+body.compact .viz { display: flex; justify-content: center; align-items: center; gap: 5px; height: 72px; order: -2; }
+body.compact .viz i { width: 5px; height: 14px; border-radius: 3px; background: var(--acc-text); opacity: .35; transition: opacity .4s var(--ease);
+  transform-origin: center; animation: vizWave 1.6s ease-in-out infinite; animation-delay: calc(var(--k) * -.11s); animation-play-state: paused; }
+body.compact.is-playing .viz i { opacity: .9; animation-play-state: running; }
+@keyframes vizWave { 0%, 100% { transform: scaleY(.6); } 25% { transform: scaleY(3.4); } 50% { transform: scaleY(1.4); } 75% { transform: scaleY(4.6); } }
+body.compact .ml { order: -1; padding: 4px 0 6px; }
+body.compact .ml-win { max-width: none; height: 44px; }
+body.compact .player .ml-row { font-size: 22px; line-height: 44px; }
+body.compact .ctl-row { flex-direction: column; align-items: center; gap: 14px; }
+body.compact .now { order: -1; flex-basis: auto; text-align: center; align-items: center; max-width: 100%; }
+body.compact .now .t { font-size: 17px; white-space: normal; text-align: center; }
+body.compact .right { flex: 0 0 auto; justify-content: center; container-type: normal; }
+body.compact #atmoLbl, body.compact #voiceLbl { display: none; }
+@media (max-height: 420px) { body.compact .viz { height: 40px; } body.compact .player { gap: 8px; padding: 14px; } }
+@media (prefers-reduced-motion: reduce) { body.compact .viz i { animation: none; } }
+body.compact .side { position: fixed; z-index: 40; inset: 0 auto 0 0; transform: translateX(-100%); transition: transform .2s; box-shadow: var(--shadow); }
+body.compact .side.open { transform: none; }

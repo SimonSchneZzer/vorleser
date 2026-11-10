@@ -644,7 +644,7 @@ class Handler(BaseHTTPRequestHandler):
             q = _quick.get(qid)
         if not q or int(idx) >= len(q["chunks"]):
             raise KeyError("Abschnitt")
-        data, mime, used = tts.synthesize(q["chunks"][int(idx)]["text"], q["voice"], q["lang"])
+        data, mime, used = tts.synthesize(q["chunks"][int(idx)]["text"], q["voice"], q["lang"], geduld=tts.EDGE_GEDULD)
         self.send(200, data, mime, {"Cache-Control": "no-store", "X-Voice-Used": used})
 
     def quick_marks(self, qid, idx):
@@ -673,7 +673,11 @@ class Handler(BaseHTTPRequestHandler):
         idx = int(idx)
         if idx >= len(doc["chunks"]):
             raise KeyError("Abschnitt")
-        data, mime, used = tts.synthesize(doc["chunks"][idx]["text"], doc["voice"], doc["lang"], doc_id=doc["id"])
+        # pre=1: Vorladen weiter vorne – keine Ersatzstimme (die bliebe sonst hängen), lieber später neu versuchen.
+        # Sonst (gerade gebraucht): höchstens EDGE_GEDULD Sekunden auf Edge warten, dann liest die Ersatzstimme.
+        pre = (parse_qs(urlparse(self.path).query).get("pre") or [""])[0] == "1"
+        data, mime, used = tts.synthesize(doc["chunks"][idx]["text"], doc["voice"], doc["lang"], doc_id=doc["id"],
+                                          fallback=not pre, geduld=None if pre else tts.EDGE_GEDULD)
         self.send(200, data, mime, {"Cache-Control": "no-store", "X-Voice-Used": used})
 
     def marks(self, doc_id, idx):
