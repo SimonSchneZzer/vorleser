@@ -47,18 +47,22 @@ def test_karten_stapel(api):
           return { upd: vis('upd'), prep: vis('prepCard'), more: $('upd').dataset.more || $('prepCard').dataset.more || null,
                    peek1: $('cardPeek1').classList.contains('on') };
         })()"""
+        async def warte(ok):                    # auf den Zustand warten statt fester Zeit (Windows-CI unter Last, 10.11.2026)
+            for _ in range(40):
+                r = await c.js(js)
+                if ok(r):
+                    return r
+                await asyncio.sleep(0.1)
+            return r
         await c.js("cardPut('prep', $('prepCard'), 'aktion'); cardPut('update', $('upd'), 'info'); 1")
-        await asyncio.sleep(0.4)
-        r = await c.js(js)
-        assert r["prep"] and not r["upd"] and r["more"] == "1" and r["peek1"]   # Aktion vor Info, Info wartet dahinter
+        r = await warte(lambda r: r["prep"] and not r["upd"] and r["more"] == "1" and r["peek1"])
+        assert r["prep"] and not r["upd"] and r["more"] == "1" and r["peek1"], r   # Aktion vor Info, Info wartet dahinter
         await c.js("cardPut('update', $('upd'), 'dringend', true); 1")        # z. B. Update lädt → nach vorne
-        await asyncio.sleep(0.4)
-        r = await c.js(js)
-        assert r["upd"] and not r["prep"]
+        r = await warte(lambda r: r["upd"] and not r["prep"])
+        assert r["upd"] and not r["prep"], r
         await c.js("cardDrop('update'); 1")                                   # fertig → die wartende rückt nach
-        await asyncio.sleep(0.4)
-        r = await c.js(js)
-        assert r["prep"] and not r["upd"] and r["more"] is None and not r["peek1"]
+        r = await warte(lambda r: r["prep"] and not r["upd"] and r["more"] is None and not r["peek1"])
+        assert r["prep"] and not r["upd"] and r["more"] is None and not r["peek1"], r
         assert await c.js("(() => { try { cardPut('x', $('upd'), undefined); return false; } catch { return true; } })()")   # Stufe ist Pflicht
         await c.js("cardDrop('prep'); 1")
     _im_browser(api, sz)

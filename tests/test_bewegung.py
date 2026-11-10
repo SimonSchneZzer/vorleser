@@ -40,13 +40,19 @@ def test_status_als_toast_und_dialog_schliesst_weich(api):
         doc = server.load_doc(d["id"]); doc["voice"] = "edge:de-DE-KatjaNeural"; server.save_doc(doc)
 
     async def sz(c):
+        # CI-Rechner melden „Bewegung reduzieren“ → dann schließt ein Dialog absichtlich sofort; hier die Bewegung prüfen
+        await c.cmd("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "no-preference"}])
         await _neu_laden(c)
         await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.5)
+        assert not await c.js("reducedMotion.matches")
         # Laden simulieren, häufig aktualisieren (wie beim Abspielen) – der Toast muss trotzdem nach ~0,7 s kommen
         await c.js("window.loadingVisible = () => true; st.waitSince = Date.now(); statusSt.html = ''; statusSt.closed = ''; window.__t = setInterval(updateStatus, 100); 1")
         await asyncio.sleep(0.3)
         assert not await c.js("$('stToast').classList.contains('show')")             # nicht sofort (kein Aufblitzen)
-        await asyncio.sleep(0.8)
+        for _ in range(40):                      # erscheint nach ~0,7 s – unter CI-Last etwas später
+            if await c.js("$('stToast').classList.contains('show')"):
+                break
+            await asyncio.sleep(0.1)
         assert await c.js("$('stToast').classList.contains('show') && !!$('stToast').querySelector('[data-offline]')")
         await c.js("$('stToast').querySelector('[data-stx]').click(); 1"); await asyncio.sleep(0.4)
         assert not await c.js("$('stToast').classList.contains('show')")             # ✕ → bleibt weg, solange es lädt

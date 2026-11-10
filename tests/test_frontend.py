@@ -349,9 +349,14 @@ def test_satzflaeche_folgt_der_wortbox(api):
 def test_schriften_kommen_aus_der_app(api):
     """Inter + Literata liegen in static/fonts (3.0.2) – laden ohne Internet, nichts von Google."""
     async def sz(c):
-        ok = await c.js("""Promise.all([document.fonts.load('16px Inter'), document.fonts.load('600 16px Literata')])
-            .then(() => ['Inter', 'Literata'].every((f) => document.fonts.check(`16px ${f}`)
-                && [...document.fonts].some((x) => x.family.replace(/"|'/g, '') === f && x.status === 'loaded')))""")
+        ok = False
+        for _ in range(40):                      # CI unter Last: Schriften kommen etwas später an (3.0.3-Build) → warten
+            ok = await c.js("""Promise.all([document.fonts.load('16px Inter'), document.fonts.load('600 16px Literata')])
+                .then(() => ['Inter', 'Literata'].every((f) => document.fonts.check(`16px ${f}`)
+                    && [...document.fonts].some((x) => x.family.replace(/"|'/g, '') === f && x.status === 'loaded')))""")
+            if ok is True:
+                break
+            await asyncio.sleep(0.25)
         assert ok is True
         fremd = await c.js("performance.getEntriesByType('resource').map((r) => r.name).filter((n) => !n.startsWith(location.origin))")
         assert fremd == [], fremd

@@ -4,7 +4,7 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
-## 3.0.3
+## 3.0.4
 One field for every new text, and a smoother app everywhere – nothing jumps anymore.
 
 - **New text, one field:** write, paste, dictate or drop a file or link into a single editor that looks like
