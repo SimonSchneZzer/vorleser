@@ -172,6 +172,11 @@ def _im_browser(api, szenario):
                     if await c.js("typeof openDoc === 'function' && !!st.settings"):
                         break
                     await asyncio.sleep(0.25)
+                # Erstes Laden unter CI-Last abgebrochen (ein Skript kam nicht an → „fillLangSelect is not defined“,
+                # Windows, 10.11.2026): sauber neu laden; Fehler einer VOLLSTÄNDIGEN Ladung zählen weiterhin.
+                if c.errors and any("is not defined" in e for e in c.errors):
+                    c.errors.clear()
+                    await _neu_laden(c)
                 await szenario(c)
                 assert not c.errors, c.errors
 
