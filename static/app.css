@@ -1672,6 +1672,9 @@ body.compact #voiceBtn .caret { transform: rotate(180deg); }   /* Menü öffnet 
 
 /* Player rechts: Beschriftungen weichen, bevor die Gruppe über die Wiedergabe-Knöpfe läuft (fitRight in player.js) */
 .right.fit-atmo #atmoLbl, .right.fit-voice #voiceLbl, .right.fit-sleep #sleepLbl { display: none; }
+/* Kein Größen-Container mehr: der machte die Gruppe beliebig schmal (eigene Inhaltsbreite zählte nicht) → sie lief über
+   die Knöpfe. Jetzt ist sie nie schmaler als ihr Inhalt; eng wird's links beim Titel (der kürzt sich). */
+.player .right { container-type: normal; min-width: max-content; }
 
 /* Inhalt tauschen (swapIn in basis.js): Neues blendet von unten ein, das Häkchen springt einmal auf */
 .swap-in { animation: viewIn .4s var(--ease-out) both; }

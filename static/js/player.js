@@ -1275,19 +1275,23 @@ setInterval(compactSync, 500);                            // Ansichtswechsel / T
    Gruppe nach links über Vorspulen/Weiter (Tester-Rückmeldung 3.0.2). Reihenfolge: Atmosphäre, Stimme, Schlaf-Timer. */
 const FIT_STEPS = ["fit-atmo", "fit-voice", "fit-sleep", "fit-tight"];   // zuletzt: Knöpfe enger zusammen
 function fitRight() {
-  const r = document.querySelector(".player .right"); if (!r || !r.clientWidth) return;
-  const gap = parseFloat(getComputedStyle(r).columnGap) || 0;
-  const need = () => { const cs = [...r.children].filter((c) => c.getClientRects().length);
-    return cs.reduce((w, c) => w + c.getBoundingClientRect().width, 0) + Math.max(0, cs.length - 1) * gap; };
-  r.classList.remove(...FIT_STEPS); r.style.minWidth = "";
-  for (const s of FIT_STEPS) { if (need() <= r.clientWidth + 0.5) break; r.classList.add(s); }
-  const w = need();                                     // reichen nicht einmal Symbole: Platz nehmen, der Titel links kürzt sich
-  if (w > r.clientWidth + 0.5) r.style.minWidth = `${Math.ceil(w)}px`;
+  const r = document.querySelector(".player .right"); if (!r) return;
+  r.classList.remove(...FIT_STEPS);
+  const row = r.parentElement, tr = row?.querySelector(".transport");
+  if (!tr || !row.clientWidth || getComputedStyle(r).position === "absolute") return;   // Mini-Player: eigene Anordnung
+  // Platz pro Seite neben den Wiedergabe-Knöpfen (Titel links und Gruppe rechts teilen ihn sich, die Mitte bleibt mittig).
+  // Gemessen an der Zeile, nicht an der Gruppe: die darf seit 3.0.4 nie schmaler als ihr Inhalt werden (CSS).
+  const rs = getComputedStyle(row), ts = getComputedStyle(tr), gapRow = parseFloat(rs.columnGap) || 0;
+  const mid = tr.getBoundingClientRect().width + (parseFloat(ts.marginLeft) || 0) + (parseFloat(ts.marginRight) || 0);
+  const side = (row.clientWidth - (parseFloat(rs.paddingLeft) || 0) - (parseFloat(rs.paddingRight) || 0) - mid - 2 * gapRow) / 2;
+  const need = () => { const g = parseFloat(getComputedStyle(r).columnGap) || 0, cs = [...r.children].filter((c) => c.getClientRects().length);
+    return cs.reduce((w, c) => w + c.getBoundingClientRect().width, 0) + Math.max(0, cs.length - 1) * g; };
+  for (const s of FIT_STEPS) { if (need() <= side + 0.5) break; r.classList.add(s); }
 }
 {
   const r = document.querySelector(".player .right");
   if (r) {
-    new ResizeObserver(() => fitRight()).observe(r);
+    new ResizeObserver(() => fitRight()).observe(r.parentElement);
     const mo = new MutationObserver(() => fitRight());
     for (const id of ["sleepLbl", "atmoLbl", "voiceLbl"]) mo.observe($(id), { childList: true, characterData: true, subtree: true });
   }
