@@ -618,7 +618,7 @@ def test_offline_stimme_nur_auf_klick(api):
         await asyncio.sleep(0.4)
         assert await c.js("!!document.querySelector('#status [data-offline]')")
         await c.js("document.querySelector('#status [data-offline]').click(); 1")
-        for _ in range(40):
+        for _ in range(200):                     # erster Piper-Abschnitt lädt das Modell (CI-Rechner: mehrere Sekunden)
             if await c.js("!!st.cache.get(st.idx)?.used"):
                 break
             await asyncio.sleep(0.1)

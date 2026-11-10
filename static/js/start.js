@@ -49,6 +49,7 @@ async function startData() {
   else { await openDoc(docs[0].id); if (h === "bearbeiten") openEditor(); }
   if (h === "tutorial" || h.startsWith("rundgang")) gtStart(false, (parseInt(h.split("/")[1], 10) || 1) - 1);
   else if (!st.settings.onboarded || h === "willkommen") onbOpen("setup");
+  st.started = true;                                     // Start-Ablauf fertig (Tests warten darauf, sonst springt er dazwischen)
 })();
 
 setInterval(() => { if (!document.hidden && $("libMenu").classList.contains("hidden")) renderLibrary(); }, 60000);   // „Gestern“/Uhrzeit aktuell halten

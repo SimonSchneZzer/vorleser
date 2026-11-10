@@ -131,7 +131,9 @@ async def _neu_laden(c):
         for _ in range(60):
             await asyncio.sleep(0.25)
             try:
-                if await c.js("!window.__alteSeite && typeof openDoc === 'function' && typeof st !== 'undefined' && !!st.settings"):
+                # st.started: Start-Ablauf (Bibliothek laden, ersten Text öffnen) ist durch – sonst öffnet er den Text
+                # mitten im Test und holt ihn z. B. aus den Einstellungen zurück (Windows-CI, 10.11.2026)
+                if await c.js("!window.__alteSeite && typeof openDoc === 'function' && typeof st !== 'undefined' && !!st.settings && !!st.started"):
                     return
             except AssertionError:
                 pass                                # Seite gerade im Wechsel
