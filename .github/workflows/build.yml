@@ -85,7 +85,8 @@ jobs:
           V="$(cat VERSION)"
           cp dist/Vorleser/_internal/VERSION build/VERSION.orig     # Byte für Byte zurück (Dateiliste/Teil-Update!)
           echo -n "9.9.3" > dist/Vorleser/_internal/VERSION      # Testversion fürs komplette Paket, eigener Ordner
-          "$ISCC" "//DAppVersion=9.9.3" "//Obuild/updatetest" packaging/vorleser.iss
+          OUT="$(cygpath -w "$PWD/build/updatetest")"             # Windows-Pfad: „//Obuild/…“ reicht Git-Bash falsch weiter
+          "$ISCC" "//DAppVersion=9.9.3" "//O$OUT" packaging/vorleser.iss
           cp build/VERSION.orig dist/Vorleser/_internal/VERSION
           python packaging/test_update_windows.py e2e "dist/Vorleser-$V-windows-setup.exe" build/updatetest/Vorleser-9.9.3-windows-setup.exe
 
