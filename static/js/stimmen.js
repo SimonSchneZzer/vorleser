@@ -117,7 +117,7 @@ function closePops(instant = false) {
     if (instant || reducedMotion.matches) { el.classList.add("hidden"); continue; }
     el.classList.add("leaving");
     clearTimeout(popTimers[id]);
-    popTimers[id] = setTimeout(() => { el.classList.add("hidden"); el.classList.remove("leaving"); }, 140);
+    popTimers[id] = setTimeout(() => { el.classList.add("hidden"); el.classList.remove("leaving"); }, 220);
   }
 }
 function openPop(el) {

@@ -34,7 +34,12 @@ function micFab(btn, opts) {
   const set = (cls, text, aria) => {
     btn.classList.toggle("on", cls === "on"); btn.classList.toggle("busy", cls === "busy");
     lbl.textContent = text; btn.setAttribute("aria-label", aria || text);
+    queueMicrotask(fit);                                   // nach der Übersetzung messen
   };
+  // Beschriftung gleitet auf ihre ECHTE Breite (vorher max-width 220 px: bei ~60 px Text schnappte sie in den ersten
+  // Millisekunden auf, nur das Zuklappen wirkte weich – Simon, 3.0.4)
+  const fit = () => lbl.style.setProperty("--fmw", `${Math.ceil(lbl.scrollWidth) + 1}px`);
+  btn.addEventListener("mouseenter", fit); btn.addEventListener("focus", fit);
   const idle = () => { btn.disabled = false; set("", "Diktieren", "Diktieren"); };
   async function start() {
     try { S.rec = startRecorder(await getMic()); }

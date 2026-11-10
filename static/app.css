@@ -538,9 +538,9 @@ body, .side, .player, .card, .box, .pill, .btn, .seg, .chip, .topbar, .search, .
 
 /* Popover & Menüs */
 .pop:not(.hidden) { animation: popIn .22s var(--ease-out) both; transform-origin: var(--origin, top right); }
-.pop.leaving { animation: popOut .14s var(--ease) both; }
+.pop.leaving { animation: popOut .22s cubic-bezier(.4, 0, .2, 1) both; }
 @keyframes popIn { from { opacity: 0; transform: translateY(-4px) scale(.96); } }
-@keyframes popOut { to { opacity: 0; transform: translateY(-4px) scale(.97); } }
+@keyframes popOut { to { opacity: 0; transform: translateY(-6px) scale(.95); } }
 .menu button { transition: background-color .15s var(--ease); }
 
 /* Dialoge */
@@ -1652,8 +1652,8 @@ body.compact #voiceBtn .caret { transform: rotate(180deg); }   /* Menü öffnet 
 .fmic:hover { transform: translateY(-1px); }
 .fmic:active { transform: scale(.96); }
 .fmic svg { width: 19px; height: 19px; }
-.fmic .fm-lbl { max-width: 0; overflow: hidden; white-space: nowrap; transition: max-width .35s var(--ease-out), margin .35s var(--ease-out); }
-.fmic:hover .fm-lbl, .fmic:focus-visible .fm-lbl, .fmic.on .fm-lbl, .fmic.busy .fm-lbl { max-width: 220px; margin-left: 9px; }
+.fmic .fm-lbl { max-width: 0; overflow: hidden; white-space: nowrap; transition: max-width .42s var(--ease-out), margin .42s var(--ease-out); }
+.fmic:hover .fm-lbl, .fmic:focus-visible .fm-lbl, .fmic.on .fm-lbl, .fmic.busy .fm-lbl { max-width: var(--fmw, 120px); margin-left: 9px; }
 .fmic.on { background: var(--acc); color: var(--on-acc); border-color: transparent; }
 .fmic .fm-dot { display: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; margin-right: 9px; }
 .fmic.on .fm-dot { display: block; }
@@ -1699,10 +1699,10 @@ body.compact #voiceBtn .caret { transform: rotate(180deg); }   /* Menü öffnet 
 @media (prefers-reduced-motion: reduce) { .prog .tick.fresh { animation: none; } }
 @keyframes tickFlash { 0% { transform: none; box-shadow: 0 0 0 0 transparent; } 25% { transform: scaleY(2.4); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 45%, transparent); } 100% { transform: none; box-shadow: 0 0 0 0 transparent; } }
 
-/* Dialoge schließen weich (close() in basis.js setzt .closing, schließt nach 170 ms) */
-dialog[open].closing { animation: dlgOut .17s var(--ease) both; pointer-events: none; }
-dialog[open].closing::backdrop { animation: fadeOut .17s var(--ease) both; }
-@keyframes dlgOut { to { opacity: 0; transform: translateY(6px) scale(.97); } }
+/* Dialoge schließen weich (close() in basis.js setzt .closing, schließt nach 260 ms) */
+dialog[open].closing { animation: dlgOut .26s cubic-bezier(.4, 0, .2, 1) both; pointer-events: none; }
+dialog[open].closing::backdrop { animation: fadeOut .26s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes dlgOut { to { opacity: 0; transform: translateY(10px) scale(.96); } }
 @keyframes fadeOut { to { opacity: 0; } }
 
 /* Status-Toast über dem Player (ersetzt die Zeile unter dem Titel, setStatus in player.js) */

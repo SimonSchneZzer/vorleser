@@ -219,7 +219,7 @@ def test_schlaf_timer(api):
         assert await c.js("$('sleepLbl').textContent") == "30:00"
         await c.js("sleepSet(null); 1")
         await c.js("$('sleepBtn').click(); 1"); await asyncio.sleep(0.2)                # danach: ein Klick reicht
-        assert await c.js("$('sleepLbl').textContent") == "30:00" and await c.js("$('sleepMenu').classList.contains('hidden')")
+        assert await c.js("$('sleepLbl').textContent") == "30:00" and await c.js("!isShown($('sleepMenu'))")
         await c.js("sleepSet(null); 1")
     try:
         _im_browser(api, sz)
@@ -692,7 +692,7 @@ def test_markieren_springt_nicht_und_zeigt_menue(api):
         await c.cmd("Input.dispatchMouseEvent", type="mousePressed", x=a[0], y=a[1], button="left", clickCount=1)
         await c.cmd("Input.dispatchMouseEvent", type="mouseReleased", x=a[0], y=a[1], button="left", clickCount=1)
         await asyncio.sleep(0.3)
-        assert await c.js("st.idx") == 1 and await c.js("$('lexMenu').classList.contains('hidden')")   # normaler Klick springt weiter
+        assert await c.js("st.idx") == 1 and await c.js("!isShown($('lexMenu'))")   # normaler Klick springt weiter
         await c.js("pause(); 1")
     try:
         _im_browser(api, sz)

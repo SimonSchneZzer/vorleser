@@ -108,3 +108,32 @@ def test_neuer_text_kein_cursor_nach_dem_laden(api):
         assert await c.js("!$('ntDoc').contains(document.activeElement) && !$('ntDoc').contains(getSelection().anchorNode)")
         await c.js("ntSet('', ''); 1")
     _im_browser(api, sz)
+
+
+@pytest.mark.browser
+def test_beschriftung_rollt_auf_englisch_nicht_dauernd(api):
+    """3.0.4: auf Englisch übersetzt i18n.js nach dem Setzen – „Erzeuge 0/266“ ≠ „Generating 0/266“ sah wie eine Änderung
+    aus, die Beschriftung rollte alle 2 s neu und der Knopf wurde kurz auf die deutsche Länge gekürzt („Generating …“)."""
+    _, d = api.json("POST", "/api/docs", {"title": "Englisch", "text": "One sentence to read. Another one here. " * 5})
+    api.json("PATCH", "/api/settings", {"uiLang": "en"})
+
+    async def sz(c):
+        await c.cmd("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "no-preference"}])
+        await c.js("try { localStorage.setItem('vorleser.ui', 'en'); } catch {} 1")
+        await _neu_laden(c)
+        await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.8)
+        assert (await c.js("$('posL').textContent")).startswith("Section")
+        await asyncio.sleep(0.6)                                                       # alles in Ruhe
+        n = await c.js("(() => { posRender(); return $('posL').getAnimations().length; })()")
+        assert n == 0, "gleicher Text darf nicht neu rollen"
+        # Knopf mit Beschriftung: neue Breite passt zum übersetzten Text (kein abgeschnittenes „…“)
+        r = await c.js("""(async () => { const b = $('prepBtn'), l = $('prepLbl'); b.classList.remove('hidden');
+            rollText(l, 'Vorab erzeugen'); await new Promise((r) => setTimeout(r, 200));
+            rollText(l, 'Erzeuge 0/266'); await new Promise((r) => setTimeout(r, 700));
+            return { txt: l.textContent, fits: l.scrollWidth <= l.clientWidth + 1 && b.scrollWidth <= b.clientWidth + 1 }; })()""")
+        assert r["txt"] == "Generating 0/266" and r["fits"], r
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.json("PATCH", "/api/settings", {"uiLang": "de"})
+        api.call("DELETE", f"/api/docs/{d['id']}")

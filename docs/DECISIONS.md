@@ -40,7 +40,7 @@ Außerdem lief die rechte Player-Gruppe bei langer Schlaf-Beschriftung („End o
 - Statuszeile unter dem Titel entfernt (Simon: „verwirrt nur“): `setStatus` füllt jetzt den Status-Toast `#stToast` –
   Puffern (erst nach 0,7 s, mit „Offline-Stimme“), „Online-Stimme hängt“, Fehler (Erneut versuchen, Fehler melden),
   kurz „Offline-Stimme liest“. Bleibt bis vorbei oder ✕ (✕ gilt für diesen Zustand). „Fertig gehört“ → normaler Toast.
-- Dialoge schließen weich: `HTMLDialogElement.prototype.close` blendet 170 ms aus (auch Esc über `cancel`); `open`
+- Dialoge schließen weich: `HTMLDialogElement.prototype.close` blendet 260 ms aus (anfangs 170 – Simon: „zu abrupt“) (auch Esc über `cancel`); `open`
   meldet währenddessen schon „zu“, `showModal()` bricht das Schließen ab – so klappen Aufrufer wie `if (!d.open) …`.
 - Toasts: rote 9 s, unter der Maus steht die Uhr; rote bieten „Fehler melden“ (Meldung landet im Formular).
 - „Neuer Text“ → Bibliothek: `flyStart` (ansichten.js) – Kopie der Karte fliegt an den neuen Eintrag. Klang auch beim

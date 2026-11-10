@@ -222,11 +222,11 @@ function animateIn(el, cls = "enter") {
 const EASE = "cubic-bezier(.2, .8, .2, 1)", EASE_OUT = "cubic-bezier(.16, 1, .3, 1)";
 /** Gegenstück zu animateIn(el, "enter") für kleine Menüs/Popups: kurz ausblenden + leicht schrumpfen, dann verstecken
  *  (vorher waren sie von einem Frame auf den nächsten weg). Nur opacity/transform – nie filter (Glas, CLAUDE.md). */
-function softHide(el, dur = 150) {
+function softHide(el, dur = 240) {
   if (!el || el.classList.contains("hidden") || el._soft) return;
   el.classList.remove("enter");
   if (reducedMotion.matches || !el.animate) { el.classList.add("hidden"); return; }
-  const a = el._soft = el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px) scale(.97)" }], { duration: dur, easing: EASE });
+  const a = el._soft = el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-6px) scale(.95)" }], { duration: dur, easing: "cubic-bezier(.4, 0, .2, 1)" });
   a.onfinish = () => { if (el._soft === a) { el._soft = null; el.classList.add("hidden"); } };
 }
 /** Inhalt eines Dialogs/einer Karte tauschen: Höhe gleitet, das Neue blendet von unten ein, ein Häkchen-Symbol darin
@@ -266,23 +266,37 @@ function toggleSoft(el, on) {
 /** Kurze Beschriftung wechselt mit einem kleinen Rollen (alt nach oben weg, neu von unten) statt zu springen.
  *  Kommen Änderungen schneller als die Bewegung (Ziehen am Balken), wird ohne Bewegung gesetzt. */
 function rollText(el, text) {
-  if (!el || el.textContent === text) return;
-  if (el._roll) { el._roll.cancel(); el._roll = null; el.textContent = text; return; }
-  if (!el.getClientRects().length || reducedMotion.matches || !el.animate || !el.textContent) { el.textContent = text; return; }
+  if (!el) return;
+  // Verglichen wird mit dem zuletzt GESETZTEN (deutschen) Text: auf Englisch übersetzt i18n.js danach – mit dem
+  // angezeigten Text verglichen sah jede Abfrage wie eine Änderung aus („Erzeuge 0/266“ ≠ „Generating 0/266“) und
+  // rollte alle 2 s neu, „neu“ in der Bibliothek ebenso (3.0.4). Hat jemand anderes den Text geändert, zählt das neu.
+  if (el._rollSrc === text && el.textContent === el._rollShown) return;
+  if (el._rollSrc === undefined && el.textContent === text) { el._rollSrc = text; el._rollShown = text; return; }
+  const set = () => { el.textContent = text; el._rollSrc = text; el._rollShown = el.textContent;
+    queueMicrotask(() => { el._rollShown = el.textContent; }); };   // nach der Übersetzung (MutationObserver) merken
+  if (el._roll) { el._roll.cancel(); el._roll = null; set(); return; }
+  if (!el.getClientRects().length || reducedMotion.matches || !el.animate || !el.textContent) { set(); return; }
   if (getComputedStyle(el).display === "inline") el.style.display = "inline-block";
   const out = el._roll = el.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(-45%)", opacity: 0 }], { duration: 110, easing: "ease-in" });
   out.onfinish = () => {
     if (el._roll !== out) return;
-    // Steckt die Beschriftung in einem Knopf, gleitet dessen Breite mit (sonst springt er z. B. bei „Alles vorbereitet“)
+    // Steckt die Beschriftung in einem Knopf, gleitet dessen Breite mit (sonst springt er z. B. bei „Alles vorbereitet“).
+    // Neue Breite erst NACH der Übersetzung messen – sonst wurde auf die deutsche Länge gekürzt („Generating …“).
     const host = el.closest("button, .pill"), w0 = host?.offsetWidth;
-    el.textContent = text;
-    const w1 = host?.offsetWidth;
-    if (host && Math.abs(w1 - w0) > 1) {
-      host.style.overflow = "hidden";
-      host.animate([{ width: `${w0}px` }, { width: `${w1}px` }], { duration: 320, easing: EASE_OUT }).onfinish = () => { host.style.overflow = ""; };
-    }
-    const inn = el._roll = el.animate([{ transform: "translateY(45%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, easing: EASE_OUT });
-    inn.onfinish = () => { if (el._roll === inn) el._roll = null; };
+    if (host) host.style.width = `${w0}px`;
+    set();
+    queueMicrotask(() => {
+      if (el._roll !== out) { if (host) host.style.width = ""; return; }
+      if (host) {
+        host.style.width = ""; const w1 = host.offsetWidth;
+        if (Math.abs(w1 - w0) > 1) {
+          host.style.overflow = "hidden";
+          host.animate([{ width: `${w0}px` }, { width: `${w1}px` }], { duration: 320, easing: EASE_OUT }).onfinish = () => { host.style.overflow = ""; };
+        }
+      }
+      const inn = el._roll = el.animate([{ transform: "translateY(45%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, easing: EASE_OUT });
+      inn.onfinish = () => { if (el._roll === inn) el._roll = null; };
+    });
   };
 }
 /** Leiser Zwei-Ton-Klang für „fertig“ (selbst erzeugt, keine Datei): zwei kurze Sinustöne, Quinte nach oben. */
@@ -308,7 +322,7 @@ function chime() {
     if (!this.hasAttribute("open") || reducedMotion.matches) return close0.call(this, rv);
     if (this._closeT) return;
     this.classList.add("closing");
-    this._closeT = setTimeout(() => { this._closeT = 0; this.classList.remove("closing"); close0.call(this, rv); }, 170);
+    this._closeT = setTimeout(() => { this._closeT = 0; this.classList.remove("closing"); close0.call(this, rv); }, 260);
   };
   P.showModal = function () {
     if (this._closeT) { clearTimeout(this._closeT); this._closeT = 0; this.classList.remove("closing"); return; }
