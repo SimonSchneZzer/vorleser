@@ -271,7 +271,7 @@ def test_rundgang_beispieltext_bleibt_ohne_doppelung(api):
 
 
 def test_statuszeile_flackert_nicht(api):
-    """Regression: #status wurde bei jedem Aufruf neu gesetzt (+ Einblendung) → Flackern trotz gleichem Text."""
+    """Regression: der Status (seit 3.0.3 als Toast #stToast) wurde bei jedem Aufruf neu gesetzt → Flackern trotz gleichem Text."""
     d = api.json("POST", "/api/docs", {"text": "# Eins\n\nErster Satz. Zweiter Satz.", "title": "Status"})[1]
 
     async def sz(c):
@@ -283,7 +283,7 @@ def test_statuszeile_flackert_nicht(api):
             r = await c.js("""(async () => {
                 await new Promise(r => setTimeout(r, 400));
                 const before = statusSt.html; let n = 0;
-                const mo = new MutationObserver(() => n++); mo.observe($('status'), {childList: true, subtree: true});
+                const mo = new MutationObserver(() => n++); mo.observe($('stToast'), {childList: true, subtree: true});
                 for (let i = 0; i < 10; i++) { updateStatus(); await new Promise(r => setTimeout(r, 30)); }
                 await new Promise(r => setTimeout(r, 300)); mo.disconnect();
                 return {n, same: statusSt.html === before}; })()""")

@@ -144,8 +144,8 @@ ILL.chapters = () => `<div class="chap"><div class="cbar"><i class="cfill"></i><
 const TOUR_ALL = [
   { target: "#newBtn", il: "create", t: "Neuen Text anlegen",
     p: "Hier fängt alles an: Text einfügen, eine Datei hineinziehen, diktieren oder einen Link angeben." },
-  { view: "new", via: "#newBtn", target: "#viewNew .seg", il: "four", t: "Vier Wege zum Text",
-    p: "Einfügen, Datei (EPUB, PDF, TXT …), Diktieren oder ein Link zu einem Artikel. Kapitel und Sprache erkennt der Vorleser selbst." },
+  { view: "new", via: "#newBtn", target: "#srcPaste", il: "four", t: "Ein Feld für alles",
+    p: "Schreiben, einfügen, eine Datei (EPUB, PDF, TXT …) hineinziehen oder einen Link einfügen – unten rechts diktierst du. Kapitel und Sprache erkennt der Vorleser selbst." },
   { view: "new", fill: true, target: "#createBtn", il: "listen", t: "Vorbereiten",
     p: "Ist der Text drin, legt „Vorbereiten“ ihn in deiner Bibliothek an und macht ihn bereit zum Hören – hier mit einem Beispieltext." },
   { view: "read", via: "#createBtn", target: () => $("library").querySelector(`a[data-id="${st.docs.find((d) => d.sample)?.id || "demo"}"]`)?.closest("li") || $("library").firstElementChild, il: "lib", t: "In deiner Bibliothek",
@@ -198,7 +198,8 @@ function gtEnd() {
   setTimeout(async () => {
     $("gt").classList.add("hidden"); $("gt").classList.remove("leaving");
     stop(); st.doc = null; st.words = null;
-    if ($("text").value === gtDemoText()) { $("text").value = ""; $("title").value = ""; updateCount(); }   // Feld wieder leer
+    if (st.gtFilled && $("text").value === st.gtFilled) { ntSet("", ""); }   // Feld wieder leer (3.0.3: Editor)
+    st.gtFilled = null;
     const sampleId = await ensureSample();                 // Beispieltext bleibt (auch bei Abbruch) in der Bibliothek
     st.demoEntry = null;
     renderLibrary();
@@ -311,7 +312,7 @@ async function gtShow(i) {
   if (step.view === "settings") {
     if (view !== "settings") { showView("settings"); wait = 450; }
     if (setTab !== step.tab) { document.querySelector(`#setTabs [data-tab="${step.tab}"]`).click(); wait = 450; }
-  } else if (step.view === "new" && view !== "new") { showNew(); setSrc("paste"); wait = 450; }
+  } else if (step.view === "new" && view !== "new") { showNew(); wait = 450; }
   else if (step.view === "read" && view !== "read") {
     if (!st.demoEntry && !st.docs.some((d) => d.sample)) {   // „Vorbereiten“: jetzt wirklich speichern – und sichtbar hereinkommen
       if (!(await ensureSample())) st.demoEntry = { ...demoDoc(), count: 7, chapters: 2 };   // offline/Fehler: nur anzeigen
@@ -323,8 +324,8 @@ async function gtShow(i) {
     }
     showDoc(st.doc?.demo ? st.doc : demoDoc()); wait = 450;
   }
-  if (step.fill && $("text").value !== gtDemoText()) {    // Beispieltext ins Feld, damit „Vorbereiten“ aktiv ist
-    $("title").value = demoDoc().title; $("text").value = gtDemoText(); updateCount();
+  if (step.fill && $("text").value !== st.gtFilled) {    // Beispieltext ins Feld, damit „Vorbereiten“ aktiv ist
+    ntSet(gtDemoText(), demoDoc().title); st.gtFilled = $("text").value;
   }
   if (step.more) { $("moreBtn").click(); wait = Math.max(wait, 260); }
   if (step.chap && $("chapterMenu").classList.contains("hidden")) { $("chapterBtn").click(); wait = Math.max(wait, 260); }

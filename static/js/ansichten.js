@@ -182,7 +182,7 @@ function libPatch(ul, docs) {
       const svg = t.content.firstElementChild; svg.dataset.h = ring;
       old ? old.replaceWith(svg) : row.prepend(svg);
     }
-    const s = a.querySelector(".st"); if (s.textContent !== state) s.textContent = state;
+    rollText(a.querySelector(".st"), state);
     const w = a.querySelector(".when"), wt = fmtWhen(ts); if (w.textContent !== wt) w.textContent = wt;
     w.title = `${d.progress.updated ? "Zuletzt gehört" : "Erstellt"}: ${new Date(ts * 1000).toLocaleString(LOC(), { dateStyle: "medium", timeStyle: "short" })}`;
     a.querySelector(".pre").style.width = `${d.count ? Math.round((d.prepared || 0) / d.count * 100) : 0}%`;
@@ -212,7 +212,7 @@ function libSync() {
   const a = $("library").querySelector(`a[data-id="${st.doc.id}"]`); if (!a) return;
   const pct = docPct(d), state = docState(d, pct);
   a.querySelector(".pos").style.width = `${pct}%`;
-  const s = a.querySelector(".st"); if (s.textContent !== state) s.textContent = state;
+  rollText(a.querySelector(".st"), state);
 }
 let libMenuFor = null;
 /** „…“-Menü eines Bibliothekseintrags – am Knopf oder (Rechtsklick) an der Maus. */
@@ -356,3 +356,30 @@ document.addEventListener("pointerdown", hideTip);
 document.addEventListener("scroll", hideTip, true);
 document.documentElement.addEventListener("mouseleave", hideTip);
 
+
+/* „Neuer Text“ → Bibliothek (3.0.3, Board-Idee 4b): nach „Vorbereiten“ fliegt eine Kopie der Karte an ihren Platz in
+   der Bibliothek und wird dort zum Eintrag (der Eintrag „landet“ wie bisher). Nur transform/opacity/Größe, keine
+   Glasfläche. Ist die Bibliothek nicht zu sehen (Mini-Player), blendet die Kopie an Ort und Stelle aus. */
+function flyStart(fromEl, title) {
+  if (!fromEl || reducedMotion.matches || !document.body.animate) return { to() {} };
+  const r0 = fromEl.getBoundingClientRect();
+  const g = document.createElement("div");
+  g.className = "fly-ghost"; g.setAttribute("aria-hidden", "true");
+  g.innerHTML = `<b data-noi18n>${esc(title || "Neuer Text")}</b><i></i><i></i><i></i>`;
+  Object.assign(g.style, { left: `${r0.left}px`, top: `${r0.top}px`, width: `${r0.width}px`, height: `${r0.height}px` });
+  document.body.append(g);
+  return {
+    to(docId) {
+      const li = $("library").querySelector(`a[data-id="${docId}"]`)?.closest("li"), r1 = li?.getBoundingClientRect();
+      const off = () => g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: EASE, fill: "forwards" }).finished.then(() => g.remove(), () => g.remove());
+      if (!li || !r1.width) return off();
+      const h1 = parseFloat(li.style.getPropertyValue("--lh")) || r1.height || 60;
+      const a = g.animate([
+        { left: `${r0.left}px`, top: `${r0.top}px`, width: `${r0.width}px`, height: `${r0.height}px`, borderRadius: "14px", opacity: 1 },
+        { left: `${r1.left}px`, top: `${r1.top}px`, width: `${r1.width}px`, height: `${h1}px`, borderRadius: "10px", opacity: 0.9, offset: 0.85 },
+        { left: `${r1.left}px`, top: `${r1.top}px`, width: `${r1.width}px`, height: `${h1}px`, borderRadius: "10px", opacity: 0 },
+      ], { duration: 700, easing: "cubic-bezier(.3, .75, .2, 1)", fill: "forwards" });
+      a.finished.then(() => g.remove(), () => g.remove());
+    },
+  };
+}

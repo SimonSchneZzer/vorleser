@@ -110,15 +110,39 @@ async function saveSettings(patch) {
 let csPolling = false;          // läuft gerade die Installation der eigenen Stimme?
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let toastT = null;
-function toast(msg, err = false) {
+/** Kurze Meldung unten. action = { label, fn }: Knopf darin (z. B. „Rückgängig“), Meldung bleibt dann länger stehen. */
+function toast(msg, err = false, action = null) {
   const t = $("toast");
   // Über offenen Dialogen (Top-Layer) sichtbar: als Popover neu öffnen – ältere WebViews ohne Popover: wie bisher
   if (t.showPopover && document.querySelector("dialog[open]")) {
     try { if (t.matches(":popover-open")) t.hidePopover(); t.showPopover(); } catch {}
   }
   t.textContent = msg; t.classList.toggle("err", err);
+  // Rote Meldung: gleich „Fehler melden“ anbieten, Meldung wird ins Formular übernommen (3.0.3, Simon)
+  if (!action && err && typeof openBug === "function" && typeof bug !== "undefined" && bug.info?.enabled) action = { label: "Fehler melden", fn: () => openBug(msg) };
+  if (action) {
+    const b = document.createElement("button"); b.className = "tbtn"; b.textContent = action.label;
+    b.onclick = () => { toastHide(t); action.fn(); };
+    t.append(b);
+  }
+  t.classList.toggle("act", !!action);
   t.classList.add("show");
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), err ? 4500 : 2200);
+  toastArm(t, err ? 9000 : action ? 6000 : 2200);       // Fehler: Zeit zum Lesen (3.0.3)
+}
+/** Ausblenden planen; solange die Maus auf dem Toast ist, steht die Uhr (danach die Restzeit, mindestens 1,5 s). */
+const toastS = { until: 0, left: 0, hover: false };
+function toastArm(t, ms) {
+  clearTimeout(toastT); toastS.until = Date.now() + ms; toastS.left = ms;
+  if (!toastS.hover) toastT = setTimeout(() => toastHide(t), ms);
+}
+$("toast").addEventListener("mouseenter", () => { toastS.hover = true; clearTimeout(toastT); toastS.left = Math.max(0, toastS.until - Date.now()); });
+$("toast").addEventListener("mouseleave", () => { toastS.hover = false; if ($("toast").classList.contains("show")) toastArm($("toast"), Math.max(1500, toastS.left)); });
+/** Toast ausblenden: erst gleitet er weg, danach verliert er die Knopf-Gestalt (vorher sprang er im ersten Frame
+ *  auf die schmale Form ohne Knopf und blendete erst dann aus). */
+let toastActT = 0;
+function toastHide(t) {
+  t.classList.remove("show");
+  clearTimeout(toastActT); toastActT = setTimeout(() => { if (!t.classList.contains("show")) t.classList.remove("act"); }, 380);
 }
 function toastErr(e) { console.error(e); toast(friendlyError(e), true); }
 const UI_INTERN = "Etwas ist schiefgelaufen – die Details stehen im Log. Über „Fehler melden“ kannst du sie mitschicken.";
@@ -187,6 +211,7 @@ function withTransition(fn) {
 }
 function animateIn(el, cls = "enter") {
   if (!el) return;
+  if (el._soft) { el._soft.cancel(); el._soft = null; }   // gerade am Schließen (softHide) → wieder auf
   el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
   // Nur das eigene Animationsende zählt – Kinder (z. B. der Auswahlpunkt) würden sonst zu früh abbrechen.
   el.addEventListener("animationend", function done(e) {
@@ -195,6 +220,107 @@ function animateIn(el, cls = "enter") {
   });
 }
 const EASE = "cubic-bezier(.2, .8, .2, 1)", EASE_OUT = "cubic-bezier(.16, 1, .3, 1)";
+/** Gegenstück zu animateIn(el, "enter") für kleine Menüs/Popups: kurz ausblenden + leicht schrumpfen, dann verstecken
+ *  (vorher waren sie von einem Frame auf den nächsten weg). Nur opacity/transform – nie filter (Glas, CLAUDE.md). */
+function softHide(el, dur = 150) {
+  if (!el || el.classList.contains("hidden") || el._soft) return;
+  el.classList.remove("enter");
+  if (reducedMotion.matches || !el.animate) { el.classList.add("hidden"); return; }
+  const a = el._soft = el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px) scale(.97)" }], { duration: dur, easing: EASE });
+  a.onfinish = () => { if (el._soft === a) { el._soft = null; el.classList.add("hidden"); } };
+}
+/** Inhalt eines Dialogs/einer Karte tauschen: Höhe gleitet, das Neue blendet von unten ein, ein Häkchen-Symbol darin
+ *  springt einmal auf (statt Formular weg → Bestätigung da von einem Frame auf den nächsten). */
+function swapIn(box, outEl, inEl) {
+  const done = heightFrom(box);
+  outEl.classList.add("hidden"); inEl.classList.remove("hidden");
+  done(440); animateIn(inEl, "swap-in");
+}
+/** Ein-/Ausblenden, das je nach Zustand immer wieder aufgerufen werden darf (macht nichts, wenn sich nichts ändert):
+ *  In einer Zeile (Flex-Zeile, Text) wird die Breite weich, sonst die Höhe – die Nachbarn rücken mit, statt zu springen
+ *  (auch die Lücke `gap` der Zeile, über einen negativen Rand). Nicht sichtbar (Ansicht zu) → sofort. */
+function toggleSoft(el, on) {
+  if (!el) return;
+  if (el._tg) { const off = el._tgOff; el._tg.cancel(); el._tg = null; if (off) el.classList.add("hidden"); }
+  if (on === !el.classList.contains("hidden")) return;
+  if (!el.parentElement?.getClientRects().length || reducedMotion.matches || !el.animate) { el.classList.toggle("hidden", !on); return; }
+  el.classList.remove("hidden");
+  const cs = getComputedStyle(el), ps = getComputedStyle(el.parentElement);
+  const row = cs.display.startsWith("inline") || (/flex/.test(ps.display) && !ps.flexDirection.startsWith("column"));
+  const gap = /flex|grid/.test(ps.display) ? parseFloat(ps.columnGap) || 0 : 0;
+  const [S, A, B, M1, M2] = row ? ["width", "paddingLeft", "paddingRight", "marginLeft", "marginRight"] : ["height", "paddingTop", "paddingBottom", "marginTop", "marginBottom"];
+  const full = { [S]: `${row ? el.offsetWidth : el.offsetHeight}px`, [A]: cs[A], [B]: cs[B], [M1]: cs[M1], [M2]: cs[M2], opacity: 1, transform: "none" };
+  const zero = { [S]: "0px", [A]: "0px", [B]: "0px", [M1]: "0px", [M2]: "0px", opacity: 0, transform: row ? "scale(.9)" : "none" };
+  if (row && gap) {                                    // Lücke zum sichtbaren Nachbarn mit einklappen
+    const sib = [...el.parentElement.children].filter((c) => c === el || c.getClientRects().length), k = sib.indexOf(el);
+    if (k > 0) zero[M1] = `${-gap}px`; else if (sib.length > 1) zero[M2] = `${-gap}px`;
+  }
+  if (row) full.minWidth = zero.minWidth = "0px";
+  const frames = [zero, full], opts = { duration: on ? 380 : 280, easing: on ? EASE_OUT : EASE };
+  el.style.overflow = "hidden"; if (row) el.style.whiteSpace = "nowrap";
+  if (!on) frames.reverse();
+  const a = el._tg = el.animate(frames, opts); el._tgOff = !on;
+  a.onfinish = () => { if (el._tg !== a) return; el._tg = null; el.style.overflow = el.style.whiteSpace = ""; if (!on) el.classList.add("hidden"); };
+  a.oncancel = () => { el.style.overflow = el.style.whiteSpace = ""; };
+}
+/** Kurze Beschriftung wechselt mit einem kleinen Rollen (alt nach oben weg, neu von unten) statt zu springen.
+ *  Kommen Änderungen schneller als die Bewegung (Ziehen am Balken), wird ohne Bewegung gesetzt. */
+function rollText(el, text) {
+  if (!el || el.textContent === text) return;
+  if (el._roll) { el._roll.cancel(); el._roll = null; el.textContent = text; return; }
+  if (!el.getClientRects().length || reducedMotion.matches || !el.animate || !el.textContent) { el.textContent = text; return; }
+  if (getComputedStyle(el).display === "inline") el.style.display = "inline-block";
+  const out = el._roll = el.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(-45%)", opacity: 0 }], { duration: 110, easing: "ease-in" });
+  out.onfinish = () => {
+    if (el._roll !== out) return;
+    // Steckt die Beschriftung in einem Knopf, gleitet dessen Breite mit (sonst springt er z. B. bei „Alles vorbereitet“)
+    const host = el.closest("button, .pill"), w0 = host?.offsetWidth;
+    el.textContent = text;
+    const w1 = host?.offsetWidth;
+    if (host && Math.abs(w1 - w0) > 1) {
+      host.style.overflow = "hidden";
+      host.animate([{ width: `${w0}px` }, { width: `${w1}px` }], { duration: 320, easing: EASE_OUT }).onfinish = () => { host.style.overflow = ""; };
+    }
+    const inn = el._roll = el.animate([{ transform: "translateY(45%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, easing: EASE_OUT });
+    inn.onfinish = () => { if (el._roll === inn) el._roll = null; };
+  };
+}
+/** Leiser Zwei-Ton-Klang für „fertig“ (selbst erzeugt, keine Datei): zwei kurze Sinustöne, Quinte nach oben. */
+let chimeCtx = null;
+function chime() {
+  try { chimeCtx ||= new (window.AudioContext || window.webkitAudioContext)(); chimeCtx.resume?.(); } catch { return; }
+  const c = chimeCtx, t0 = c.currentTime + 0.02;
+  for (const [f, d] of [[880, 0], [1318.5, 0.12]]) {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t0 + d); g.gain.linearRampToValueAtTime(0.05, t0 + d + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.9);
+    o.connect(g).connect(c.destination); o.start(t0 + d); o.stop(t0 + d + 1);
+  }
+}
+/* Dialoge schließen weich (3.0.3, Simon: „harter Cut bei Abbrechen“): close() – auch über Esc – blendet den Dialog und
+   den Hintergrund kurz aus und schließt erst dann. `open` gilt währenddessen schon als zu; showModal() in der Zeit
+   bricht das Schließen ab (der Dialog bleibt einfach offen). Dialoge sind keine Glasflächen → opacity ist erlaubt. */
+{
+  const P = HTMLDialogElement.prototype, close0 = P.close, show0 = P.showModal;
+  const openD = Object.getOwnPropertyDescriptor(P, "open");
+  P.close = function (rv) {
+    if (!this.hasAttribute("open") || reducedMotion.matches) return close0.call(this, rv);
+    if (this._closeT) return;
+    this.classList.add("closing");
+    this._closeT = setTimeout(() => { this._closeT = 0; this.classList.remove("closing"); close0.call(this, rv); }, 170);
+  };
+  P.showModal = function () {
+    if (this._closeT) { clearTimeout(this._closeT); this._closeT = 0; this.classList.remove("closing"); return; }
+    return show0.call(this);
+  };
+  if (openD?.get) Object.defineProperty(P, "open", { ...openD, get() { return openD.get.call(this) && !this._closeT; } });
+  document.addEventListener("cancel", (e) => {
+    if (e.target instanceof HTMLDialogElement && !reducedMotion.matches) { e.preventDefault(); e.target.close(); }
+  }, true);
+}
+/** Sichtbar und nicht gerade am Schließen (für Knöpfe, die ein Menü auf/zu schalten). */
+function isShown(el) { return !!el && !el.classList.contains("hidden") && !el._soft; }
 /** Höhe vorher messen; die zurückgegebene Funktion nach der Änderung aufrufen → Höhe gleitet zum neuen Wert. */
 function heightFrom(el) {
   const h0 = el.offsetHeight;

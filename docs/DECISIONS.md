@@ -5,6 +5,63 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-10 · Bewegungen ohne harte Schnitte: Schließen, Tauschen, Beschriftungen (für 3.0.3)
+**Kontext:** Durchsicht mit Simon: Menüs/Popups gingen weich auf, aber hart zu; Inhalte (Fehler melden → Danke,
+Deinstallieren) und Knöpfe in den Einstellungen tauschten von einem Frame auf den nächsten; Zahlen sprangen.
+Außerdem lief die rechte Player-Gruppe bei langer Schlaf-Beschriftung („End of chapter“) über Vorspulen/Weiter.
+**Entscheidung:** Helfer in `basis.js`, alle nur opacity/transform/Größe (kein filter, Glas-Regel):
+- `softHide` (Gegenstück zu `animateIn`) für Schlaf-Timer, Atmosphäre, Lesezeichen-Popup, Aussprache-Menü;
+  `isShown` für Auf/Zu-Knöpfe (während des Ausblendens gilt das Menü als zu).
+- `swapIn` (Höhe gleitet, Neues blendet ein, Häkchen springt einmal auf) für Fehler melden und Deinstallieren.
+- `toggleSoft` für Zustands-Knöpfe: in einer Zeile gleitet die **Breite** samt Flex-Lücke (negativer Rand), sonst
+  die Höhe. Gemessen in WebKit: nach Darstellungsart (`inline`) zu entscheiden war falsch – `.pill` ist `flex`,
+  klappte in der Höhe zu und der Nachbar sprang 50 px.
+- `rollText` für Abschnitt/Restzeit, Stand in der Bibliothek, „Vorab erzeugen“; ganze Beschriftung rollt
+  (nicht nur die Zahl), weil `i18n.js` ganze Texte übersetzt. Steckt sie in einem Knopf, gleitet dessen Breite mit.
+- Toast mit Knopf: erst ausblenden, dann die Knopf-Gestalt (`act`) verlieren (`toastHide`); Signatur unverändert.
+- „Vorab erzeugen“ fertig: Häkchen + Ring einmal, leiser Zwei-Ton-Klang (`chime`, WebAudio, keine Datei, nur wenn
+  gerade nichts vorgelesen wird), Knopf bleibt 2,6 s stehen und gleitet dann weg.
+- Kapitel anspringen / Lesezeichen setzen: Markierung im Fortschrittsbalken leuchtet einmal auf (`flashTick`).
+- Player rechts: `fitRight` misst und blendet Beschriftungen der Reihe nach aus (Atmosphäre, Stimme, Schlaf-Timer);
+  reichen nicht einmal Symbole, nimmt die Gruppe den Platz und der Titel links kürzt sich. Feste Container-Breiten
+  reichten nicht, weil die Länge von Sprache und Zustand abhängt.
+- Statuszeile unter dem Titel entfernt (Simon: „verwirrt nur“): `setStatus` füllt jetzt den Status-Toast `#stToast` –
+  Puffern (erst nach 0,7 s, mit „Offline-Stimme“), „Online-Stimme hängt“, Fehler (Erneut versuchen, Fehler melden),
+  kurz „Offline-Stimme liest“. Bleibt bis vorbei oder ✕ (✕ gilt für diesen Zustand). „Fertig gehört“ → normaler Toast.
+- Dialoge schließen weich: `HTMLDialogElement.prototype.close` blendet 170 ms aus (auch Esc über `cancel`); `open`
+  meldet währenddessen schon „zu“, `showModal()` bricht das Schließen ab – so klappen Aufrufer wie `if (!d.open) …`.
+- Toasts: rote 9 s, unter der Maus steht die Uhr; rote bieten „Fehler melden“ (Meldung landet im Formular).
+- „Neuer Text“ → Bibliothek: `flyStart` (ansichten.js) – Kopie der Karte fliegt an den neuen Eintrag. Klang auch beim
+  fertigen Export (Dialog offen oder Karte im Hintergrund), wie sonst nur, wenn gerade nichts vorgelesen wird.
+**Prüfung:** Playwright mit WebKit (Wegwerf-Ordner, nicht im Repo), je Szene Bild für Bild Lage/Größe/Deckkraft
+gemessen (~60 fps) + Video; keine Flacker-Wechsel, Sprünge nur bei Deckkraft 0. Test `tests/test_bewegung.py`.
+
+## 2026-11-10 · Neuer Text: ein Feld wie „Text bearbeiten“ (für 3.0.3, Board „Neuer Text · ein Eingabefeld“)
+**Kontext:** Simon (Canvas-Threads 2e26c1b2, aad2e741, 82344da1): keine Reiter Einfügen/Datei/Diktieren/Link mehr; ein Feld,
+das aussieht wie „Text bearbeiten“; Diktieren als schwebender Knopf; Links automatisch.
+**Entscheidung:**
+- Editor als Bauteil `makeEditor` (`static/js/editor.js`, gleiche Logik wie der Editor in player.js); „Neuer Text“ nutzt ihn.
+  „Text bearbeiten“ hat noch die eigene Fassung – zieht nach, wenn der Diktier-Knopf dort hinkommt. Inhalt steht weiter als
+  Text in `#text` (versteckt) → Zähler, Spracherkennung, Entwurf, „Vorbereiten“, Rundgang unverändert (`ntSet` zum Setzen).
+- Diktieren: `micFab` (`static/js/diktat.js`), Glas, nur transform/Breite animiert; Text kommt als eigener Absatz an die Schreibmarke.
+- Links: nur ein Link eingefügt (leeres Feld) → Artikel holen; genau einer im Text → Hinweis, Sprung, 3× Pulsieren
+  (Flächen HINTER dem Text aus `Range.getClientRects`, Inhalt bleibt unverändert; beim Scrollen nur verschieben, sonst
+  bricht das Pulsieren ab – vom Test gefunden); mehrere → ruhiger Hinweis, optional „Links einzeln durchgehen“.
+- Datei/Link-Inhalt ersetzen den Text mit „Rückgängig“ (`toast(msg, err, {label, fn})`); Ablegen zeigt eine Fläche
+  „Datei loslassen“; Texterkennung/Laden als Fläche über dem Feld. Ablage-Leiste: das Upload-Symbol ist der Knopf.
+**Verworfen:** Textfeld (textarea) mit Spiegel-Ebene für die Link-Markierung – sah nicht aus wie „Text bearbeiten“.
+
+## 2026-11-10 · Lesezeichen-Symbol bleibt beim Satz, auch auf dem Weg dorthin
+**Kontext:** Tester-Rückmeldung: Beginnt ein Satz mitten in der Zeile, springt das Lesezeichen-Symbol auf dem Weg nach
+links oben zum vorigen Satz – der gewünschte Satz lässt sich nicht markieren.
+**Ursachen:** (1) `bmChunkAt` hielt den Satz nur, solange `movementX < 0` war. In WebKit ist `movementX` nicht
+verlässlich, und am Trackpad zittert die Maus kurz nach rechts → über dem vorigen Satz in der gemeinsamen Zeile
+wechselte das Symbol sofort. (2) Geprüft wurden nur die Zeilen-Rechtecke des Satzes (±2 px); die Lücke zwischen den
+Zeilen (Zeilenabstand > Schrifthöhe) gehörte nicht dazu.
+**Entscheidung:** Richtung selbst aus der letzten Mausposition rechnen, erst ab 4 px nach rechts gilt sie als „nach
+rechts“; gehalten wird über die ganze Höhe des Satzes (erste bis letzte Zeile).
+**Folgen:** Test `test_lesezeichen_symbol_bleibt_beim_satz` fährt schräg mit Zittern zum Symbol (schlug vorher fehl).
+
 ## 2026-11-10 · Windows-Update repariert und auf echtem Windows geprüft (3.0.2)
 **Kontext:** Tester-Rückmeldung David (Windows 11, 2.10.3): „Restart now“ schließt, startet nicht neu; nach „Later“ +
 Beenden erscheint das Update wieder; Version bleibt 2.10.3. Das Windows-Teil-Update war nie echt getestet.

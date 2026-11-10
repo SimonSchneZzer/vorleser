@@ -266,7 +266,7 @@ async function ueRenderRows() {
   $("bgSw").classList.toggle("on", bg); $("bgSw").setAttribute("aria-checked", String(bg));
   if (!hkCapture) hkRender();
   let ok = true; try { ok = await ueBridge()?.ueberall_erlaubt(); } catch {}
-  $("hkAllow").classList.toggle("hidden", ok !== false);
+  toggleSoft($("hkAllow"), ok === false);
   $("hkNote").textContent = ok === false ? "Braucht einmal deine Erlaubnis (Bedienungshilfen)" : "In jeder App: Text markieren, dann das Tastenkürzel";
 }
 $("bgSw").onclick = () => saveSettings({ background: !(st.settings?.background !== false) }).then(ueRenderRows);
@@ -376,8 +376,10 @@ async function bugInit() {
   $("bugRow").classList.toggle("hidden", !bug.info.enabled);
   $("bugSideBtn").classList.toggle("hidden", !bug.info.enabled);
 }
-function openBug() {
+function openBug(prefill) {
   if (!bug.info?.enabled) return;
+  // Aus einer roten Meldung heraus: die Meldung steht schon im Formular (nur, wenn noch nichts geschrieben ist)
+  if (typeof prefill === "string" && prefill && !$("bugMsg").value.trim()) $("bugMsg").value = `Meldung in der App: „${prefill}“\n\nWas ich davor gemacht habe: `;
   $("bugForm").classList.remove("hidden", "sending");
   $("bugOk").classList.add("hidden");
   $("bugMsgInfo").textContent = "";
@@ -428,8 +430,7 @@ $("bugForm").onsubmit = async (e) => {
     try { localStorage.setItem("vorleser.bugs", JSON.stringify([...recent, Date.now()])); } catch {}
     $("bugMsg").value = "";
     $("bugOkText").textContent = mail ? "Sie ist bei Simon angekommen. Bei Rückfragen meldet er sich per E-Mail." : "Sie ist bei Simon angekommen.";
-    $("bugForm").classList.add("hidden");
-    $("bugOk").classList.remove("hidden");
+    swapIn($("bugDlg"), $("bugForm"), $("bugOk"));
   } catch (err) {
     $("bugForm").classList.remove("sending");
     $("bugMsgInfo").textContent = /Failed to fetch|NetworkError|Load failed/i.test(err.message)
@@ -491,7 +492,7 @@ $("uninGo").onclick = async () => {
   try {
     if (st.wantPlay) pause();
     await api("/api/uninstall", { method: "POST", body: JSON.stringify({ keepData: $("uninKeep").checked }) });
-    $("uninAsk").classList.add("hidden"); $("uninBye").classList.remove("hidden");
+    swapIn($("uninDlg"), $("uninAsk"), $("uninBye"));
   } catch (e) { uninReset(); toastErr(e); }
 };
 

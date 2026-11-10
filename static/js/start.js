@@ -37,7 +37,7 @@ async function startData() {
   st.settings = settings;
   if ((settings.uiLang || "de") !== UI_LANG) setUiLang(settings.uiLang || "de");
   applyTheme(); renderSettings(); renderPlay();
-  $("dictTab").classList.toggle("hidden", !st.features.dictate);
+  $("dictBtn").classList.toggle("hidden", !st.features.dictate);      // Diktieren nur, wenn Whisper da ist
   fillLangSelect();
   const docs = await refreshLibrary().catch((e) => { toastErr(e); return []; });
   const h = location.hash.slice(1);

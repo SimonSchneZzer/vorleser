@@ -4,6 +4,23 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.3
+One field for every new text, and a smoother app everywhere – nothing jumps anymore.
+
+- **New text, one field:** write, paste, dictate or drop a file or link into a single editor that looks like
+  "Edit text". A pasted link fetches the article on its own; a link inside your text is pointed out, and you choose
+  whether to read it as it is or replace the text with its content. Undo brings back whatever was replaced.
+- **Dictation button:** a floating microphone in the corner of the field.
+- **Calmer player:** the status line under the title is gone. Only what matters shows up as a small note above
+  the player – preparing (with a switch to the offline voice), a stuck online voice or an error. It stays until
+  it's resolved or you close it.
+- **Smoother everywhere:** menus and dialogs close softly instead of vanishing, the progress bar glides instead of
+  ticking, section numbers roll, play and pause turn into each other, and a new text flies into your library.
+- **"Done" sound:** a quiet chime when preparing in advance or an export is finished (not while something is read aloud).
+- **Errors:** red notes stay longer, pause while your mouse is on them and offer "Report a problem" right away.
+- **Fixes:** the sleep timer no longer covers the skip buttons in narrow windows, and bookmarks can be set on
+  sentences that start in the middle of a line.
+
 ## 3.0.2
 Lighter and smoother: a cleaner mini player, a faster library, and playback that keeps going when you switch views.
 

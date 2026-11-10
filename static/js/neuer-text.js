@@ -1,5 +1,8 @@
 "use strict";
-// Vorleser – Neuer Text: Einfügen, Import, Diktat. Teil der Oberfläche; Reihenfolge der Dateien: index.html
+// Vorleser – Neuer Text (3.0.3): eine Karte wie „Text bearbeiten“ – schreiben, einfügen, Datei hineinziehen, Link
+// einfügen, diktieren (schwebender Knopf). Editor-Bauteil: editor.js, Diktier-Knopf: diktat.js.
+// Teil der Oberfläche; Reihenfolge der Dateien: index.html. Der Inhalt steht zusätzlich als Text in #text (versteckt)
+// – so lesen Zähler, Spracherkennung, Entwurf und „Vorbereiten“ ihn wie bisher.
 /* ===================================================================== */
 /* Neuer Text                                                             */
 /* ===================================================================== */
@@ -15,29 +18,20 @@ function showNew() {
   if (!st.newVoice || voiceById(st.newVoice)?.lang !== $("newLang").value) st.newVoice = st.defaults[$("newLang").value];
   setVoicePill($("newVoiceAv"), $("newVoiceLbl"), st.newVoice);
   updateCount();
+  $("ntOrig").classList.toggle("hidden", !st.importOriginal);
+  $("ntDoc").dataset.ph = UI_LANG === "en" ? trString(NT_PH) || NT_PH : NT_PH;   // Editor selbst ist von der Übersetzung ausgenommen
+  requestAnimationFrame(() => segThumbs($("ntKind").parentElement));
+  // gleich losschreiben: Cursor blinkt im Feld
+  setTimeout(() => { if (view === "new" && !document.querySelector("dialog[open]")) nt.focusEnd(); }, 60);
 }
-$("newBtn").onclick = () => { showNew(); setSrc("paste"); $("text").focus(); };
+const NT_PH = "Schreib los oder füge Text ein – eine Datei oder einen Link kannst du einfach hier hineinziehen oder einfügen.";
+$("newBtn").onclick = () => showNew();
 
 function fillLangSelect() {
   const sel = $("newLang"), cur = sel.value;
   sel.innerHTML = Object.entries(st.langs).filter(([k]) => langVoices(k).length).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
   if (cur && [...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
-function setSrc(src) {
-  const ids = { paste: "srcPaste", file: "srcFile", dict: "srcDict", link: "srcLink" }, order = Object.keys(ids);
-  const prev = order.find((k) => !$(ids[k]).classList.contains("hidden"));
-  const how = prev && prev !== src ? (order.indexOf(src) > order.indexOf(prev) ? "right" : "left") : null;
-  const ghost = how && view === "new" ? ghostOf($(ids[prev])) : null;
-  document.querySelectorAll("[data-src]").forEach((b) => b.classList.toggle("on", b.dataset.src === src));
-  $("srcPaste").classList.toggle("hidden", src !== "paste");
-  $("srcFile").classList.toggle("hidden", src !== "file");
-  $("srcDict").classList.toggle("hidden", src !== "dict");
-  $("srcLink").classList.toggle("hidden", src !== "link");
-  if (src === "link") setTimeout(() => $("linkUrl").focus(), 50);
-  segThumbs($("viewNew"));
-  if (ghost) { navIn($(ids[src]), how); navOut(ghost, how); } else animateIn($(ids[src]), "enter");
-}
-document.querySelectorAll("[data-src]").forEach((b) => (b.onclick = () => setSrc(b.dataset.src)));
 
 function setNewLang(lang, auto) {
   $("newLang").value = lang;
@@ -59,8 +53,7 @@ function updateCount() {
   $("createBtn").disabled = n === 0;
 }
 let detectTimer = null;
-$("text").oninput = () => {
-  updateCount();
+function detectLang() {
   if (!$("text").value.trim()) { st.langManual = false; $("langHint").classList.add("hidden"); return; }
   if (st.langManual) return;
   clearTimeout(detectTimer);
@@ -69,7 +62,7 @@ $("text").oninput = () => {
     if (!st.langManual && $("text").value.trim() && lang !== $("newLang").value) setNewLang(lang, true);
     else if (!st.langManual) showHint(true);
   }, 400);
-};
+}
 $("newLang").onchange = () => { st.langManual = true; setNewLang($("newLang").value, false); };
 $("newVoiceBtn").onclick = (e) => {
   e.stopPropagation();
@@ -83,79 +76,199 @@ $("newVoiceBtn").onclick = (e) => {
   });
 };
 
-/* ---------- Link → Artikel (Version 3.0) ---------- */
-let linkBusy = false;
-async function importLink(url) {
-  if (linkBusy) return;
-  url = (url || "").trim(); if (!url) return;
-  linkBusy = true; $("linkGo").disabled = true;
-  const card = $("linkCard"), done = heightFrom($("srcLink"));
-  card.classList.add("hidden");
-  $("linkStatus").innerHTML = `<span class="spin" style="display:inline-block;vertical-align:-2px"></span> Hole den Artikel …`;
-  done(360);
-  try {
-    const d = await readJson(await fetch("/api/import-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }));
-    $("text").value = d.text; $("title").value = d.title || "";
-    st.langManual = false; setNewLang(d.lang, true); updateCount();
-    const mins = Math.max(1, Math.round(d.text.length / 15 / 60)), chaps = (d.text.match(/^# /gm) || []).length;
-    $("linkMeta").textContent = [d.source, `ca. ${mins} Min. Hördauer`, chaps ? `${chaps} Kapitel` : ""].filter(Boolean).join(" · ");
-    $("linkTitle").textContent = d.title || d.source;
-    $("linkText").textContent = d.text.replace(/^# .*$/gm, "").trim().slice(0, 240) + "…";
-    const grow = heightFrom($("srcLink"));
-    $("linkStatus").textContent = ""; card.classList.remove("hidden"); grow(420); animateIn(card, "enter");
-  } catch (e) {
-    const grow = heightFrom($("srcLink"));
-    $("linkStatus").textContent = friendlyError(e); grow(360);
-  } finally { linkBusy = false; $("linkGo").disabled = false; }
-}
-$("linkForm").onsubmit = (e) => { e.preventDefault(); importLink($("linkUrl").value); };
-// Nur ein Link ins Textfeld eingefügt → Artikel holen statt die Adresse vorlesen
-$("text").addEventListener("paste", (e) => {
-  const t = (e.clipboardData?.getData("text") || "").trim();
-  if (/^https?:\/\/\S+$/.test(t) && !$("text").value.trim()) { e.preventDefault(); setSrc("link"); $("linkUrl").value = t; importLink(t); }
+/* ---------- Der Editor ---------- */
+const nt = makeEditor({
+  doc: $("ntDoc"), toc: $("ntToc"), kindP: $("ntP"), kindH: $("ntH"), undo: $("ntUndo"), redo: $("ntRedo"),
+  findBtn: $("ntFindBtn"), find: $("ntFind"), findQ: $("ntFindQ"), findR: $("ntFindR"), findN: $("ntFindN"), findAll: $("ntFindAll"),
+}, {
+  active: () => view === "new",
+  onChange: () => { $("text").value = nt.serialize(); updateCount(); detectLang(); draftSave(); lnRefresh(); },
+  onPaste: (e) => {                                       // nur ein Link in ein leeres Feld → Artikel holen statt Adresse
+    const t = (e.clipboardData?.getData("text/plain") || "").trim();
+    if (!$("text").value.trim() && isOnlyLink(t)) { importLink(t, false); return true; }
+    setTimeout(afterPaste, 0);                            // sonst einfügen lassen, dann schauen, ob Links drinstecken
+    return false;
+  },
 });
+/** Inhalt setzen (Datei, Link-Inhalt, Entwurf, Rundgang …) – Editor, Text-Spiegel und Zähler. */
+function ntSet(text, title) {
+  nt.render(text || "");
+  $("text").value = nt.serialize();
+  if (title !== undefined) $("title").value = title || "";
+  $("ntDoc").scrollTop = 0;
+  updateCount(); lnRefresh();
+}
+$("title").addEventListener("input", () => draftSave());
 
+/* ---------- Ersetzen mit Rückgängig, Lade-Fläche ---------- */
+/** Feld-Inhalt durch etwas Neues ersetzen (Datei, Link-Inhalt) – mit „Rückgängig“, wenn vorher Text da war. */
+function replaceField(title, text, msg) {
+  const prev = { title: $("title").value, text: $("text").value, orig: st.importOriginal };
+  lnClose(); ntSet(text, title); draftSave();
+  if (prev.text.trim()) {
+    toast(msg, false, { label: "Rückgängig", fn: () => {
+      st.importOriginal = prev.orig; $("ntOrig").classList.toggle("hidden", !prev.orig);
+      lnClose(); ntSet(prev.text, prev.title); draftSave(); detectLang();
+    } });
+  }
+}
+function busyShow(label, sub) {
+  $("busyLbl").textContent = label; $("busySub").textContent = sub || ""; $("ocrPages").textContent = "";
+  $("ocrFill").style.width = ""; $("ocrFill").classList.add("indet"); $("ocrCancel").classList.add("hidden");
+  const o = $("busyOv"); if (o.classList.contains("hidden")) { o.classList.remove("hidden"); animateIn(o, "enter"); }
+}
+function busyHide() {
+  const o = $("busyOv"); if (o.classList.contains("hidden") || o.dataset.closing) return;
+  o.dataset.closing = "1";
+  const done = () => { o.classList.add("hidden"); delete o.dataset.closing; };
+  if (o.animate && !reducedMotion.matches) o.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: EASE }).finished.then(done, done);
+  else done();
+}
+
+/* ---------- Links: nur ein Link → Artikel holen · ein Link im Text → hinspringen · mehrere → ruhiger Hinweis ---------- */
+const URL_RX = /\b(?:https?:\/\/|www\.)[^\s<>"'()[\]{}]+[^\s<>"'()[\]{}.,;:!?]/gi;
+const isOnlyLink = (t) => { const m = t.match(URL_RX); return !!m && m.length === 1 && m[0] === t; };
+function findLinks(text) { return [...text.matchAll(URL_RX)].map((m) => m[0]); }
+const ln = { links: [], i: 0, walk: false, focus: -1 };
+let linkBusy = false;
+async function fetchArticle(url) {
+  const u = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  return readJson(await fetch("/api/import-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: u }) }));
+}
+async function importLink(url, replacesText) {
+  if (linkBusy) return; linkBusy = true;
+  busyShow(replacesText ? "Inhalt wird geholt …" : "Link erkannt – Artikel wird geholt …",
+    replacesText ? "Ersetzt den Text im Feld – Rückgängig holt ihn zurück." : "Nur der Artikel: Werbung, Menüs und Cookie-Hinweise fliegen raus.");
+  try {
+    const d = await fetchArticle(url);
+    st.importOriginal = null; $("ntOrig").classList.add("hidden");
+    replaceField(d.title || "", d.text, "Ersetzt durch den Inhalt des Links");
+    st.langManual = false; setNewLang(d.lang, true);
+  } catch (e) { toastErr(e); }
+  finally { linkBusy = false; busyHide(); }
+}
+/** Bereiche (Range) aller Links im Editor, in Textreihenfolge – aus den Textknoten, ohne den Inhalt zu verändern. */
+function linkRanges() {
+  const out = [];
+  for (const blk of $("ntDoc").children) {
+    const nodes = [], tw = document.createTreeWalker(blk, NodeFilter.SHOW_TEXT);
+    let all = "";
+    while (tw.nextNode()) { nodes.push([tw.currentNode, all.length]); all += tw.currentNode.nodeValue; }
+    if (!nodes.length) continue;
+    const at = (pos) => { let k = nodes.length - 1; while (k > 0 && nodes[k][1] > pos) k--; return [nodes[k][0], pos - nodes[k][1]]; };
+    for (const m of all.matchAll(URL_RX)) {
+      const r = document.createRange();
+      try { r.setStart(...at(m.index)); r.setEnd(...at(m.index + m[0].length)); out.push(r); } catch {}
+    }
+  }
+  return out;
+}
+/** Markierung hinter dem Text: je Zeile des Links eine runde Fläche (wie die Wort-Box beim Lesen).
+ *  Beim Scrollen werden die Flächen nur verschoben (nicht neu angelegt) – sonst bricht das Pulsieren ab. */
+function lkPaint(pulse) {
+  const layer = $("lkLayer");
+  if (!ln.links.length) { layer.innerHTML = ""; return; }
+  const W = $("ntDoc").parentElement.getBoundingClientRect(), boxes = [];
+  linkRanges().forEach((r, k) => { for (const q of r.getClientRects()) if (q.width) boxes.push([k, q]); });
+  if (layer.children.length !== boxes.length) layer.innerHTML = boxes.map(() => '<i class="lk-box"></i>').join("");
+  boxes.forEach(([k, q], n) => {
+    const b = layer.children[n];
+    Object.assign(b.style, { left: `${q.left - W.left - 3}px`, top: `${q.top - W.top - 1}px`, width: `${q.width + 6}px`, height: `${q.height + 2}px` });
+    b.classList.toggle("cur", k === ln.focus);
+    if (k !== ln.focus) b.classList.remove("pulse");
+    else if (pulse) { b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse"); }
+  });
+}
+$("ntDoc").addEventListener("scroll", () => lkPaint(false));
+window.addEventListener("resize", () => { if (view === "new") lkPaint(false); });
+/** Zum Link k scrollen und ihn 3× pulsieren lassen (erst wenn das Scrollen steht). */
+function lnFocus(k) {
+  ln.focus = k;
+  const r = linkRanges()[k]; if (!r) return;
+  const doc = $("ntDoc"), q = r.getBoundingClientRect(), D = doc.getBoundingClientRect();
+  const top = Math.max(0, Math.min(doc.scrollHeight - doc.clientHeight, doc.scrollTop + (q.top - D.top) - doc.clientHeight * 0.35));
+  lkPaint(false);
+  if (reducedMotion.matches || Math.abs(top - doc.scrollTop) < 2) { doc.scrollTop = top; lkPaint(true); return; }
+  let done = false;
+  const go = () => { if (done) return; done = true; doc.removeEventListener("scrollend", go); lkPaint(true); };
+  doc.addEventListener("scrollend", go);
+  setTimeout(go, 700);                                     // ohne scrollend (ältere WebViews)
+  doc.scrollTo({ top, behavior: "smooth" });
+}
+function lnRender() {
+  const n = ln.links.length, calm = n > 1 && !ln.walk;
+  $("lnTitle").textContent = calm ? `${n} Links erkannt – werden als Text vorgelesen` : "In deinem Text steckt ein Link";
+  $("lnSub").textContent = calm ? "Sie bleiben einfach im Text stehen. Nur wenn du magst, gehst du sie einzeln durch." : ln.links[ln.i] || "";
+  if (calm) delete $("lnSub").dataset.noi18n; else $("lnSub").dataset.noi18n = "";   // Adresse nie übersetzen
+  $("lnCnt").textContent = n > 1 && ln.walk ? `Link ${ln.i + 1} von ${n}` : "";
+  $("lnWalk").classList.toggle("hidden", !calm);
+  $("lnActs").classList.toggle("hidden", calm);
+}
+function lnOpen() {
+  lnRender();
+  $("lnWrap").classList.add("open");
+  if (ln.links.length === 1 || ln.walk) setTimeout(() => lnFocus(ln.i), 120);   // erst aufklappen, dann springen
+  else { ln.focus = -1; lkPaint(false); }
+}
+function lnClose() {
+  ln.links = []; ln.i = 0; ln.walk = false; ln.focus = -1;
+  $("lnWrap").classList.remove("open"); lkPaint(false);
+}
+/** Nach dem Einfügen: Was steckt drin? (Nur beim Einfügen – beim Tippen springt nichts.) */
+function afterPaste() {
+  $("text").value = nt.serialize();
+  const links = findLinks($("text").value);
+  if (!links.length) { if (ln.links.length) lnClose(); return; }
+  Object.assign(ln, { links, i: 0, walk: false, focus: -1 });
+  lnOpen();
+}
+/** Text geändert: offene Markierung nachziehen bzw. Hinweis schließen, wenn kein Link mehr da ist. */
+function lnRefresh() {
+  if (!ln.links.length) return;
+  const links = findLinks($("text").value);
+  if (!links.length) return lnClose();
+  ln.links = links; ln.i = Math.min(ln.i, links.length - 1); lnRender(); lkPaint(false);
+}
+$("lnKeep").onclick = () => {                               // Link bleibt als Text (wird als Adresse ohne Pfad gelesen)
+  if (ln.walk && ln.i < ln.links.length - 1) { ln.i++; lnRender(); lnFocus(ln.i); return; }
+  lnClose();
+};
+$("lnFetch").onclick = () => { const l = ln.links[ln.i]; if (l) importLink(l, true); };
+$("lnWalk").onclick = () => { ln.walk = true; ln.i = 0; lnRender(); lnFocus(0); };
+$("lnClose").onclick = lnClose;
+
+/* ---------- Datei hineinziehen / wählen ---------- */
 async function importFile(f) {
-  setSrc("file");
-  $("fileStatus").innerHTML = `<span class="spin" style="display:inline-block;vertical-align:-2px"></span> Lese ${esc(f.name)} …`;
+  lnClose();
+  busyShow(`${f.name} · wird gelesen …`, "");
   try {
     const r = await fetch("/api/import", { method: "POST", body: f, headers: { "X-Filename": encodeURIComponent(f.name) } });
     let d = await readJson(r);
     if (d.ocr) {                                            // eingescannt → Texterkennung (Version 3.0)
-      $("fileStatus").textContent = "";
+      busyShow(`${f.name} · Text wird erkannt …`, "Läuft nur auf deinem Rechner, ohne Internet.");
       d = await ocrWait(d.ocr);
       if (!d) return;                                       // abgebrochen
     }
-    $("text").value = d.text;
-    $("title").value = d.title || f.name.replace(/\.[^.]+$/, "");
+    replaceField(d.title || f.name.replace(/\.[^.]+$/, ""), d.text, `Ersetzt durch „${f.name}“`);
     st.importOriginal = d.original || null;
+    $("ntOrig").classList.toggle("hidden", !st.importOriginal);
     const c = d.cleanup;                                    // Version 3.0: PDF aufgeräumt → kurz sagen, was
-    if (c && (c.kopf || c.seiten || c.getrennt || c.fussnoten || c.punkte || c.tabellen)) {
+    if (c && (c.kopf || c.seiten || c.getrennt || c.fussnoten || c.punkte || c.tabellen) && !$("toast").querySelector("button")) {
       toast("Aufgeräumt: " + [c.kopf && `${c.kopf} Kopf-/Fußzeilen`, c.seiten && `${c.seiten} Seitenzahlen`,
         c.getrennt && `${c.getrennt} getrennte Wörter`, c.fussnoten && `${c.fussnoten} Fußnoten ans Kapitelende`, c.punkte && `${c.punkte} Listenpunkte`, c.tabellen && `${c.tabellen} Tabellen übersprungen`].filter(Boolean).join(", "));
     }
     st.langManual = false;
     setNewLang(d.lang, true);
-    $("fileStatus").textContent = "";
-    setSrc("paste"); updateCount(); draftSave();
-  } catch (err) { $("fileStatus").textContent = friendlyError(err); }   // eigener Satz vom Server, übersetzbar
+  } catch (err) { toastErr(err); }                          // eigener Satz vom Server, übersetzbar
+  finally { busyHide(); }
 }
 let ocrJob = null;
 function ocrShow(job) {
-  const box = $("ocrBox"), pct = job && job.total ? (job.done / job.total) * 100 : 0;
-  if (job && box.classList.contains("hidden")) { const grow = heightFrom($("srcFile")); box.classList.remove("hidden"); grow(); animateIn(box, "enter"); }
-  if (!job) {
-    if (!box.classList.contains("hidden") && !box.dataset.closing) {
-      box.dataset.closing = "1";
-      collapseOut(box).then(() => {                         // danach zurücksetzen, damit sie beim nächsten Scan wieder aufgeht
-        box.classList.add("hidden"); box.getAnimations().forEach((x) => x.cancel());
-        box.style.overflow = box.style.pointerEvents = ""; delete box.dataset.closing; $("ocrFill").style.width = "0";
-      });
-    }
-    return;
-  }
+  if (!job) return;
+  $("ocrFill").classList.remove("indet");
   $("ocrPages").textContent = job.total ? `Seite ${job.done} von ${job.total}` : "";
-  $("ocrFill").style.width = `${pct}%`;
+  $("ocrFill").style.width = `${job.total ? (job.done / job.total) * 100 : 0}%`;
+  $("ocrCancel").classList.remove("hidden");
 }
 async function ocrWait(job) {
   ocrJob = job.id; ocrShow(job);
@@ -171,24 +284,58 @@ async function ocrWait(job) {
       if (job.status === "error") throw new Error(job.error);
       if (job.status === "cancelled") return null;
     }
-  } finally { if (ocrJob === job.id) ocrJob = null; setTimeout(() => ocrShow(null), 250); }
+  } finally { if (ocrJob === job.id) ocrJob = null; }
 }
 $("ocrCancel").onclick = () => {
   const id = ocrJob; if (!id) return;
-  ocrJob = null; ocrShow(null);
+  ocrJob = null; busyHide();
   api(`/api/import/ocr/${id}`, { method: "DELETE" }).catch(() => {});
-  $("fileStatus").textContent = "Texterkennung abgebrochen.";
+  toast("Texterkennung abgebrochen.");
 };
-$("pickFile").onclick = $("pickFile2").onclick = () => $("file").click();
+$("ntOrig").onclick = async () => {
+  if (!st.importOriginal) return;
+  if (!(await ask({ title: "Original wiederherstellen?", text: "Der Text wird durch das PDF ersetzt, wie es vor dem Aufräumen war – mit Kopfzeilen und Seitenzahlen.", ok: "Wiederherstellen" }))) return;
+  replaceField($("title").value, st.importOriginal, "Original wiederhergestellt");
+};
+$("pickFile2").onclick = () => $("file").click();
 $("file").onchange = (e) => { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ""; };
-const wrap = $("newWrap");
-wrap.addEventListener("dragover", (e) => { e.preventDefault(); $("srcFile").classList.add("drop-on"); $("srcPaste").classList.add("drop-on"); });
-wrap.addEventListener("dragleave", (e) => { if (!wrap.contains(e.relatedTarget)) { $("srcFile").classList.remove("drop-on"); $("srcPaste").classList.remove("drop-on"); } });
-wrap.addEventListener("drop", (e) => {
-  e.preventDefault(); $("srcFile").classList.remove("drop-on"); $("srcPaste").classList.remove("drop-on");
-  const f = e.dataTransfer.files[0]; if (!f) return;
-  importFile(f);
-  animateIn($("srcFile").querySelector("svg"), "plop");   // Datei-Symbol „plumpst“ einmal in die Fläche
+const card = $("srcPaste");
+const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+card.addEventListener("dragover", (e) => {
+  if (!isFileDrag(e)) return;                               // gezogener Text: normal ins Feld (editor.js)
+  e.preventDefault();
+  if (card.classList.contains("drag")) return;
+  card.classList.add("drag");
+  $("dropHint").textContent = $("text").value.trim() ? "Ersetzt den Text im Feld – mit Rückgängig holst du ihn zurück." : "Kapitel werden automatisch erkannt.";
+  $("dropOv").classList.remove("hidden"); animateIn($("dropOv"), "enter");
+});
+const dragEnd = () => { card.classList.remove("drag"); $("dropOv").classList.add("hidden"); };
+card.addEventListener("dragleave", (e) => { if (!card.contains(e.relatedTarget)) dragEnd(); });
+card.addEventListener("drop", (e) => {
+  if (!isFileDrag(e)) { setTimeout(afterPaste, 0); return; }   // Text hineingezogen → wie Einfügen
+  e.preventDefault(); dragEnd();
+  const f = e.dataTransfer.files[0]; if (f) importFile(f);
+});
+
+/* ---------- Diktieren: schwebender Knopf (Bauteil aus diktat.js) ---------- */
+let ntSel = null;                                           // Schreibmarke merken – der Klick auf den Knopf nimmt den Fokus
+$("dictBtn").addEventListener("pointerdown", () => {
+  const s = getSelection(); ntSel = s.rangeCount && $("ntDoc").contains(s.anchorNode) ? s.getRangeAt(0).cloneRange() : null;
+});
+micFab($("dictBtn"), {
+  lang: () => (st.langManual ? $("newLang").value : null),
+  onStart: () => lnClose(),
+  insert: (said, lang) => {                                 // als eigener Absatz an der Schreibmarke (sonst am Ende)
+    const doc = $("ntDoc"), p = document.createElement("p"); p.textContent = said;
+    let blk = ntSel?.startContainer; while (blk && blk.parentNode !== doc) blk = blk.parentNode;
+    if (doc.classList.contains("empty")) doc.replaceChildren(p);
+    else if (blk) blk.after(p); else doc.append(p);
+    const rg = document.createRange(); rg.selectNodeContents(p); rg.collapse(false);
+    doc.focus({ preventScroll: true }); const s = getSelection(); s.removeAllRanges(); s.addRange(rg);
+    p.scrollIntoView({ block: "nearest" });
+    if (!st.langManual && st.langs[lang]) setNewLang(lang, true);
+    nt.sync();
+  },
 });
 
 $("createBtn").onclick = async () => {
@@ -198,62 +345,15 @@ $("createBtn").onclick = async () => {
     const d = await api("/api/docs", { method: "POST", body: JSON.stringify({
       title: $("title").value, text: $("text").value, lang, voice: st.newVoice || st.defaults[lang],
       original: st.importOriginal || undefined }) });           // PDF: Original für „Original wiederherstellen“
-    st.importOriginal = null;
-    $("title").value = ""; $("text").value = ""; st.langManual = false; $("langHint").classList.add("hidden"); updateCount(); draftClear();
+    const fly = flyStart($("srcPaste"), d.title);       // Karte fliegt gleich in die Bibliothek (3.0.3)
+    st.importOriginal = null; $("ntOrig").classList.add("hidden");
+    lnClose(); ntSet("", ""); st.langManual = false; $("langHint").classList.add("hidden"); updateCount(); draftClear();
     st.libLand = { id: d.id, t: performance.now() };
     await refreshLibrary();
+    fly.to(d.id);
     openDoc(d.id);
   } catch (err) { toastErr(err); $("createBtn").disabled = false; }
 };
-
-/* ---------- Mikrofon / Diktat ---------- */
-let micStream = null;
-async function getMic() {
-  if (micStream && micStream.active) return micStream;
-  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-  return micStream;
-}
-function releaseMic() { micStream?.getTracks().forEach((t) => t.stop()); micStream = null; }
-function startRecorder(stream) {
-  const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"].find((m) => MediaRecorder.isTypeSupported(m));
-  const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
-  const parts = [];
-  rec.ondataavailable = (e) => e.data.size && parts.push(e.data);
-  const done = new Promise((res) => (rec.onstop = () => res(new Blob(parts, { type: rec.mimeType }))));
-  const t0 = Date.now();
-  rec.start(1000);
-  return { stop: () => { rec.stop(); return done; }, secs: () => (Date.now() - t0) / 1000 };
-}
-let dict = null;
-$("dictBtn").onclick = async () => {
-  const btn = $("dictBtn");
-  if (!dict) {
-    try { dict = startRecorder(await getMic()); }
-    catch (e) { reportClientError(`Mikrofon: ${e?.message || e}`); $("dictHint").textContent = "Mikrofon nicht verfügbar – bitte den Zugriff in den Systemeinstellungen erlauben."; return; }
-    btn.classList.add("on"); btn.setAttribute("aria-label", "Diktat beenden");
-    $("dictHint").textContent = "Aufnahme läuft – nochmal tippen zum Beenden.";
-    dict.timer = setInterval(() => ($("dictTime").textContent = mmss(dict.secs())), 250);
-    return;
-  }
-  clearInterval(dict.timer);
-  const blob = await dict.stop(); dict = null; releaseMic();
-  btn.classList.remove("on"); btn.disabled = true; btn.setAttribute("aria-label", "Diktat starten");
-  let first = true; try { first = !localStorage.getItem("vorleser.sttReady"); } catch {}
-  $("dictHint").textContent = first ? "Wandle in Text um … (beim ersten Mal wird das Sprachmodell geladen)" : "Wandle in Text um …";
-  try {
-    const headers = st.langManual ? { "X-Lang": $("newLang").value } : {};
-    const r = await fetch("/api/transcribe", { method: "POST", body: blob, headers });
-    const d = await readJson(r);
-    const ta = $("text");
-    ta.value = (ta.value.trim() ? ta.value.trimEnd() + "\n\n" : "") + d.text;
-    if (!st.langManual && st.langs[d.lang]) setNewLang(d.lang, true);
-    try { localStorage.setItem("vorleser.sttReady", "1"); } catch {}
-    updateCount(); setSrc("paste"); draftSave();
-    $("dictHint").textContent = "Tippen und losreden. Längere Pausen werden zu Absätzen. Läuft lokal mit Whisper.";
-  } catch (e) { $("dictHint").textContent = friendlyError(e); }
-  finally { btn.disabled = false; $("dictTime").textContent = "0:00"; }
-};
-
 
 /* Entwurf behalten: Text im Feld überlebt Schließen/Neustart (Tester-Rückmeldung, Version 3.0) */
 let draftT = 0;
@@ -271,17 +371,15 @@ function draftRestore() {
   if ($("text").value.trim()) return;
   try {
     const d = JSON.parse(localStorage.getItem("vorleser.draft") || "null");
-    if (d?.text) { $("title").value = d.title || ""; $("text").value = d.text; updateCount(); }
+    if (d?.text) ntSet(d.text, d.title || "");
   } catch {}
 }
 function draftClear() { clearTimeout(draftT); try { localStorage.removeItem("vorleser.draft"); } catch {} }
-$("text").addEventListener("input", draftSave);
-$("title").addEventListener("input", draftSave);
 /* Datei per Strg+V / ⌘V einfügen (im Explorer/Finder kopiert) – wie Hineinziehen */
 document.addEventListener("paste", (e) => {
   if (view !== "new") return;
   const f = e.clipboardData?.files?.[0];
   if (!f) return;
-  e.preventDefault();
+  e.preventDefault(); e.stopPropagation();
   importFile(f);
 }, true);

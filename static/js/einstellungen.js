@@ -171,7 +171,7 @@ function lexPlace(el, x, y) {
   el.style.top = `${Math.max(8, Math.min(innerHeight - h - 8, y))}px`;
   animateIn(el, "enter");
 }
-function lexClose() { ["lexMenu", "lexPop"].forEach((id) => $(id).classList.add("hidden")); }
+function lexClose() { ["lexMenu", "lexPop"].forEach((id) => softHide($(id))); }
 /** Menü öffnen: „So spricht man das aus …“ nur für kurze, einzeilige Stellen; Kopieren immer. */
 function lexMenuOpen(word, x, y) {
   Object.assign(lexPop, { word, x, y });
@@ -315,7 +315,7 @@ const REGION_ORDER = { de: ["DE", "AT", "CH"], en: ["US", "GB", "AU", "CA", "IE"
 const REGION_NAME = { DE: "Deutschland", AT: "Österreich", CH: "Schweiz", US: "USA", GB: "Großbritannien", AU: "Australien", CA: "Kanada", IE: "Irland", IN: "Indien", NZ: "Neuseeland", ZA: "Südafrika", SG: "Singapur", PH: "Philippinen", HK: "Hongkong", KE: "Kenia", NG: "Nigeria", TZ: "Tansania" };
 function renderVoiceLib() {
   // Ein Knopf: installiert → Aufnahme, sonst → Installation anbieten (während der Installation ausgeblendet)
-  $("newCloneBtn").classList.toggle("hidden", !(st.features.clone || st.features.cloneSetup) || csPolling);
+  toggleSoft($("newCloneBtn"), !!(st.features.clone || st.features.cloneSetup) && !csPolling);
   if (!st.features.clone && st.features.cloneSetup && !csPolling) cloneSetupPoll(true);
   $("libLang").innerHTML = Object.entries(st.langs).map(([k, n]) => `<button data-ll="${k}" class="${k === libLang ? "on" : ""}">${esc(n)}</button>`).join("");
   document.querySelectorAll("#libFilter [data-f]").forEach((b) => b.classList.toggle("on", b.dataset.f === libFilter));
@@ -460,10 +460,10 @@ function fillStorage(r, fresh) {
   // Modelle
   $("whisperSize").textContent = r.whisper.bytes ? fmtMB(r.whisper.bytes) : "–";
   $("whisperNote").textContent = r.whisper.bytes ? "lädt nach dem Entfernen beim nächsten Diktat neu" : "wird beim ersten Diktat geladen";
-  $("whisperRemove").classList.toggle("hidden", !(r.whisper.removable && r.whisper.bytes));
+  toggleSoft($("whisperRemove"), !!(r.whisper.removable && r.whisper.bytes));
   $("cloneSize").textContent = r.clone.installed ? fmtMB(r.clone.bytes) : "–";
   $("cloneState").textContent = r.clone.installed ? "installiert" : "nicht installiert · ca. 4,5 GB";
-  $("cloneRemove").classList.toggle("hidden", !(r.clone.installed && r.clone.removable));
+  toggleSoft($("cloneRemove"), !!(r.clone.installed && r.clone.removable));
   const names = st.voices.filter((v) => v.engine === "piper").map((v) => v.name);
   $("piperCount").textContent = names.length ? `${names.join(", ")} · springt ein, wenn offline` : "keine";
   $("piperSize").textContent = fmtMB(r.piper);
@@ -589,7 +589,7 @@ function csRender() {
   $("csArt").dataset.sub = s.phase === "model" ? String(frac < 1 / 3 ? 1 : frac < 2 / 3 ? 2 : 3) : "1";
   $("csPhase").textContent = CS_TITLE[s.phase] || "Eigene Stimme wird installiert";
   if (s.phase !== cs.tipPhase && s.phase !== "done") csTip();        // neuer Schritt → passender Hinweis sofort
-  $("csCancel").classList.toggle("hidden", s.phase === "done");
+  toggleSoft($("csCancel"), s.phase !== "done");
   // Zwischenschritt; bei längerem Stillstand erklären statt still zu hängen
   const preparing = s.phase === "model" && !(s.mb > 0);   // noch keine Daten – vorbereiten, nicht „langsam“
   let step = CS_STEP[`${s.phase}:${preparing ? "prepare" : s.step || ""}`] || CS_STEP[`${s.phase}:`] || "";
@@ -637,7 +637,7 @@ async function cloneSetupPoll(quiet = false) {
     csPolling = true;
     cs.s = s;
     if (s.now) cs.offset = Date.now() / 1000 - s.now;
-    $("newCloneBtn").classList.add("hidden");
+    toggleSoft($("newCloneBtn"), false);
     csRender();
     if (!cs.clockT) { cs.clockT = setInterval(csTick, 1000); cs.tipT = setInterval(csTip, 7000); }
     csTick();

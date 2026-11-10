@@ -123,57 +123,67 @@
         <div class="newwrap" id="newWrap">
           <div>
             <h1>Neuer Text</h1>
-            <p class="lead">Einfügen, Datei laden, einfach sprechen oder einen Link angeben. Kapitel und Sprache werden automatisch erkannt.</p>
+            <p class="lead">Schreiben, einfügen, diktieren – oder eine Datei bzw. einen Link hineinziehen.</p>
           </div>
-          <div class="seg" role="tablist" aria-label="Quelle">
-            <button role="tab" data-src="paste" class="on"><svg class="i" style="width:16px;height:16px"><use href="#i-doc"/></svg>Einfügen</button>
-            <button role="tab" data-src="file"><svg class="i" style="width:16px;height:16px"><use href="#i-file"/></svg>Datei</button>
-            <button role="tab" data-src="dict" id="dictTab"><svg class="i" style="width:16px;height:16px"><use href="#i-mic"/></svg>Diktieren</button>
-            <button role="tab" data-src="link"><svg class="i" style="width:16px;height:16px"><use href="#i-link"/></svg>Link</button>
-          </div>
-
-          <div class="card" id="srcPaste">
+          <!-- Ein Feld für alles (3.0.3, Board „Neuer Text · ein Eingabefeld“): schreiben, einfügen, Datei hineinziehen, Link
+               einfügen; Diktieren über den schwebenden Knopf unten rechts. Keine Reiter mehr. -->
+          <div class="card ed-card ecard" id="srcPaste">
             <label class="sr" for="title">Titel</label>
             <input class="title-in" id="title" placeholder="Titel (optional)">
-            <label class="sr" for="text">Text</label>
-            <textarea id="text" placeholder="Text hier einfügen … Kapitel kannst du mit „# Überschrift“ markieren."></textarea>
-            <div class="dropline"><svg class="i"><use href="#i-upload"/></svg>EPUB, PDF, TXT, Markdown oder HTML hierher ziehen oder <button id="pickFile2">Datei wählen</button></div>
-          </div>
-
-          <div class="dropzone hidden" id="srcFile">
-            <svg class="i" style="width:34px;height:34px"><use href="#i-upload"/></svg>
-            <b>Datei hierher ziehen</b>
-            <span>EPUB, PDF, TXT, Markdown oder HTML – Kapitel werden automatisch erkannt</span>
-            <button class="btn" id="pickFile">Datei wählen</button>
-            <span id="fileStatus"></span>
-            <div class="ocr-box hidden" id="ocrBox" role="status">
-              <div class="ocr-top"><b>Eingescanntes PDF – Text wird erkannt</b><span id="ocrPages"></span></div>
-              <div class="ocr-bar"><i id="ocrFill"></i></div>
-              <div class="ocr-foot"><span>Läuft nur auf deinem Rechner, ohne Internet.</span><button class="linkbtn" id="ocrCancel">Abbrechen</button></div>
+            <div class="ed-tools" role="toolbar" aria-label="Formatieren">
+              <div class="seg ed-kind" id="ntKind" role="radiogroup" aria-label="Zeile ist">
+                <button id="ntP" role="radio" aria-checked="true" class="on" data-tip="Normaler Absatz">Text</button><button id="ntH" role="radio" aria-checked="false" data-tip="Beginnt ein neues Kapitel">Überschrift</button>
+              </div>
+              <span class="ed-sep"></span>
+              <button class="ed-ib" id="ntUndo" aria-label="Rückgängig" data-tip="Rückgängig · ⌘Z"><svg class="i"><use href="#i-undo"/></svg></button>
+              <button class="ed-ib" id="ntRedo" aria-label="Wiederholen" data-tip="Wiederholen · ⇧⌘Z"><svg class="i"><use href="#i-redo"/></svg></button>
+              <span class="ed-sep"></span>
+              <button class="ed-ib wide" id="ntFindBtn" aria-pressed="false"><svg class="i"><use href="#i-search"/></svg>Suchen &amp; ersetzen</button>
+              <span class="spacer"></span>
+              <button class="ed-ib wide hidden" id="ntOrig" data-tip="PDF so, wie es vor dem Aufräumen war">Original wiederherstellen</button>
             </div>
+            <div class="ed-find" id="ntFind">
+              <div class="ed-find-in">
+                <input id="ntFindQ" placeholder="Suchen" aria-label="Suchen"><input id="ntFindR" placeholder="Ersetzen durch …" aria-label="Ersetzen durch">
+                <span class="ed-find-n" id="ntFindN"></span><button class="btn sm" id="ntFindAll">Alle ersetzen</button>
+              </div>
+            </div>
+            <div class="ln-wrap" id="lnWrap"><div class="ln-in">
+              <div class="lnote" id="lnNote" role="status">
+                <span class="ln-ic" aria-hidden="true"><svg class="i"><use href="#i-link"/></svg></span>
+                <div class="ln-tx"><b id="lnTitle"></b><span id="lnSub" data-noi18n></span></div>
+                <span class="ln-cnt" id="lnCnt"></span>
+                <button class="btn sm hidden" id="lnWalk">Links einzeln durchgehen</button>
+                <span class="ln-acts" id="lnActs"><button class="btn sm" id="lnKeep">Link so vorlesen</button><button class="btn sm primary" id="lnFetch">Inhalt holen · ersetzt den Text</button></span>
+                <button class="ib ln-x" id="lnClose" aria-label="Hinweis schließen"><svg class="i"><use href="#i-x"/></svg></button>
+              </div>
+            </div></div>
+            <div class="ed-body nt-body" id="edArea">
+              <nav class="ed-toc" id="ntToc" aria-label="Gliederung"></nav>
+              <div class="nt-docwrap">
+                <div class="ed-doc nt-doc" id="ntDoc" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Text" data-noi18n
+                     data-ph="Schreib los oder füge Text ein – eine Datei oder einen Link kannst du einfach hier hineinziehen oder einfügen."></div>
+                <div class="lk-layer" id="lkLayer" aria-hidden="true"></div>
+              </div>
+              <div class="dropov hidden" id="dropOv" aria-hidden="true">
+                <svg class="i"><use href="#i-upload"/></svg>
+                <b>Datei loslassen</b>
+                <span id="dropHint"></span>
+              </div>
+              <div class="dropov calm hidden" id="busyOv" role="status">
+                <b id="busyLbl"></b>
+                <div class="ocr-bar"><i id="ocrFill"></i></div>
+                <span id="busySub"></span>
+                <span id="ocrPages"></span>
+                <button class="linkbtn hidden" id="ocrCancel">Abbrechen</button>
+              </div>
+              <button class="fmic glass" id="dictBtn" aria-label="Diktieren"><span class="fm-dot" aria-hidden="true"></span><svg class="i"><use href="#i-mic"/></svg><span class="fm-lbl" id="dictLbl">Diktieren</span></button>
+            </div>
+            <!-- Simon 10.11.: „Datei wählen“-Knopf zog zu viel Aufmerksamkeit → das Symbol selbst ist der Knopf -->
+            <div class="dropline"><button class="ib dl-pick" id="pickFile2" aria-label="Datei wählen" data-tip="Datei wählen"><svg class="i"><use href="#i-upload"/></svg></button>EPUB, PDF, TXT, Markdown oder HTML hierher ziehen<span class="spacer"></span><span class="dl-note">Links werden automatisch erkannt</span></div>
+            <input type="hidden" id="text">
           </div>
           <input type="file" id="file" accept=".epub,.pdf,.txt,.md,.markdown,.html,.htm" hidden>
-
-          <div class="dict hidden" id="srcDict">
-            <button class="mic" id="dictBtn" aria-label="Diktat starten"><svg class="i"><use href="#i-mic"/></svg></button>
-            <span class="time" id="dictTime">0:00</span>
-            <span id="dictHint">Tippen und losreden. Längere Pausen werden zu Absätzen. Läuft lokal mit Whisper.</span>
-          </div>
-
-          <div class="linksrc hidden" id="srcLink">
-            <form class="linkrow" id="linkForm">
-              <label class="sr" for="linkUrl">Link zum Artikel</label>
-              <input id="linkUrl" type="url" inputmode="url" placeholder="https://… Link zu einem Artikel einfügen" autocomplete="off" spellcheck="false">
-              <button class="btn primary" id="linkGo" type="submit">Artikel holen</button>
-            </form>
-            <div class="linkstat" id="linkStatus"></div>
-            <div class="linkcard hidden" id="linkCard">
-              <span class="lk-meta" id="linkMeta"></span>
-              <b class="lk-title" id="linkTitle" data-noi18n></b>
-              <p class="lk-text" id="linkText" data-noi18n></p>
-              <span class="lk-ok">Nur der Artikel – Werbung, Menüs und Cookie-Hinweise entfernt</span>
-            </div>
-          </div>
 
           <div class="formrow">
             <select class="pill" id="newLang" aria-label="Sprache"></select>
@@ -715,6 +725,8 @@
 <script src="/js/basis.js"></script>
 <script src="/js/ansichten.js"></script>
 <script src="/js/stimmen.js"></script>
+<script src="/js/editor.js"></script>
+<script src="/js/diktat.js"></script>
 <script src="/js/neuer-text.js"></script>
 <script src="/js/dokument.js"></script>
 <script src="/js/player.js"></script>

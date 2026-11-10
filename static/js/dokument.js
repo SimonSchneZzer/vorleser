@@ -29,7 +29,7 @@ function showDoc(doc) {
   setVoicePill($("voiceAv"), $("voiceLbl"), doc.voice);
   $("chapterBtn").classList.toggle("hidden", !doc.chapters.length);
   posRender();
-  $("ticks").innerHTML = doc.chapters.filter((c) => c.chunk > 0).map((c) => `<span class="tick" style="left:${(c.chunk / doc.chunks.length) * 100}%"></span>`).join("");
+  $("ticks").innerHTML = doc.chapters.filter((c) => c.chunk > 0).map((c) => `<span class="tick" data-c="${c.chunk}" style="left:${(c.chunk / doc.chunks.length) * 100}%"></span>`).join("");
 
   const box = $("docText"); box.innerHTML = "";
   const frag = document.createDocumentFragment();
@@ -82,9 +82,9 @@ function renderDocOver() {
 function posRender() {
   if (!st.doc) return;
   const n = st.doc.chunks.length, i = Math.min(st.idx, n - 1);
-  $("posL").textContent = `Abschnitt ${i + 1} von ${n}`;
+  rollText($("posL"), `Abschnitt ${i + 1} von ${n}`);
   const rest = st.doc.chunks.slice(i).reduce((a, c) => a + c.text.length, 0) / 15 / (+$("rate").value || 1);
-  $("posR").textContent = rest < 30 ? "fast fertig" : `noch ca. ${fmtDuration(rest)}`;
+  rollText($("posR"), rest < 30 ? "fast fertig" : `noch ca. ${fmtDuration(rest)}`);
 }
 function fmtDuration(sec) { const m = Math.max(1, Math.round(sec / 60)); return m < 60 ? `${m} Min.` : `${Math.floor(m / 60)} Std. ${m % 60 ? `${m % 60} Min.` : ""}`.trim(); }
 function currentChapter() {
@@ -225,7 +225,7 @@ audio.addEventListener("ended", () => {
   if (window.recapNext?.()) return;                       // 3.0: Wiederholung vorbei → genau an der alten Stelle weiter
   const next = st.idx < st.doc.chunks.length - 1 ? st.idx + 1 : st.doc.chunks.length;
   if (next < st.doc.chunks.length) playFrom(next);
-  else { st.wantPlay = false; setPlayIcon(false); saveProgress(true, 0, 1); setStatus("Fertig gehört"); updateBar(); refreshLibrary(); }
+  else { st.wantPlay = false; setPlayIcon(false); saveProgress(true, 0, 1); toast("Fertig gehört"); updateBar(); refreshLibrary(); }
 });
 audio.addEventListener("timeupdate", () => { updateBar(); if (st.wantPlay && Date.now() - st.lastSave > SAVE_EVERY_MS) saveProgress(); });
 audio.addEventListener("play", startTick);

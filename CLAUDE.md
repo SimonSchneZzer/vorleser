@@ -27,7 +27,7 @@ ergänzen** (Datum, Kontext, Entscheidung, Folgen) – auch bei Bugfixes, deren 
 | `uninstaller.py` | Deinstallieren aus der App (Helfer nach dem Beenden, optional Daten behalten) |
 | `bugreport.py` | „Fehler melden“: technische Infos; Versand vom Formular an Web3Forms (Key, keine Adresse) |
 | `settings.py` | `data/settings.json` mit Validierung |
-| `static/` | `index.html`, `js/*.js` (Oberfläche in zehn normalen Skripten, kein Build; Reihenfolge in `index.html`), `app.css`, `i18n.js` |
+| `static/` | `index.html`, `js/*.js` (Oberfläche in normalen Skripten, kein Build; Reihenfolge in `index.html`; Bauteile: `editor.js` Editor, `diktat.js` schwebender Diktier-Knopf), `app.css`, `i18n.js` |
 | `packaging/` | PyInstaller-Spec, `make_dmg.sh`, Inno-Setup (`vorleser.iss`), Icon (`icon.png` aus `make_icon.py`) |
 | `.github/workflows/build.yml` | Tests → Build Mac (.dmg) + Windows (Setup) → bei Tag `v*` Veröffentlichung |
 

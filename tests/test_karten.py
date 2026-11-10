@@ -101,13 +101,14 @@ def test_link_reiter_im_browser(api, monkeypatch):
 
     async def sz(c):
         await _neu_laden(c)
-        await c.js("showNew(); setSrc('link'); $('linkUrl').value = 'https://beispiel.at/radwege'; $('linkForm').requestSubmit(); 1")
+        # 3.0.3: kein Link-Reiter mehr – nur ein Link eingefügt → Artikel wird geholt und landet im einen Feld
+        await c.js("showNew(); importLink('https://beispiel.at/radwege', false); 1")   # wie: nur ein Link eingefügt
         for _ in range(30):
             await asyncio.sleep(0.2)
-            if await c.js("!$('linkCard').classList.contains('hidden')"):
+            if (await c.js("$('text').value")).startswith("Die Stadt"):
                 break
-        r = await c.js("({ title: $('linkTitle').textContent, meta: $('linkMeta').textContent, text: $('text').value.slice(0, 40), btn: $('createBtn').disabled })")
-        assert r["title"] == "Zwölf neue Radwege" and r["meta"].startswith("beispiel.at") and r["text"].startswith("Die Stadt") and not r["btn"]
+        r = await c.js("({ title: $('title').value, text: $('text').value.slice(0, 40), btn: $('createBtn').disabled, busy: !$('busyOv').classList.contains('hidden') })")
+        assert r["title"] == "Zwölf neue Radwege" and r["text"].startswith("Die Stadt") and not r["btn"], r
     _im_browser(api, sz)
 
 
@@ -272,6 +273,39 @@ def test_lesezeichen_im_browser(api):
         await c.js("document.querySelector('.bm-mark').click(); 1"); await asyncio.sleep(0.4)
         await c.js("$('bmPopDel').click(); 1"); await asyncio.sleep(0.6)
         assert await c.js("st.doc.bookmarks.length") == 0
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_lesezeichen_symbol_bleibt_beim_satz(api):
+    """Satz beginnt mitten in der Zeile, geht über mehrere Zeilen: Maus von seiner letzten Zeile nach links in den Rand
+    und hoch zum Symbol → durch die Lücken zwischen den Zeilen darf das Symbol nicht zum vorigen Satz springen."""
+    satz = "Bhasin und Kaynia zeigen die Anwendung einer dynamischen Analyse an einem siebenhundert Meter hohen Hang, um mögliche Felsvolumen abzuschätzen, die bei einem Versagen abgehen könnten. "
+    _, d = api.json("POST", "/api/docs", {"title": "Hang", "text": ("Kurzer Satz davor. " + satz * 2) * 4})
+
+    async def sz(c):
+        await c.cmd("Emulation.setDeviceMetricsOverride", width=1280, height=800, deviceScaleFactor=1, mobile=False)
+        await _neu_laden(c)
+        await c.js(f"localStorage.setItem('vorleser.bmHint', '1'); openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.8)
+        ziel = await c.js("""(() => { const L = $('docText').getBoundingClientRect().left;
+            const i = st.spans.findIndex((s) => { const r = s.getClientRects(); return r.length >= 3 && r[0].left > L + 40 && r[r.length - 1].bottom < innerHeight - 140; });
+            const r = st.spans[i].getClientRects(); return { i, L, x: r[r.length - 1].left + 60, y: (r[r.length - 1].top + r[r.length - 1].bottom) / 2 }; })()""")
+        assert ziel["i"] > 0
+        await c.cmd("Input.dispatchMouseEvent", type="mouseMoved", x=ziel["x"], y=ziel["y"]); await asyncio.sleep(0.1)
+        assert await c.js("bmState.hoverI") == ziel["i"]
+        await asyncio.sleep(0.35)
+        hx, hy = await c.js("(() => { const r = $('bmHover').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()")
+        # schräg nach links oben zum Symbol, mit Zittern wie am Trackpad (jeder dritte Schritt kurz 2 px nach rechts),
+        # über den vorigen Satz in der gemeinsamen ersten Zeile und durch die Lücken zwischen den Zeilen
+        n = 60
+        for k in range(1, n + 1):
+            x = ziel["x"] + (hx - ziel["x"]) * k / n + (2 if k % 3 == 0 else 0)
+            y = ziel["y"] + (hy - ziel["y"]) * k / n
+            await c.cmd("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
+            assert await c.js("bmState.hoverI") == ziel["i"], f"Symbol sprang bei x={x:.0f}, y={y:.0f}"
     try:
         _im_browser(api, sz)
     finally:
@@ -531,7 +565,7 @@ def test_texterkennung_im_browser(api, monkeypatch):
                 break
             await asyncio.sleep(0.1)
         assert await c.js("$('ocrPages').textContent") == "Seite 1 von 3"
-        assert await c.js("!$('ocrBox').classList.contains('hidden')")
+        assert await c.js("!$('busyOv').classList.contains('hidden')")          # 3.0.3: Fortschritt über dem Feld
         gate.set()
         for _ in range(40):
             if (await c.js("$('text').value")).startswith("Gregor"):
@@ -539,8 +573,8 @@ def test_texterkennung_im_browser(api, monkeypatch):
             await asyncio.sleep(0.1)
         assert (await c.js("$('text').value")).startswith("Gregor Samsa")
         await asyncio.sleep(0.8)
-        assert await c.js("$('ocrBox').classList.contains('hidden')")
-        await c.js("$('text').value = ''; showView('read'); 1")
+        assert await c.js("$('busyOv').classList.contains('hidden')")
+        await c.js("ntSet('', ''); showView('read'); 1")
     _im_browser(api, sz)
 
 
@@ -620,10 +654,10 @@ def test_offline_stimme_nur_auf_klick(api):
     async def sz(c):
         await _neu_laden(c)
         await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.5)
-        await c.js("st.wantPlay = true; st.loadedIdx = -1; st.loadSince = Date.now() - 1000; st.waitSince = Date.now() - 7000; statusSt.html = ''; updateStatus(); 1")
+        await c.js("st.wantPlay = true; st.loadedIdx = -1; st.loadSince = Date.now() - 1000; st.waitSince = Date.now() - 7000; statusSt.html = ''; statusSt.closed = ''; updateStatus(); 1")
         await asyncio.sleep(0.4)
-        assert await c.js("!!document.querySelector('#status [data-offline]')")
-        await c.js("document.querySelector('#status [data-offline]').click(); 1")
+        assert await c.js("!!document.querySelector('#stToast [data-offline]')")
+        await c.js("document.querySelector('#stToast [data-offline]').click(); 1")
         for _ in range(200):                     # erster Piper-Abschnitt lädt das Modell (CI-Rechner: mehrere Sekunden)
             if await c.js("!!st.cache.get(st.idx)?.used"):
                 break
@@ -803,7 +837,7 @@ def test_platzhalter_in_textfeldern_werden_uebersetzt(api):
         try:
             await _neu_laden(c)
             assert (await c.js("$('bugMsg').placeholder")).startswith("e.g. When exporting")
-            assert (await c.js("$('text').placeholder")).startswith("Paste text here")
+            assert (await c.js("$('ntDoc').dataset.ph")).startswith("Start writing")   # 3.0.3: Editor-Platzhalter
         finally:
             api.json("PATCH", "/api/settings", {"uiLang": "de"}); await c.js("localStorage.setItem('vorleser.ui', 'de'); 1")
     _im_browser(api, sz)
@@ -852,3 +886,79 @@ def test_kuerzel_aendern(api):
         assert api.json("GET", "/api/settings")[1]["hotkey"]["code"] == "KeyK"
     finally:
         api.json("PATCH", "/api/settings", {"hotkey": {"code": "KeyV", "ctrl": True, "alt": True, "shift": False, "meta": False}})
+
+
+# --------------------------------------------------------------------------- #
+# Neuer Text · ein Feld (3.0.3, Board „Neuer Text · ein Eingabefeld“)
+# --------------------------------------------------------------------------- #
+@pytest.mark.browser
+def test_neuer_text_ein_feld_link_einfuegen_holt_artikel(api, monkeypatch):
+    """Nur ein Link in ein leeres Feld eingefügt (echtes paste-Ereignis) → Artikel wird geholt, kein Link-Text im Feld."""
+    import importers
+    monkeypatch.setattr(importers, "_fetch", lambda url: (ARTIKEL, "utf-8"))
+
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js("showNew(); ntSet('', ''); 1"); await asyncio.sleep(0.3)
+        assert await c.js("document.activeElement.id") == "ntDoc"          # Cursor blinkt sofort im Feld
+        await c.js("""(() => { const dt = new DataTransfer(); dt.setData('text/plain', 'https://beispiel.at/radwege');
+            $('ntDoc').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); return 1; })()""")
+        for _ in range(30):
+            await asyncio.sleep(0.2)
+            if (await c.js("$('text').value")).startswith("Die Stadt"):
+                break
+        assert (await c.js("$('text').value")).startswith("Die Stadt") and await c.js("$('title').value") == "Zwölf neue Radwege"
+        assert "https://" not in await c.js("$('text').value")
+        await c.js("ntSet('', ''); 1")
+    _im_browser(api, sz)
+
+
+@pytest.mark.browser
+def test_neuer_text_links_im_text(api):
+    """Ein Link im Text: Hinweis, Sprung, Pulsieren, „Link so vorlesen“ schließt. Mehrere: ruhiger Hinweis ohne Pulsieren,
+    „Links einzeln durchgehen“ → „Link 1 von 2“. Ersetzen zeigt „Rückgängig“ und holt den Text zurück."""
+    lang = "Ein langer Absatz zum Scrollen. " * 60
+    ein = f"# Notizen\n\n{lang}\n\nArtikel: https://beispiel.at/radwege – bitte lesen.\n\n{lang}"
+
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js(f"showNew(); ntSet({ein!r}, 'Notizen'); afterPaste(); 1"); await asyncio.sleep(1.0)
+        r = await c.js("""({ open: $('lnWrap').classList.contains('open'), title: $('lnTitle').textContent, sub: $('lnSub').textContent,
+            pulse: !!document.querySelector('#lkLayer .lk-box.pulse'), scrolled: $('ntDoc').scrollTop > 50,
+            acts: !$('lnActs').classList.contains('hidden') })""")
+        assert r == {"open": True, "title": "In deinem Text steckt ein Link", "sub": "https://beispiel.at/radwege",
+                     "pulse": True, "scrolled": True, "acts": True}, r
+        await c.js("$('lnKeep').click(); 1"); await asyncio.sleep(0.2)
+        assert await c.js("!$('lnWrap').classList.contains('open') && !$('lkLayer').children.length")
+        await c.js(f"ntSet({ein!r} + '\\n\\nFolien: https://beispiel.org/folien', 'Notizen'); afterPaste(); 1"); await asyncio.sleep(0.8)
+        r = await c.js("""({ title: $('lnTitle').textContent, pulse: !!document.querySelector('#lkLayer .pulse'),
+            walk: !$('lnWalk').classList.contains('hidden'), acts: !$('lnActs').classList.contains('hidden') })""")
+        assert r == {"title": "2 Links erkannt – werden als Text vorgelesen", "pulse": False, "walk": True, "acts": False}, r
+        await c.js("$('lnWalk').click(); 1"); await asyncio.sleep(0.8)
+        assert await c.js("$('lnCnt').textContent") == "Link 1 von 2"
+        await c.js("$('lnKeep').click(); 1"); await asyncio.sleep(0.2)
+        assert await c.js("$('lnCnt').textContent") == "Link 2 von 2"
+        await c.js("lnClose(); replaceField('Neu', 'Ganz anderer Text.', 'Ersetzt'); 1"); await asyncio.sleep(0.2)
+        assert await c.js("$('text').value") == "Ganz anderer Text."
+        await c.js("$('toast').querySelector('button').click(); 1"); await asyncio.sleep(0.2)
+        assert (await c.js("$('text').value")).startswith("# Notizen") and await c.js("$('title').value") == "Notizen"
+        await c.js("ntSet('', ''); 1")
+    _im_browser(api, sz)
+
+
+@pytest.mark.browser
+def test_neuer_text_editor_ueberschrift_und_diktierknopf(api):
+    """Editor wie „Text bearbeiten“: „Überschrift“ macht die Zeile zum Kapitel (Text-Spiegel „# …“, Gliederung);
+    Diktier-Knopf ist das Bauteil aus diktat.js (Glas, Beschriftung „Diktieren“)."""
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js("showNew(); ntSet('Kapitel eins\\n\\nEin Absatz.', ''); 1"); await asyncio.sleep(0.3)
+        await c.js("""(() => { const p = $('ntDoc').firstElementChild, r = document.createRange(); r.selectNodeContents(p); r.collapse(true);
+            $('ntDoc').focus(); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $('ntH').click(); return 1; })()""")
+        await asyncio.sleep(0.2)
+        assert await c.js("$('text').value") == "# Kapitel eins\n\nEin Absatz."
+        assert "Kapitel eins" in (await c.js("$('ntToc').textContent"))
+        r = await c.js("({ glass: $('dictBtn').classList.contains('glass'), lbl: $('dictLbl').textContent, inField: $('edArea').contains($('dictBtn')) })")
+        assert r == {"glass": True, "lbl": "Diktieren", "inField": True}, r
+        await c.js("ntSet('', ''); 1")
+    _im_browser(api, sz)

@@ -135,24 +135,30 @@ function failPlay(msg, retry) {
   st.lastError = { msg, retry };
   renderPlay(); updateStatus();
 }
-// Statuszeile: nur neu zeichnen, wenn sich wirklich etwas ändert (vorher bei jedem Aufruf innerHTML neu →
-// Flackern). Kurze Zwischenzustände (< 150 ms, z. B. beim Abschnittswechsel) werden geschluckt; ein neuer
-// Text gleitet einmal kurz herein.
-const statusSt = { html: "", pending: "", timer: 0 };
-function setStatus(html, now = false) {
-  statusSt.pending = html;
-  clearTimeout(statusSt.timer);
-  if (html === statusSt.html) return;
+// Status als Toast (3.0.3, Simon): die Zeile unter dem Titel ist weg – sie verwirrte („4 Abschnitte bereit“). Nur was
+// zählt, erscheint über dem Player: Vorbereiten/Puffern (mit „Offline-Stimme“), Online-Stimme hängt, Fehler. Bleibt,
+// bis es vorbei ist oder ✕ (dann erst wieder bei einem anderen Zustand). Gleicher Inhalt → nichts neu zeichnen.
+const stBox = document.createElement("div");
+stBox.id = "stToast"; stBox.className = "toast st-toast"; stBox.setAttribute("role", "status"); stBox.setAttribute("aria-live", "polite");
+document.body.append(stBox);
+const statusSt = { html: "", key: "", closed: "", pending: null, timer: 0, lifeT: 0 };
+/** html leer → ausblenden. opts: key (Zustand, für ✕), delay (erst nach so vielen ms zeigen), life (ms, sonst bleibt er). */
+function setStatus(html, { key = html, delay = 0, life = 0 } = {}) {
+  if (key !== statusSt.key && key !== statusSt.closed) statusSt.closed = "";
+  if (key && key === statusSt.closed) html = "";
+  if (html === statusSt.html && key === statusSt.key) { clearTimeout(statusSt.timer); statusSt.pending = null; return; }
+  if (statusSt.pending === html) return;               // schon unterwegs (Verzögerung läuft) – nicht neu starten
+  clearTimeout(statusSt.timer); statusSt.pending = null;
   const apply = () => {
-    const el = $("status"), first = !statusSt.html, h = statusSt.pending;
-    if (h === statusSt.html) return;
-    statusSt.html = h;
-    el.innerHTML = h;
-    if (!first && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap");
-    }
+    statusSt.pending = null;
+    clearTimeout(statusSt.lifeT);
+    statusSt.html = html; statusSt.key = key;
+    if (!html) { stBox.classList.remove("show"); document.body.classList.remove("st-on"); return; }
+    stBox.innerHTML = `<span class="st-msg">${html}</span><button class="st-x" data-stx aria-label="Hinweis schließen">${icon("i-x", "i", "width:14px;height:14px")}</button>`;
+    stBox.classList.add("show"); document.body.classList.add("st-on");
+    if (life) statusSt.lifeT = setTimeout(() => { statusSt.closed = key; setStatus("", { key }); }, life);
   };
-  if (now || !statusSt.html) apply(); else statusSt.timer = setTimeout(apply, 150);
+  if (html && delay && !statusSt.html) { statusSt.pending = html; statusSt.timer = setTimeout(apply, delay); } else apply();
 }
 /** Player-Zeile (3.0.1): auf der Textseite das aktuelle Kapitel (Titel steht oben), sonst der Titel als Link zum Text. */
 function nowSync() {
@@ -174,39 +180,27 @@ function setOffline(on) {
   clearCache();
   if (play) playFrom(st.idx, frac); else updateStatus();
 }
-$("status").addEventListener("click", (e) => {
-  if (e.target.closest("[data-offline]")) setOffline(true);
+stBox.addEventListener("click", (e) => {
+  if (e.target.closest("[data-stx]")) { statusSt.closed = statusSt.key; setStatus("", { key: statusSt.key }); }
+  else if (e.target.closest("[data-offline]")) setOffline(true);
   else if (e.target.closest("[data-online]")) setOffline(false);
+  else if (e.target.closest("[data-bug]")) openBug(st.lastError?.msg || "");
+  else if (e.target.closest("[data-retry]")) { const r = st.lastError?.retry; st.lastError = null; r ? r() : play(); }
 });
 function updateStatus(loading = false) {
-  if (!st.doc) return;
-  if (st.doc.demo) return setStatus(`<span class="dot"></span><span>Beispieltext</span>`);
+  if (!st.doc || st.doc.demo) return setStatus("");
+  const offBtn = canOffline() ? ` <button class="tbtn" data-offline>Offline-Stimme</button>` : "";
   if (st.lastError && !st.wantPlay) {
-    statusSt.html = "";                       // Knopf braucht frische Elemente + Handler
-    const off = canOffline() ? ` · <button class="linkbtn" data-offline>Offline-Stimme nutzen</button>` : "";
-    setStatus(`<span class="status-err">${icon("i-x", "i", "width:14px;height:14px")}<span>${esc(st.lastError.msg)}</span> · <button class="linkbtn" id="retryBtn">Erneut versuchen</button>${off}</span>`);
-    $("retryBtn").onclick = () => { const r = st.lastError?.retry; st.lastError = null; r ? r() : play(); };
-    return;
+    const bugBtn = typeof bug !== "undefined" && bug.info?.enabled ? ` <button class="tbtn" data-bug>Fehler melden</button>` : "";
+    return setStatus(`<span class="status-err">${icon("i-x", "i", "width:14px;height:14px")}<span>${esc(st.lastError.msg)}</span></span> <button class="tbtn" data-retry>Erneut versuchen</button>${offBtn}${bugBtn}`, { key: "err" });
   }
-  // Eine Meldung, ein Punkt (3.0.1): grau = alles gut, gelb = es wird gerade etwas getan, rot nur bei Fehlern (oben)
-  let ready = 0; for (let i = st.idx + 1; i < st.doc.chunks.length; i++) if (isReady(i)) ready++;   // alle kommenden, auch nach einer Lücke
-  const last = st.idx >= st.doc.chunks.length - 1;
-  const allReady = st.doc.chunks.every((_, i) => isReady(i));
-  let msg, kind = "", act = "";
-  if (canOffline() && loadingVisible() && st.waitSince && Date.now() - st.waitSince > 6000) {
-    msg = "Online-Stimme hängt – zur Offline-Stimme wechseln"; kind = "busy"; act = "offline";   // der Text ist der Knopf
-  } else if (loadingVisible()) {
-    msg = st.doc.voice.startsWith("clone:") ? "Eigene Stimme erzeugt …" : "Bereite vor …"; kind = "load";
-  } else if (st.offline && st.doc.voice.startsWith("edge:")) {
-    msg = "Offline-Stimme liest – zurück zur Online-Stimme"; act = "online";
-  } else if (st.wantPlay && !last && !isReady(st.idx + 1)) {
-    msg = "Nächster Abschnitt wird erzeugt …"; kind = "busy";
-  } else {
-    msg = allReady ? "Alles bereit" : last ? "Letzter Abschnitt" : ready > 0 ? `${nAbschn(ready)} bereit` : "";
-    if (!st.wantPlay) msg = ["Pausiert", st.pendingOffset > 0 ? "beim Lesezeichen" : msg].filter(Boolean).join(" · ");
-  }
-  const mark = kind === "load" ? '<span class="spin"></span>' : `<span class="dot${kind ? " busy" : ""}"></span>`;
-  setStatus(`<span class="st-in${kind ? " busy" : ""}">${mark}<span>${act ? `<button class="st-act" data-${act}>${esc(msg)}</button>` : esc(msg)}</span></span>`);
+  if (canOffline() && loadingVisible() && st.waitSince && Date.now() - st.waitSince > 6000)
+    return setStatus(`<span class="dot busy"></span><span>Online-Stimme hängt</span>${offBtn}`, { key: "hang" });
+  if (loadingVisible())
+    return setStatus(`<span class="spin"></span><span>${st.doc.voice.startsWith("clone:") ? "Eigene Stimme erzeugt …" : "Bereite vor …"}</span>${offBtn}`, { key: "load", delay: 700 });
+  if (st.offline && st.doc.voice.startsWith("edge:"))
+    return setStatus(`<span>Offline-Stimme liest</span> <button class="tbtn" data-online>Zur Online-Stimme</button>`, { key: "offline", life: 6000 });
+  setStatus("");
 }
 function updateMediaSession() {
   if (!("mediaSession" in navigator) || !st.doc) return;
@@ -354,8 +348,12 @@ $("chapterMenu").onclick = (e) => {
   const t = e.target.closest("[data-cmtab]");
   if (t) { e.stopPropagation(); bmState.tab = t.dataset.cmtab; const m = $("chapterMenu"), grow = heightFrom(m); m.innerHTML = chapterMenuHtml(currentChapter()); grow(320); return; }
   if (e.target.closest("[data-bmexport]")) { closePops(); return bmExport(); }
-  const b = e.target.closest("[data-chunk]"); if (b) { closePops(); jumpTo(+b.dataset.chunk, 0); }
+  const b = e.target.closest("[data-chunk]"); if (b) { closePops(); jumpTo(+b.dataset.chunk, 0); flashTick(+b.dataset.chunk); }
 };
+/** Markierung im Fortschrittsbalken leuchtet einmal auf – zeigt, wohin der Sprung ging (Kapitel, Lesezeichen). */
+function flashTick(chunk) {
+  const t = $("ticks").querySelector(`.tick[data-c="${chunk}"]`); if (t) animateIn(t, "fresh");
+}
 /** Lesezeichen als Textdatei (Kapitel · Abschnitt, Textauszug, Notiz) – Desktop: „Sichern unter“, Browser: Download. */
 async function bmExport() {
   const d = st.doc, en = UI_LANG === "en", chs = d.chapters || [];
@@ -549,6 +547,7 @@ async function updatePrep(force) {
   clearTimeout(prepTimer);
   if (!st.doc) return;
   if (st.doc.demo) { $("prepBtn").classList.add("hidden"); $("prepX").classList.add("hidden"); return; }
+  if (st.doc.id !== $("prepBtn").dataset.doc) { clearTimeout($("prepBtn")._keepT); $("prepBtn")._keepT = 0; $("prepBtn").dataset.doc = st.doc.id; }
   const id = st.doc.id;
   const j = await api(`/api/docs/${id}/prepare`).catch(() => null);
   if (st.doc?.id !== id) return;
@@ -562,17 +561,24 @@ async function updatePrep(force) {
   const isClone = st.doc.voice.startsWith("clone:");
   const running = j.status === "running", all = j.total > 0 && j.done >= j.total;
   const b = $("prepBtn");
-  b.classList.toggle("hidden", !isClone && !running);
+  // Gerade fertig geworden: Häkchen springt auf, ein leiser Klang (nur wenn nichts vorgelesen wird), der Knopf bleibt
+  // kurz stehen und blendet dann aus – vorher verschwand er im selben Moment (3.0.3).
+  const justDone = b.classList.contains("running") && all && !running && !b.classList.contains("hidden");
+  if (justDone) {
+    clearTimeout(b._keepT); b._keepT = setTimeout(() => { b._keepT = 0; updatePrep(); }, 2600);
+    animateIn(b, "celebrate"); if (!st.wantPlay) chime();
+  }
+  toggleSoft(b, isClone || running || !!b._keepT);
   b.classList.toggle("running", running);
   b.classList.toggle("done", all && !running);
   b.disabled = running || all;                          // läuft → Abbrechen nur über ✕; fertig → nichts mehr zu tun
   $("prepIc").setAttribute("href", all && !running ? "#i-check" : "#i-bolt");
-  $("prepLbl").textContent = running ? `Erzeuge ${j.done}/${j.total}` : all ? "Alles vorbereitet" : "Vorab erzeugen";
+  rollText($("prepLbl"), running ? `Erzeuge ${j.done}/${j.total}` : all ? "Alles vorbereitet" : "Vorab erzeugen");
   b.dataset.tip = running ? "Wird im Hintergrund erzeugt – du kannst weiterhören oder woanders hin. ✕ bricht ab."
     : all ? "Alle Abschnitte sind fertig – alles spielt ohne Wartezeit."
     : "Erzeugt alle Abschnitte schon jetzt im Hintergrund. Danach spielt alles ohne Wartezeit – ideal für deine eigene Stimme, die pro Abschnitt etwas länger braucht.";
   b.setAttribute("aria-disabled", String(running || all));
-  $("prepX").classList.toggle("hidden", !running);
+  toggleSoft($("prepX"), running);
   if (running || force) prepTimer = setTimeout(() => updatePrep(), 2000);
 }
 $("prepBtn").onclick = async () => {
@@ -624,6 +630,7 @@ async function jobsPoll() {
         if (x.status === "error") return toast(x.error || "Export fehlgeschlagen", true);
         if (x.status !== "ready") return;
         const d = st.docs.find((y) => y.id === j.doc);
+        if (!st.wantPlay) chime();                          // fertig-Klang wie bei „Vorab erzeugen“ (3.0.3)
         xDoneShow(j.doc, d?.title || "Text");               // Karte mit „Speichern“ – nicht erst wieder hinsuchen (Tester-Rückmeldung)
       }).catch(() => {});
       continue;
@@ -736,6 +743,7 @@ async function exportPoll() {
         else if (!r.cancelled) toast(r.error || "Speichern fehlgeschlagen", true);
       } catch (err) { toastErr(err); }
     } : null;
+    if (animate && xView === "run" && !st.wantPlay) chime();   // Export fertig, während der Dialog offen ist (3.0.3)
     xSetView("done", animate);
   } else {
     xSetView("pick", animate);
@@ -832,7 +840,7 @@ audio.addEventListener("timeupdate", () => {
 });
 function sleepMenu(open) {
   const m = $("sleepMenu");
-  if (!open) return m.classList.add("hidden");
+  if (!open) return softHide(m);
   const cur = schlaf.mode, last = sleepLast();
   $("sleepOpts").innerHTML = SLEEP_OPTS.map(([v, l], i) => `<button role="menuitemradio" aria-checked="${v === cur}" data-i="${i}" class="${v === cur ? "on" : ""}">${l}${v != null && v === last && v !== cur ? '<small>zuletzt</small>' : ""}</button>`).join("");
   m.classList.remove("hidden");
@@ -843,7 +851,7 @@ $("sleepBtn").onclick = (e) => {
   e.stopPropagation();
   const last = sleepLast();
   if (schlaf.mode == null && last != null) { sleepSet(last); return toast(last === "chapter" ? "Schlaf-Timer: bis zum Ende des Kapitels" : `Schlaf-Timer: ${last} Minuten`); }
-  sleepMenu($("sleepMenu").classList.contains("hidden"));
+  sleepMenu(!isShown($("sleepMenu")));
 };
 $("sleepOpts").onclick = (e) => {
   const b = e.target.closest("[data-i]"); if (!b) return;
@@ -918,12 +926,12 @@ function popAtBtn(m, btn) {
 }
 function atmoMenu(open) {
   const m = $("atmoMenu");
-  if (!open) return m.classList.add("hidden");
+  if (!open) return softHide(m);
   atmoRender(); m.classList.remove("hidden");
   popAtBtn(m, $("atmoBtn"));
   animateIn(m, "enter");
 }
-$("atmoBtn").onclick = (e) => { e.stopPropagation(); atmoMenu($("atmoMenu").classList.contains("hidden")); };
+$("atmoBtn").onclick = (e) => { e.stopPropagation(); atmoMenu(!isShown($("atmoMenu"))); };
 $("atmoOpts").onclick = (e) => {
   const b = e.target.closest("[data-a]"); if (!b) return;
   saveSettings({ ambient: b.dataset.a }); atmoRender();
@@ -970,7 +978,7 @@ function bmRender(fresh) {
   bmPlace();
   $("ticks").querySelectorAll(".tick.bm").forEach((t) => t.remove());
   const n = st.doc.chunks.length;
-  $("ticks").insertAdjacentHTML("beforeend", bmList().map((b) => `<span class="tick bm" style="left:${(b.chunk / n) * 100}%"></span>`).join(""));
+  $("ticks").insertAdjacentHTML("beforeend", bmList().map((b) => `<span class="tick bm${b.id === fresh ? " fresh" : ""}" data-c="${b.chunk}" style="left:${(b.chunk / n) * 100}%"></span>`).join(""));
   $("chapterBtn").classList.toggle("hidden", !st.doc.chapters.length && !bmList().length);
 }
 function bmPlace() {
@@ -985,9 +993,17 @@ function bmChunkAt(e) {
   // Vom Satz nach links zum Symbol: beginnt er mitten in der Zeile, fährt die Maus über den vorigen Satz bzw. landet am
   // Zeilenanfang bei ihm → solange sie auf einer Zeile des gezeigten Satzes nach links fährt (oder schon im Rand ist),
   // diesen behalten (Tester-Rückmeldung 3.0.1). Nach rechts/oben/unten wechselt das Symbol wie gewohnt.
+  // Geprüft wird die ganze Höhe des Satzes (erste bis letzte Zeile): die Lücken zwischen den Zeilen gehören dazu –
+  // sonst ging der Satz dort verloren und das Symbol sprang zum vorigen Satz (Tester-Rückmeldung 3.0.2).
+  // Richtung selbst aus der letzten Position: `movementX` ist in WebKit nicht verlässlich, und ein kurzes Zittern nach
+  // rechts (Trackpad) darf den Satz nicht abgeben → erst ab 4 px nach rechts gilt die Bewegung als „nach rechts“.
   const T = $("docText").getBoundingClientRect();
+  const dx = bmState.lastX == null ? 0 : e.clientX - bmState.lastX; bmState.lastX = e.clientX;
   const cur = bmState.hoverI >= 0 ? st.spans[bmState.hoverI] : null;
-  if (cur && (e.movementX < 0 || e.clientX < T.left) && [...cur.getClientRects()].some((r) => e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2)) return cur;
+  if (cur && (dx < 4 || e.clientX < T.left)) {
+    const rs = cur.getClientRects();
+    if (rs.length && e.clientY >= rs[0].top - 4 && e.clientY <= rs[rs.length - 1].bottom + 4) return cur;
+  }
   const c = e.target.closest?.(".chunk"); if (c) return c;
   if (e.clientX >= T.left) return null;                   // irgendwo links vom Text – egal wie weit
   for (const dx of [4, 24, 60]) {
@@ -1035,7 +1051,7 @@ function bmPopOpen(id, anchor) {
 }
 async function bmPopClose(save) {
   const id = bmState.popId; if (!id) return;
-  bmState.popId = null; $("bmPop").classList.add("hidden");
+  bmState.popId = null; softHide($("bmPop"));
   const b = bmList().find((x) => x.id === id), note = $("bmPopNote").value.trim();
   if (save && b && note !== (b.note || "")) {
     try { st.doc.bookmarks = (await api(`/api/docs/${st.doc.id}/bookmarks/${id}`, { method: "PATCH", body: JSON.stringify({ note }) })).bookmarks; } catch (e) { toastErr(e); }
@@ -1043,7 +1059,7 @@ async function bmPopClose(save) {
 }
 $("bmPopOk").onclick = () => bmPopClose(true);
 $("bmPopDel").onclick = async () => {
-  const id = bmState.popId; bmState.popId = null; $("bmPop").classList.add("hidden");
+  const id = bmState.popId; bmState.popId = null; softHide($("bmPop"));
   const mark = $("bmLayer")?.querySelector(`[data-bm="${id}"]`);
   if (mark) { mark.classList.add("leaving"); await new Promise((r) => setTimeout(r, 220)); }
   try { st.doc.bookmarks = (await api(`/api/docs/${st.doc.id}/bookmarks/${id}`, { method: "DELETE" })).bookmarks; } catch (e) { return toastErr(e); }
@@ -1253,3 +1269,44 @@ function compactSync() {
 }
 compactMq.addEventListener?.("change", compactSync);
 setInterval(compactSync, 500);                            // Ansichtswechsel / Text geöffnet – billig, kein Haken nötig
+
+/* Player rechts: Beschriftungen nur, solange sie passen. Feste Breiten (Container-Abfragen) reichten nicht – wie lang
+   „Kapitelende“/„End of chapter“, ein Atmosphäre- oder Stimmenname ist, hängt von Sprache und Zustand ab; sonst lief die
+   Gruppe nach links über Vorspulen/Weiter (Tester-Rückmeldung 3.0.2). Reihenfolge: Atmosphäre, Stimme, Schlaf-Timer. */
+const FIT_STEPS = ["fit-atmo", "fit-voice", "fit-sleep"];
+function fitRight() {
+  const r = document.querySelector(".player .right"); if (!r || !r.clientWidth) return;
+  const gap = parseFloat(getComputedStyle(r).columnGap) || 0;
+  const need = () => { const cs = [...r.children].filter((c) => c.getClientRects().length);
+    return cs.reduce((w, c) => w + c.getBoundingClientRect().width, 0) + Math.max(0, cs.length - 1) * gap; };
+  r.classList.remove(...FIT_STEPS); r.style.minWidth = "";
+  for (const s of FIT_STEPS) { if (need() <= r.clientWidth + 0.5) break; r.classList.add(s); }
+  const w = need();                                     // reichen nicht einmal Symbole: Platz nehmen, der Titel links kürzt sich
+  if (w > r.clientWidth + 0.5) r.style.minWidth = `${Math.ceil(w)}px`;
+}
+{
+  const r = document.querySelector(".player .right");
+  if (r) {
+    new ResizeObserver(() => fitRight()).observe(r);
+    const mo = new MutationObserver(() => fitRight());
+    for (const id of ["sleepLbl", "atmoLbl", "voiceLbl"]) mo.observe($(id), { childList: true, characterData: true, subtree: true });
+  }
+}
+
+/* Fortschrittsbalken flüssig (3.0.3, Simon): `timeupdate` kommt in WebKit nur ~4× pro Sekunde → Balken und Knopf
+   rückten in Stufen vor. Beim Abspielen zeichnet requestAnimationFrame jedes Bild aus audio.currentTime (nur Breite
+   und Lage; Bibliothek, ARIA und Speichern bleiben bei timeupdate). Pause/verdecktes Fenster → Schleife steht. */
+let barRaf = 0;
+function barFrame() {
+  barRaf = 0;
+  if (!st.doc || audio.paused || document.hidden || st.loadedIdx !== st.idx) return;
+  if (!scrub.drag && !$("prog").classList.contains("glide")) {
+    const pct = docPct({ count: st.doc.chunks.length, progress: { chunk: st.idx, frac: curFrac() } });
+    $("fill").style.width = `${pct}%`; $("knob").style.left = `${pct}%`;
+  }
+  barRaf = requestAnimationFrame(barFrame);
+}
+const barGo = () => { if (!barRaf) barRaf = requestAnimationFrame(barFrame); };
+audio.addEventListener("playing", barGo);
+audio.addEventListener("timeupdate", barGo);
+document.addEventListener("visibilitychange", barGo);
