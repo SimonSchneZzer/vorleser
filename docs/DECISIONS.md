@@ -5,6 +5,18 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-10 · Teil-Updates: Ausreißer-Vorversionen nicht mehr mitversorgen
+**Kontext:** Simon: „alle Updates in letzter Zeit 75 MB“. Das Paket deckte die letzten fünf Releases ab und enthielt
+jede Datei, die sich gegenüber *irgendeiner* davon änderte. 2.10.x hatte die Offline-Stimme (63 MB) und die
+Atmosphäre-Klänge noch nicht → beide lagen in jedem 3.0.x-Paket (gepackt 79 MB; nötig für 3.0.2 → 3.0.4: 15,8 MB).
+**Entscheidung:** `make_patch.py` deckt nur Vorversionen ab, deren Unterschied höchstens das Doppelte (bzw. +10 MB)
+des Unterschieds zur neuesten Vorversion ist. Die übrigen laden das komplette Paket – das erkennt die App schon heute
+an der Dateiliste (`from` in `-patch.json` bzw. Prüfsummen). Mit den echten 3.0.4-Listen: 3.0.0–3.0.2 abgedeckt,
+2.10.x nicht, Paket 18 MB statt 87 MB (roh).
+**Noch offen:** 15 MB davon ist die Programmdatei – PyInstaller packt den ganzen Python-Code hinein, sie ändert sich
+bei jeder Code-Änderung. Eigene Module außerhalb davon würden Updates auf wenige hundert KB bringen (größerer Umbau).
+**Auch:** „Neuer Text“ gibt nach dem Laden einer Datei/eines Links den Fokus ab (Cursor blinkte weiter am Anfang).
+
 ## 2026-11-10 · Bewegungen ohne harte Schnitte: Schließen, Tauschen, Beschriftungen (für 3.0.3)
 **Kontext:** Durchsicht mit Simon: Menüs/Popups gingen weich auf, aber hart zu; Inhalte (Fehler melden → Danke,
 Deinstallieren) und Knöpfe in den Einstellungen tauschten von einem Frame auf den nächsten; Zahlen sprangen.

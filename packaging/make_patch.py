@@ -51,6 +51,10 @@ def manifest(root: Path) -> dict:
     return dict(sorted(files.items()))
 
 
+def _vkey(v: str) -> tuple:
+    return tuple(int(x) if x.isdigit() else 0 for x in v.split("."))
+
+
 def previous(plat: str, versions: list[str]) -> dict[str, dict]:
     out = {}
     for v in versions:
@@ -83,6 +87,19 @@ def main() -> int:
     if not prev:
         print("Keine Vorversion mit Dateiliste → kein Teil-Update (die App lädt das komplette Paket)")
         return 0
+    # Ausreißer nicht mitversorgen (3.0.4): fehlt einer alten Version z. B. die Offline-Stimme (63 MB), landete sie
+    # bei JEDEM Update im Paket – alle 3.0.x-Nutzer luden 75 MB statt ~16. Abgedeckt wird nur, wer höchstens das
+    # Doppelte (bzw. +10 MB) des Unterschieds zur neuesten Vorversion braucht; die übrigen laden das komplette Paket
+    # (die App erkennt das selbst an der Dateiliste).
+    def diff(p: dict) -> list[str]:
+        return [rel for rel, f in files.items() if "h" in f and p.get(rel) != f]
+    sizes = {v: sum(files[r]["s"] for r in diff(p)) for v, p in prev.items()}
+    newest = max(prev, key=_vkey)
+    limit = max(2 * sizes[newest], sizes[newest] + 10_000_000)
+    for v in sorted(prev, key=_vkey):
+        if sizes[v] > limit:
+            print(f"Vorversion {v}: {sizes[v] / 1e6:.0f} MB anders (Grenze {limit / 1e6:.0f} MB) – nicht abgedeckt, lädt das komplette Paket")
+    prev = {v: p for v, p in prev.items() if sizes[v] <= limit}
     changed = sorted(rel for rel, f in files.items() if "h" in f and any(p.get(rel) != f for p in prev.values()))
     zpath = out / f"Vorleser-{plat}-patch.zip"
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:

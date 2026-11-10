@@ -94,3 +94,17 @@ def test_fortschrittsbalken_laeuft_fluessig(api):
         _im_browser(api, sz)
     finally:
         api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_neuer_text_kein_cursor_nach_dem_laden(api):
+    """3.0.4: Nach dem Ersetzen durch Datei/Link-Inhalt blinkt kein Cursor mehr im Feld (Fokus wird abgegeben)."""
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js("showNew(); 1"); await asyncio.sleep(0.4)
+        await c.js("nt.focusEnd(); 1")
+        assert await c.js("$('ntDoc').contains(document.activeElement)")              # leeres Feld: Cursor bereit
+        await c.js("replaceField('Titel', '# Erster Teil\\n\\nEin Satz aus der Datei.', 'Ersetzt'); 1"); await asyncio.sleep(0.2)
+        assert await c.js("!$('ntDoc').contains(document.activeElement) && !$('ntDoc').contains(getSelection().anchorNode)")
+        await c.js("ntSet('', ''); 1")
+    _im_browser(api, sz)

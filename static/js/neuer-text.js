@@ -105,6 +105,9 @@ $("title").addEventListener("input", () => draftSave());
 function replaceField(title, text, msg) {
   const prev = { title: $("title").value, text: $("text").value, orig: st.importOriginal };
   lnClose(); ntSet(text, title); draftSave();
+  // Fertig geladen: kein blinkender Cursor mehr am Anfang des neuen Inhalts (Simon, 3.0.4) – ein Klick setzt ihn wieder
+  if ($("ntDoc").contains(document.activeElement)) document.activeElement.blur();
+  if ($("ntDoc").contains(getSelection().anchorNode)) getSelection().removeAllRanges();
   if (prev.text.trim()) {
     toast(msg, false, { label: "Rückgängig", fn: () => {
       st.importOriginal = prev.orig; $("ntOrig").classList.toggle("hidden", !prev.orig);

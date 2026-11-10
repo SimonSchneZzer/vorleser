@@ -99,3 +99,18 @@ def test_teilupdate_nur_fuer_abgedeckte_version(monkeypatch):
     monkeypatch.setattr(updater.paths, "APP_VERSION", "0.9.0")
     assert updater._patch_for({"patch": p}) is None
     assert updater._patch_for({"patch": None}) is None
+
+
+def test_ausreisser_vorversion_wird_nicht_mitversorgt(tmp_path):
+    """3.0.4: Fehlt einer alten Version eine große Datei (z. B. die Offline-Stimme), soll sie nicht in jedem Paket landen –
+    diese Version wird nicht abgedeckt (lädt das komplette Paket), die nahen Vorversionen bekommen ein kleines Paket."""
+    gross = b"V" * 12_000_000
+    alt = _app(tmp_path / "alt", {"Contents/prog": b"p1", "Contents/b.txt": b"x"})                       # ohne Stimme
+    nah = _app(tmp_path / "nah", {"Contents/prog": b"p2", "Contents/b.txt": b"x", "Contents/stimme.onnx": gross})
+    neu = _app(tmp_path / "neu", {"Contents/prog": b"p3", "Contents/b.txt": b"x", "Contents/stimme.onnx": gross})
+    a = _build(tmp_path, "2.10.3", alt)
+    m = _build(tmp_path, "3.0.2", nah)
+    n = _build(tmp_path, "3.0.4", neu, [str(a / "Vorleser-mac-manifest.json"), str(m / "Vorleser-mac-manifest.json")])
+    with zipfile.ZipFile(n / "Vorleser-mac-patch.zip") as z:
+        assert sorted(z.namelist()) == ["files/Contents/prog", "manifest.json"]
+    assert json.loads((n / "Vorleser-mac-patch.json").read_text())["from"] == ["3.0.2"]
