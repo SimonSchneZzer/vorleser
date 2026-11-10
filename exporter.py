@@ -180,11 +180,16 @@ def _prepare(doc: dict, _fmt: str) -> None:
 def _prepare_run(doc: dict) -> None:
     key = doc["id"] + "#prep"
     try:
-        for i, ch in enumerate(doc["chunks"]):
-            if not tts.is_cached(ch["text"], doc["voice"], doc["id"]):
+        chunks = doc["chunks"]
+        fertig = lambda j: tts.is_cached(chunks[j]["text"], doc["voice"], doc["id"])  # noqa: E731
+        offen = {j for j in range(len(chunks)) if not fertig(j)}
+        for i in range(len(chunks)):
+            if i in offen:
                 synth_strict(doc, i, low=True, stop=lambda: _cancelled(key))
-            done = sum(tts.is_cached(c["text"], doc["voice"], doc["id"]) for c in doc["chunks"])   # echte Zahl, nicht Schleifenzähler
-            if not _update(key, done=done):
+                offen.discard(i)
+            if i % 20 == 19:                   # echte Zahl (das Vorlesen erzeugt nebenher auch), aber nicht jedes Mal alles
+                offen = {j for j in offen if not fertig(j)}
+            if not _update(key, done=len(chunks) - len(offen)):
                 _update(key, status="cancelled")
                 return
         _update(key, status="ready", phase="Fertig")
@@ -227,8 +232,11 @@ def _run(doc: dict, fmt: str, ambient: tuple[Path, float] | None = None, rate: f
 
             abort = threading.Event()            # Fehler in einem Abschnitt → wartende Nachbarn hören sofort auf
 
-            def synth(i):
-                return chunk_audio(doc, i, stop=lambda: abort.is_set() or _cancelled(doc_id))
+            def synth(i):                        # erzeugen + gleich dekodieren (parallel statt nacheinander im Schreib-Takt)
+                data = chunk_audio(doc, i, stop=lambda: abort.is_set() or _cancelled(doc_id))
+                if abort.is_set():
+                    raise InterruptedError
+                return tts.ffmpeg(["-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", str(RATE), "pipe:1"], data)
 
             silence = lambda sec: b"\0\0" * int(RATE * sec)  # noqa: E731
             with open(raw_path, "wb") as raw, ThreadPoolExecutor(tts.EDGE_PARALLEL if is_edge else 1) as pool:
@@ -249,7 +257,7 @@ def _run(doc: dict, fmt: str, ambient: tuple[Path, float] | None = None, rate: f
                         data = futures[i].result()
                         futures[i] = None
                         starts.append(raw.tell() / BYTES_PER_SEC)
-                        raw.write(tts.ffmpeg(["-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", str(RATE), "pipe:1"], data))
+                        raw.write(data)
                         if not _update(doc_id, done=i + 1):
                             for f in futures:
                                 if f:

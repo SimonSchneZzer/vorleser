@@ -211,39 +211,60 @@ def test_eigene_stimme_bricht_ab_wird_nachgeholt(monkeypatch, tmp_path):
     assert tts._wav_secs(out) > 7                                  # vollständig (≈ 18 Wörter / 2,3 + Pause)
 
 
+def _wav_float(secs: float) -> bytes:
+    """So schreibt torchaudio einen Float-Tensor (Format 3) – damit hielt 3.0.1 jeden Klon-Abschnitt für „0 s“."""
+    data = b"\0\0\0\0" * int(24000 * secs)
+    fmt = (3).to_bytes(2, "little") + (1).to_bytes(2, "little") + (24000).to_bytes(4, "little") \
+        + (96000).to_bytes(4, "little") + (4).to_bytes(2, "little") + (32).to_bytes(2, "little")
+    body = b"WAVE" + b"fmt " + len(fmt).to_bytes(4, "little") + fmt + b"data" + len(data).to_bytes(4, "little") + data
+    return b"RIFF" + len(body).to_bytes(4, "little") + body
+
+
+def test_eigene_stimme_float_wav_nicht_dreifach(monkeypatch, tmp_path):
+    """Lüfter/Akku (3.0.1): Float-WAV vom Worker wurde als „0 s“ gelesen → jeder Abschnitt dreifach erzeugt."""
+    text = "Ein ganz normaler Satz mit acht Wörtern drin."
+    assert abs(tts._wav_secs(_wav_float(3.2)) - 3.2) < 0.01
+    assert not tts._clone_too_short(text, _wav_float(3.2))
+    assert tts._clone_too_short(text, _wav_float(0.5))                # echter Abbruch wird weiter erkannt
+    assert not tts._clone_too_short(text, b"kaputt")                  # unbekannte Dauer: nie nachholen
+    joined = tts._concat_wavs([_wav_float(1.0), _wav_float(2.0)])
+    assert abs(tts._wav_secs(joined) - 3.25) < 0.01                   # + 0,25 s Pause
+    calls = []
+    monkeypatch.setattr(tts, "CLONE_DIR", tmp_path)
+    (tmp_path / "ich").mkdir(); (tmp_path / "ich" / "sample.wav").write_bytes(b"x")
+    monkeypatch.setattr(tts._clone_worker, "synth", lambda t, lang, ref, low=False: calls.append(t) or _wav_float(3.2))
+    monkeypatch.setattr(tts, "to_opus", lambda wav: wav)
+    tts._synth_clone(text, "ich", "de")
+    assert calls == [text]
+
+
 def test_eigene_stimme_normales_tempo_bleibt():
     assert not tts._clone_too_short("Ein ganz normaler Satz mit acht Wörtern drin.", _wav(3.2))
     assert not tts._clone_too_short("Kurz.", _wav(0.2))             # kurze Texte schwanken – nie nachholen
 
 
-def test_langsame_online_stimme_ersatz_nur_kurz(monkeypatch):
-    """Tester-Rückmeldung (3.0.1): Edge hing bis zu 30 s → Stille, danach 60 s Sperre und alle vorgeladenen Abschnitte
-    in der Ersatzstimme. Jetzt: gebrauchter Abschnitt wartet höchstens `geduld`, Edge läuft weiter in den Cache;
-    Vorladen (fallback=False) nimmt nie die Ersatzstimme."""
-    import threading as _th
+def test_kein_automatischer_wechsel_zur_ersatzstimme(api, monkeypatch):
+    """Rückmeldung Simon (3.0.2): die Ersatzstimme nicht aufdrängen. Hängt Edge, liefert der Abschnitt einen Fehler
+    (der Player bietet den Wechsel an); mit offline=1 liest ausdrücklich die Offline-Stimme. Auch während der Sperre
+    wird für den gebrauchten Abschnitt Edge versucht."""
     import time as _t
-    los = _th.Event()
+    calls = []
 
     def edge(text, name):
-        los.wait(5)
-        return b"edge-audio", [[0.0, 0.1, "Hallo"]]
+        calls.append(text)
+        raise TimeoutError()
     monkeypatch.setattr(tts, "_synth_edge", edge)
-    monkeypatch.setattr(tts, "_fallback", lambda *a, **k: (b"piper-audio", "audio/webm", "piper:x"))
-    monkeypatch.setattr(tts, "_edge_down_until", 0.0)
-    text, voice = f"Langsamer Abschnitt {_t.time()}.", "edge:de-DE-KatjaNeural"
-    t0 = _t.time()
-    assert tts.synthesize(text, voice, "de", geduld=0.2)[0] == b"piper-audio"
-    assert _t.time() - t0 < 1.5
-    los.set()
-    for _ in range(50):                                   # Edge schreibt im Hintergrund in den Cache
-        if tts.cache_path(text, voice).exists():
-            break
-        _t.sleep(0.05)
-    data, _, used = tts.synthesize(text, voice, "de", geduld=0.2)
-    assert data == b"edge-audio" and used == voice
-    tts.cache_path(text, voice).unlink(missing_ok=True)
-
-    monkeypatch.setattr(tts, "_edge_down_until", _t.time() + 60)    # Sperre: Vorladen bekommt Fehler statt Piper
-    with pytest.raises(meldungen.Meldung) as e:
-        tts.synthesize(f"Noch einer {_t.time()}.", voice, "de", fallback=False)
-    assert str(e.value) == tts.EDGE_WEG
+    monkeypatch.setattr(tts, "_edge_down_until", _t.time() + 60)
+    _, d = api.json("POST", "/api/docs", {"title": "Netz", "text": f"Ein Satz, der noch nicht im Cache liegt {_t.time()}."})
+    try:
+        import server
+        with server._doc_lock:                                  # Edge-Stimme direkt setzen (Stimmenliste im Test leer)
+            doc = server.load_doc(d["id"]); doc["voice"] = "edge:de-DE-KatjaNeural"; server.save_doc(doc)
+        status, _, _ = api.call("GET", f"/api/docs/{d['id']}/audio/0")
+        assert status >= 400 and len(calls) == 1               # Sperre übergangen, kein stilles Piper
+        status, _, _ = api.call("GET", f"/api/docs/{d['id']}/audio/0?pre=1")
+        assert status >= 400 and len(calls) == 1               # Vorladen: während der Sperre gar nicht erst versuchen
+        status, h, _ = api.call("GET", f"/api/docs/{d['id']}/audio/0?offline=1")
+        assert status == 200 and h["X-Voice-Used"].startswith("piper:")
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")

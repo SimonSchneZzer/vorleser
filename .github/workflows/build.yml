@@ -76,6 +76,19 @@ jobs:
           [ -f "$ISCC" ] || choco install innosetup -y --no-progress
           "$ISCC" "//DAppVersion=$(cat VERSION)" packaging/vorleser.iss
 
+      # Update auf echtem Windows durchspielen (Teil-Update „Jetzt neu starten“, „Später“ + Beenden, komplettes
+      # Paket) – vor jeder Veröffentlichung. Bis 3.0.1 kam die App nach einem Update nie wieder (Rückmeldung David).
+      - name: Windows – Update-Test
+        if: matrix.name == 'windows'
+        run: |
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          V="$(cat VERSION)"
+          cp dist/Vorleser/_internal/VERSION build/VERSION.orig     # Byte für Byte zurück (Dateiliste/Teil-Update!)
+          echo -n "9.9.3" > dist/Vorleser/_internal/VERSION      # Testversion fürs komplette Paket, eigener Ordner
+          "$ISCC" "//DAppVersion=9.9.3" "//Obuild/updatetest" packaging/vorleser.iss
+          cp build/VERSION.orig dist/Vorleser/_internal/VERSION
+          python packaging/test_update_windows.py e2e "dist/Vorleser-$V-windows-setup.exe" build/updatetest/Vorleser-9.9.3-windows-setup.exe
+
       # Teil-Update: Dateiliste mit Prüfsummen + Paket nur mit den Dateien, die sich gegenüber den letzten
       # Versionen geändert haben (macOS erst NACH make_dmg.sh – dort wird das Paket signiert)
       - name: Teil-Update erstellen
@@ -128,11 +141,12 @@ jobs:
           # latest.json für den Updater der App (Download-Seite, kein Ratenlimit) – erst NACH dem Hochladen,
           # damit eine App nie eine Version meldet, deren Installer noch fehlt
           python3 - "$VER" <<'PY'
-          import json, os, sys, time
+          import hashlib, json, os, sys, time
           ver = sys.argv[1]
           base = f"https://github.com/SimonSchneZzer/vorleser-download/releases/download/v{ver}/"
           notes = open("notes.md", encoding="utf-8").read().split("\n---\n")[0].strip()[:600]
-          assets = {n: {"url": base + n, "size": os.path.getsize(n)} for n in ("Vorleser-mac.dmg", "Vorleser-windows-setup.exe")}
+          sha = lambda n: hashlib.sha256(open(n, "rb").read()).hexdigest()   # App prüft das komplette Paket damit (ab 3.0.2)
+          assets = {n: {"url": base + n, "size": os.path.getsize(n), "sha256": sha(n)} for n in ("Vorleser-mac.dmg", "Vorleser-windows-setup.exe")}
           # Teil-Update je System (nur für die in patch.json genannten Vorversionen; sonst lädt die App alles)
           for plat, n in (("mac", "Vorleser-mac.dmg"), ("windows", "Vorleser-windows-setup.exe")):
               z, info = f"Vorleser-{plat}-patch.zip", f"Vorleser-{plat}-patch.json"

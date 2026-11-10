@@ -101,7 +101,7 @@ function getAudio(i) {
   if (!st.cache.has(i)) {
     const docId = st.doc.id, voice = st.doc.voice;
     // weiter vorne: „pre“ → Server nimmt keine Ersatzstimme (die bliebe sonst für den Rest der Sitzung hängen)
-    const pre = i > st.idx + 1 ? "&pre=1" : "";
+    const pre = (i > st.idx + 1 ? "&pre=1" : "") + (st.offline ? "&offline=1" : ""), offline = st.offline;
     const entry = { url: null, used: null, fallback: false, at: Date.now() };
     entry.promise = fetch(`/api/docs/${docId}/audio/${i}?v=${encodeURIComponent(voice)}${pre}`)
       .then(async (r) => {
@@ -110,7 +110,7 @@ function getAudio(i) {
         entry.fallback = entry.used !== voice;
         return r.blob();
       })
-      .then((b) => { entry.url = URL.createObjectURL(b); if (st.doc?.id === docId) st.srvCached.add(i); markReady(); return entry.url; })
+      .then((b) => { entry.url = URL.createObjectURL(b); if (st.doc?.id === docId && !offline) st.srvCached.add(i); markReady(); return entry.url; })
       .catch((e) => { st.cache.delete(i); throw e; });
     st.cache.set(i, entry);
   }
@@ -124,11 +124,6 @@ async function prefetch() {
   try {
     // Aktueller + nächster Abschnitt gleichzeitig, der Rest nacheinander (bei „Viel“ nicht 10 Anfragen auf einmal)
     const doc = st.doc, from = st.idx, last = Math.min(from + ahead(), doc.chunks.length - 1);
-    // Abschnitte mit Ersatzstimme, die noch nicht laufen, nach einer Weile neu holen – antwortet Edge wieder,
-    // liest ab dort die gewählte Stimme (der Server hat das Edge-Ergebnis inzwischen meist schon im Cache)
-    for (const [i, e] of st.cache) {
-      if (e.fallback && i > st.loadedIdx && i >= from && Date.now() - e.at > 10000) { if (e.url) URL.revokeObjectURL(e.url); st.cache.delete(i); }
-    }
     await Promise.all([from, from + 1].filter((i) => i <= last).map((i) => getAudio(i).catch(() => {})));
     for (let i = from + 2; i <= last && st.doc === doc && st.idx === from; i++) await getAudio(i).catch(() => {});
     // „Ganzer Text“: Rest im Hintergrund vorab erzeugen (eigener Auftrag, lässt dem Vorlesen den Vortritt)
@@ -156,8 +151,11 @@ async function playFrom(i, offset = 0) {
   st.idx = i; st.wantPlay = true; st.lastError = null; st.buffering = false;
   highlight(true); renderPlay(); updateStatus();
   let url;
+  // Hängt die Online-Stimme, bietet die Statuszeile nach 6 s den Wechsel zur Offline-Stimme an (nie automatisch, 3.0.2)
+  st.waitSince = Date.now(); setTimeout(() => { if (my === st.token && st.waitSince) updateStatus(); }, 6100);
   try { url = await getAudio(i); }
-  catch (e) { if (my === st.token) failPlay(friendlyError(e), () => playFrom(i, offset)); return; }
+  catch (e) { if (my === st.token) { st.waitSince = 0; failPlay(friendlyError(e), () => playFrom(i, offset)); } return; }
+  if (my === st.token) st.waitSince = 0;
   if (my !== st.token) return;
   st.loadedIdx = i; st.switching = true;
   audio.src = url;
@@ -442,8 +440,10 @@ function placeSentBoxes(els, fresh = true) {
   if (!layer || !layer.isConnected) { layer = document.createElement("span"); layer.id = "sboxes"; layer.className = "sboxes"; layer.setAttribute("aria-hidden", "true"); reader.appendChild(layer); }
   if (!els.length || markMode() === "section") { layer.innerHTML = ""; return; }
   const R = reader.getBoundingClientRect(), lines = [];
-  for (const el of els) {
-    const r = (el.firstElementChild || el).getBoundingClientRect();
+  // je Zeilenstück messen: ein Wort mit Bindestrich („cross-section“) kann über zwei Zeilen umbrechen – sein
+  // Gesamt-Rechteck wäre dann zwei Zeilen hoch und so breit wie die Spalte (doppelte Fläche, Tester-Rückmeldung 3.0.1)
+  for (const el of els) for (const r of (el.firstElementChild || el).getClientRects()) {
+    if (!r.width) continue;
     const ln = lines.find((l) => Math.abs(l.top - r.top) < r.height / 2);
     if (ln) { ln.left = Math.min(ln.left, r.left); ln.right = Math.max(ln.right, r.right); ln.bottom = Math.max(ln.bottom, r.bottom); }
     else lines.push({ top: r.top, left: r.left, right: r.right, bottom: r.bottom });
@@ -453,7 +453,9 @@ function placeSentBoxes(els, fresh = true) {
 }
 /** Markierungs-Box hinter das aktuelle Wort im Text. */
 function placeWordBox(el, animate = true) {
-  boxIn($("reader"), "wbox", "wbox", markMode() === "word" ? el?.firstElementChild?.getBoundingClientRect() : null, animate);
+  // umbrochenes Wort: nur das erste Zeilenstück markieren (sonst leuchtet kurz ein Block über zwei Zeilen)
+  const r = markMode() === "word" && el?.firstElementChild ? [...el.firstElementChild.getClientRects()].find((x) => x.width) : null;
+  boxIn($("reader"), "wbox", "wbox", r || null, animate);
 }
 function replaceMarks() {                  // Wort- und Satz-Box neu an den Text legen (ohne Gleiten)
   const W = st.words;

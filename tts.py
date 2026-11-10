@@ -77,7 +77,6 @@ def cache_limit() -> int:
 EDGE_PARALLEL = 4          # gleichzeitige Anfragen an Edge
 EDGE_TIMEOUT = 40          # Sekunden pro Abschnitt
 EDGE_COOLDOWN = 60         # nach einem Fehler so lange direkt Piper nehmen
-EDGE_GEDULD = 6            # Sekunden, die der gerade gebrauchte Abschnitt auf Edge wartet, dann liest Piper (3.0.1)
 
 PREFERRED = {
     "de": ["edge:de-DE-SeraphinaMultilingualNeural", "edge:de-DE-KatjaNeural", "edge:de-DE-ConradNeural"],
@@ -170,7 +169,7 @@ def refresh_edge_voices(timeout: float = 10) -> None:
             if v["Locale"].split("-")[0] in LANGS and v.get("Status", "GA") != "Deprecated"
         ]
         voices.sort(key=lambda v: (v["lang"], v["region"] not in ("DE", "US"), v["region"], v["label"]))
-        EDGE_LIST_FILE.write_text(json.dumps(voices, ensure_ascii=False), "utf-8")
+        _write_atomic(EDGE_LIST_FILE, json.dumps(voices, ensure_ascii=False).encode())
         with _edge_lock:
             _edge_cache.update(voices=voices, loaded=time.time())
         print(f"[edge] {len(voices)} Online-Stimmen geladen", flush=True)
@@ -313,8 +312,6 @@ _piper_load_lock = threading.Lock()
 _piper_lock = threading.Lock()          # Piper: ein Abschnitt nach dem anderen
 _edge_sem = threading.Semaphore(EDGE_PARALLEL)
 _edge_down_until = 0.0
-_edge_laeuft: dict = {}               # Cache-Pfad → laufender Edge-Auftrag (Ersatzstimme hat schon übernommen)
-_edge_laeuft_lock = threading.Lock()
 
 
 def _espeak_dir() -> Path:
@@ -554,34 +551,50 @@ def _synth_clone(text: str, slug: str, lang: str, low: bool = False) -> bytes:
 CLONE_WORDS_PER_SEC = 2.3      # typisches Sprechtempo der eigenen Stimme (gemessen: Median 2,28)
 
 
-def _wav_secs(wav: bytes) -> float:
+def _wav_teile(wav: bytes) -> tuple[bytes, bytes]:
+    """(fmt-Block, Audiodaten) einer WAV-Datei. Selbst gelesen statt über `wave`: der Klon-Worker schrieb bis 3.0.1
+    Gleitkomma-WAV (Format 3), das `wave` nicht kennt – ein noch laufender alter Worker darf nichts kaputt machen."""
+    if wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
+        raise wave.Error("not a WAV file")
+    pos, fmt = 12, None
+    while pos + 8 <= len(wav):
+        cid, size = wav[pos:pos + 4], int.from_bytes(wav[pos + 4:pos + 8], "little")
+        if cid == b"fmt ":
+            fmt = wav[pos + 8:pos + 8 + size]
+        elif cid == b"data" and fmt is not None and len(fmt) >= 16:
+            return fmt, wav[pos + 8:pos + 8 + size]      # Größe 0xFFFFFFFF (gestreamt) → einfach bis zum Ende
+        pos += 8 + size + (size & 1)
+    raise wave.Error("WAV without fmt/data chunk")
+
+
+def _wav_secs(wav: bytes) -> float | None:
+    """Dauer in Sekunden; None, wenn sie sich nicht bestimmen lässt (dann nie als „zu kurz“ werten)."""
     try:
-        with wave.open(io.BytesIO(wav)) as w:
-            return w.getnframes() / float(w.getframerate() or 1)
-    except Exception:
-        return 0.0
+        fmt, data = _wav_teile(wav)
+    except wave.Error:
+        return None
+    rate, block = int.from_bytes(fmt[4:8], "little"), int.from_bytes(fmt[12:14], "little")
+    return len(data) // block / rate if rate and block else None
 
 
 def _clone_too_short(text: str, wav: bytes) -> bool:
-    """Deutlich kürzer als für den Text plausibel? (Unter ~45 % der erwarteten Dauer; kurze Texte schwanken zu stark.)"""
-    words = len(text.split())
-    return words >= 6 and _wav_secs(wav) < 0.45 * words / CLONE_WORDS_PER_SEC
+    """Deutlich kürzer als für den Text plausibel? (Unter ~45 % der erwarteten Dauer; kurze Texte schwanken zu stark.)
+    Unbekannte Dauer zählt nicht als zu kurz: sonst wird jeder Abschnitt dreifach erzeugt (3.0.1: Lüfter, Akku)."""
+    words, secs = len(text.split()), _wav_secs(wav)
+    return words >= 6 and secs is not None and secs < 0.45 * words / CLONE_WORDS_PER_SEC
 
 
 def _concat_wavs(wavs: list[bytes]) -> bytes:
-    """WAVs gleichen Formats aneinanderhängen, mit kurzer Pause zwischen den Sätzen."""
-    out = io.BytesIO()
-    with wave.open(io.BytesIO(wavs[0])) as first:
-        params = first.getparams()
-    gap = b"\0" * int(params.framerate * 0.25) * params.sampwidth * params.nchannels
-    with wave.open(out, "wb") as w:
-        w.setparams(params)
-        for n, data in enumerate(wavs):
-            with wave.open(io.BytesIO(data)) as r:
-                if n:
-                    w.writeframes(gap)
-                w.writeframes(r.readframes(r.getnframes()))
-    return out.getvalue()
+    """WAVs gleichen Formats (PCM oder Gleitkomma) aneinanderhängen, mit kurzer Pause zwischen den Sätzen."""
+    teile = [_wav_teile(w) for w in wavs]
+    fmt = teile[0][0]
+    if any(f != fmt for f, _ in teile):
+        raise wave.Error("WAV formats differ")
+    rate, block = int.from_bytes(fmt[4:8], "little"), int.from_bytes(fmt[12:14], "little")
+    data = (b"\0" * (int(rate * 0.25) * block)).join(d for _, d in teile)   # Stille ist in beiden Formaten 0
+    fmt_chunk = b"fmt " + len(fmt).to_bytes(4, "little") + fmt + b"\0" * (len(fmt) & 1)
+    body = b"WAVE" + fmt_chunk + b"data" + len(data).to_bytes(4, "little") + data + b"\0" * (len(data) & 1)
+    return b"RIFF" + len(body).to_bytes(4, "little") + body
 
 
 # --------------------------------------------------------------------------- #
@@ -603,6 +616,12 @@ _lex = {"mtime": None, "entries": [], "rx": []}
 
 def lexikon() -> list[dict]:
     """Einträge {wort, sprich, doc?} – doc = nur in diesem Text. Fehlt die Datei: Vorbelegung."""
+    _lex_laden()
+    return [dict(e) for e in _lex["entries"]]
+
+
+def _lex_laden() -> None:
+    """Wörterbuch neu lesen, wenn sich die Datei geändert hat (sonst nichts tun – wird pro Abschnitt gerufen)."""
     try:
         mt = LEX_FILE.stat().st_mtime
     except OSError:
@@ -618,7 +637,7 @@ def lexikon() -> list[dict]:
         _lex.update(mtime=mt, entries=entries,
                     rx=[(re.compile(r"(?<!\w)" + re.escape(e["wort"].strip()) + r"(?!\w)"), e["sprich"].strip(), e.get("doc"), e.get("lang"))
                         for e in entries])
-    return [dict(e) for e in _lex["entries"]]
+        _gesprochen.clear()                  # Aufbereitung hängt am Wörterbuch → gemerkte Ergebnisse verwerfen
 
 
 def lexikon_speichern(entries: list[dict]) -> list[dict]:
@@ -669,23 +688,39 @@ def _voice_lang(voice_id: str) -> str | None:
     return _voice_lang_cache[voice_id]
 
 
+_gesprochen: dict[tuple, str] = {}     # (Text, Text-ID, Sprache) → aufbereiteter Text; geleert, wenn sich das Wörterbuch ändert
+
+
 def spoken(text: str, doc_id: str | None = None, lang: str | None = None) -> str:
-    """Text, wie er gesprochen wird (aufbereitet, Wörterbuch der passenden Sprache angewendet)."""
-    text = _fuer_stimme(text, lang)
-    lexikon()
+    """Text, wie er gesprochen wird (aufbereitet, Wörterbuch der passenden Sprache angewendet).
+    Gemerkt: Bibliothek, Vorab erzeugen und Speicher-Übersicht fragen denselben Abschnitt sehr oft ab (Messung
+    11.11.2026: Speicher-Übersicht eines Buchs mit 2000 Abschnitten 5 s, fast nur diese Funktion)."""
+    _lex_laden()
+    key = (text, doc_id, lang)
+    hit = _gesprochen.get(key)
+    if hit is not None:
+        return hit
+    out = _fuer_stimme(text, lang)
     for rx, sp, doc, elang in _lex["rx"]:
         if doc and doc != doc_id:
             continue
         if elang and lang and elang != lang:
             continue
-        text = rx.sub(sp, text)
-    return text
+        out = rx.sub(sp, out)
+    if len(_gesprochen) > 50_000:            # Obergrenze für den Arbeitsspeicher (ein paar große Bücher)
+        _gesprochen.clear()
+    _gesprochen[key] = out
+    return out
+
+
+def cache_name(voice_id: str, said: str) -> str:
+    """Dateiname im Audio-Cache für schon aufbereiteten Text (`spoken`) mit dieser Stimme."""
+    key = hashlib.sha1(f"{voice_id}\0{said}".encode()).hexdigest()
+    return f"{key}.{'mp3' if voice_id.startswith('edge:') else 'webm'}"
 
 
 def cache_path(text: str, voice_id: str, doc_id: str | None = None) -> Path:
-    key = hashlib.sha1(f"{voice_id}\0{spoken(text, doc_id, _voice_lang(voice_id))}".encode()).hexdigest()
-    ext = "mp3" if voice_id.startswith("edge:") else "webm"
-    return CACHE_DIR / f"{key}.{ext}"
+    return CACHE_DIR / cache_name(voice_id, spoken(text, doc_id, _voice_lang(voice_id)))
 
 
 _inflight: dict[Path, threading.Event] = {}     # Klon-Abschnitte, die gerade erzeugt werden (nicht doppelt rechnen)
@@ -714,10 +749,10 @@ def warm_clone_preview(voice_id: str, first_lang: str = "de") -> None:
 
 
 def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: bool = False,
-               doc_id: str | None = None, geduld: float | None = None) -> tuple[bytes, str, str]:
+               doc_id: str | None = None, sperre: bool = True) -> tuple[bytes, str, str]:
     """Liefert (audio, mime, tatsächlich genutzte Stimme).
     fallback=False: bei Fehler Exception statt Ersatzstimme (z. B. für Hörproben). doc_id: für Wörterbuch-Einträge
-    „nur in diesem Text“. geduld: so viele Sekunden höchstens auf Edge warten, dann Ersatzstimme (Edge läuft weiter)."""
+    „nur in diesem Text“. sperre=False: Edge auch während der 60-s-Sperre versuchen (Vorlesen ohne Ersatzstimme, 3.0.2)."""
     voice_id = normalize_voice_id(voice_id)
     path = cache_path(text, voice_id, doc_id)
     say = spoken(text, doc_id, _voice_lang(voice_id))
@@ -728,23 +763,10 @@ def synthesize(text: str, voice_id: str, lang: str, fallback: bool = True, low: 
     engine, name = voice_id.split(":", 1)
     t0 = time.time()
     if engine == "edge":
-        if time.time() < _edge_down_until:
+        if sperre and time.time() < _edge_down_until:
             if not fallback:
                 raise Meldung(EDGE_WEG)
             return _fallback(text, lang, voice_id, doc_id)
-        if fallback and geduld:
-            # Gerade gebrauchter Abschnitt: nicht bis zu 40 s still warten. Edge läuft im Hintergrund weiter und
-            # legt das Ergebnis in den Cache – beim nächsten Abruf (Austausch im Player) kommt dann die echte Stimme.
-            auftrag = _edge_auftrag(say, name, path)
-            if not auftrag["fertig"].wait(geduld):
-                print(f"[edge] {name}: nach {geduld:.0f}s noch keine Antwort – Ersatzstimme für diesen Abschnitt", flush=True)
-                return _fallback(text, lang, voice_id, doc_id)
-            if "fehler" in auftrag:
-                return _edge_fehler(auftrag["fehler"], name, fallback, text, lang, voice_id, doc_id)
-            if path.exists():
-                return path.read_bytes(), MIME[path.suffix[1:]], voice_id
-            data = auftrag["data"]                 # Schreiben fehlgeschlagen (Platte voll) – trotzdem vorlesen
-            return data, MIME[path.suffix[1:]], voice_id
         try:
             data, marks = _synth_edge(say, name)
         except Exception as e:
@@ -806,40 +828,6 @@ def _edge_fehler(e, name, fallback, text, lang, voice_id, doc_id):
     return _fallback(text, lang, voice_id, doc_id)
 
 
-def _edge_auftrag(say: str, name: str, path: Path) -> dict:
-    """Edge-Abschnitt im eigenen Thread erzeugen und in den Cache schreiben. Läuft derselbe schon, diesen zurückgeben."""
-    with _edge_laeuft_lock:
-        auftrag = _edge_laeuft.get(path)
-        if auftrag:
-            return auftrag
-        auftrag = _edge_laeuft[path] = {"fertig": threading.Event()}
-
-    def lauf():
-        global _edge_down_until
-        t0 = time.time()
-        try:
-            data, marks = _synth_edge(say, name)
-            auftrag["data"] = data
-            print(f"[edge] {len(say):4d} Zeichen in {time.time() - t0:.2f}s", flush=True)
-            try:
-                _write_atomic(path.with_suffix(".marks.json"), json.dumps(marks, ensure_ascii=False).encode())
-                _write_atomic(path, data)
-                schedule_prune()
-            except Exception as e:
-                meldungen.loggen("edge-cache", e)
-        except Exception as e:
-            auftrag["fehler"] = e
-            print(f"[edge] {name}: {type(e).__name__} (im Hintergrund)", flush=True)
-            if not _ist_stimmfehler(e):                     # auch wenn keiner mehr wartet: Netz hakt → Sperre
-                _edge_down_until = time.time() + EDGE_COOLDOWN
-        finally:
-            with _edge_laeuft_lock:
-                _edge_laeuft.pop(path, None)
-            auftrag["fertig"].set()
-    threading.Thread(target=lauf, daemon=True, name="vorleser-edge").start()
-    return auftrag
-
-
 def _write_atomic(path: Path, data: bytes) -> None:
     """Über eine eigene Zwischendatei je Thread: erzeugen zwei Threads denselben Abschnitt, stört keiner den anderen."""
     tmp = path.with_name(f"{path.name}.{os.getpid()}-{threading.get_ident()}.tmp")
@@ -892,7 +880,7 @@ def get_marks(text: str, voice_id: str, lang: str | None = None, compute: bool =
                 return json.loads(p.read_text("utf-8"))
             t0 = time.time()
             marks = stt.word_marks(audio_path.read_bytes(), lang)
-            p.write_text(json.dumps(marks, ensure_ascii=False), "utf-8")
+            _write_atomic(p, json.dumps(marks, ensure_ascii=False).encode())   # halb geschrieben → Whisper rechnet sonst neu
             print(f"[marks] {len(marks)} Wortmarken in {time.time() - t0:.1f}s ({voice_id.split(':')[0]})", flush=True)
             return marks
     except Exception as e:

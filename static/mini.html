@@ -17,7 +17,7 @@
     background: var(--glass); -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
     border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shade);
     background-image: linear-gradient(180deg, var(--glass-sheen), transparent 40%);
-    animation: miniIn .55s var(--spring) both; -webkit-app-region: drag; }
+    animation: miniIn .55s var(--spring) backwards; -webkit-app-region: drag; }
   .mp.leaving { animation: miniOut .3s var(--ease) both; }
   .mp button { -webkit-app-region: no-drag; }
   @keyframes miniIn { from { opacity: 0; transform: translateY(-22px) scale(.96); } }
@@ -31,7 +31,7 @@
   .bar { margin-top: 7px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
   .bar i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .25s linear; }
   .warn { margin-top: 12px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.45;
-    background: color-mix(in srgb, var(--acc) 12%, transparent); border: 1px solid color-mix(in srgb, var(--acc) 30%, transparent); animation: fadeUp .4s var(--ease-out) both; }
+    background: color-mix(in srgb, var(--acc) 12%, transparent); border: 1px solid color-mix(in srgb, var(--acc) 30%, transparent); animation: warnIn .4s var(--ease-out) backwards; }
   .warn span { flex: 1; }
   .foot { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
   .foot .v { margin-left: auto; font-size: 12px; color: var(--muted); }
@@ -46,7 +46,9 @@
   .mp-ml .mbox.on { opacity: 1; }
   .mp-ml .mbox.snap { transition: opacity .2s var(--ease); }
   .hidden { display: none !important; }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } }
+  /* Kein opacity/filter in Glas-Flächen (CLAUDE.md): WebKit schaltet sonst die Unschärfe ab – bei „both“ sogar so lange,
+     wie der Hinweis steht → Mini-Fenster wirkte durchsichtig (Rückmeldung Simon, 3.0.2). Darum aufklappen statt einblenden. */
+  @keyframes warnIn { from { transform: translateY(4px); clip-path: inset(0 0 100% 0 round 12px); } to { clip-path: inset(0 0 0 0 round 12px); } }
   @media (prefers-reduced-motion: reduce) { .mp, .mp.leaving, .warn { animation: none; } }
 </style>
 </head>
@@ -135,8 +137,8 @@ function mlShow(k) {
     win.appendChild(row);
     if (old) {
       old.classList.add("gone");
-      old.animate([{ opacity: 1, translate: "0 0" }, { opacity: 0, translate: "0 -12px" }], { duration: 220, fill: "forwards" }).finished.then(() => old.remove(), () => old.remove());
-      row.animate([{ opacity: 0, translate: "0 12px" }, { opacity: 1, translate: "0 0" }], { duration: 380, delay: 100, fill: "backwards" });
+      old.animate([{ clipPath: "inset(0 0 0 0)", translate: "0 0" }, { clipPath: "inset(0 0 100% 0)", translate: "0 -12px" }], { duration: 220, fill: "forwards" }).finished.then(() => old.remove(), () => old.remove());
+      row.animate([{ clipPath: "inset(100% 0 0 0)", translate: "0 12px" }, { clipPath: "inset(0 0 0 0)", translate: "0 0" }], { duration: 380, delay: 100, fill: "backwards" })   // ohne opacity: Glas bleibt unscharf;
     }
   }
   const el = row.querySelector(`[data-k="${k}"]`), box = row.querySelector(".mbox"); if (!el) return;

@@ -5,6 +5,90 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-10 · Windows-Update repariert und auf echtem Windows geprüft (3.0.2)
+**Kontext:** Tester-Rückmeldung David (Windows 11, 2.10.3): „Restart now“ schließt, startet nicht neu; nach „Later“ +
+Beenden erscheint das Update wieder; Version bleibt 2.10.3. Das Windows-Teil-Update war nie echt getestet.
+**Nachgestellt** auf GitHub `windows-latest` (`.github/workflows/windows-update.yml`, `packaging/test_update_windows.py`):
+mit der veröffentlichten 2.10.3 und mit 3.0.1 genau Davids Verhalten – der PowerShell-Helfer schrieb keine Zeile.
+**Ursachen (alle drei auf Windows bestätigt):**
+1. `DETACHED_PROCESS`: Windows PowerShell braucht eine Konsole und beendet sich ohne sofort. Jetzt
+   `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` (+ `CREATE_BREAKAWAY_FROM_JOB`, wenn erlaubt; auf dem Runner nicht).
+2. Aufräumen beim Start (läuft verzögert nach Stimmenliste/Offline-Stimme) löschte ein schon vorbereitetes Update →
+   robocopy 16 „Quelle fehlt“. Jetzt nur aufräumen, wenn kein Update in Arbeit/bereit ist.
+3. „Beenden“ nach einem Update-Neustart beendete die App nicht (Fenster reagierte nicht) → Sicherheitsnetz in
+   `desktop._quit`: nach 8 s aufräumen + `os._exit`.
+**Neuer Helfer:** eigene `.ps1` (UTF-8 mit BOM wegen Umlauten), loggt sofort, wartet ≤ 60 s auf das Ende der App,
+beendet Reste aus dem App-Ordner, sichert ersetzte Dateien und stellt sie bei Fehler wieder her, Fehlschlag →
+`failed-<ver>.txt` → nächstes Mal komplettes Paket, startet die App **immer** neu (sichtbares Fenster). „Fehler melden“
+hängt die letzten Zeilen von `update.log` an.
+**Geprüft (grün):** Teil-Update + „Jetzt neu starten“ (Fenster sichtbar), „Später“ + Beenden, komplettes Paket (Setup).
+Der e2e-Test läuft jetzt in `build.yml` vor jeder Veröffentlichung (Testversion 9.9.3 aus eigenem Ordner, VERSION
+danach Byte für Byte zurück – sonst passt die Dateiliste fürs nächste Teil-Update nicht).
+**Folgen:** Wer auf Windows 3.0.1 oder älter hat, muss 3.0.2 **einmal** von der Webseite installieren (der alte Helfer
+kann sich nicht selbst reparieren). Danach laufen Updates per Klick.
+
+## 2026-11-10 · Optimierungen ohne sichtbare Änderung (3.0.2)
+**Kontext:** Durchsicht „was lässt sich optimieren“; Simons Bedingung: die UX darf nicht leiden. Nur Punkte ohne sichtbare
+Änderung, jeweils mit Test bzw. Messung.
+**Entscheidung:**
+- `tts.spoken` merkt sich Ergebnisse (Text, Text-ID, Sprache), geleert bei Wörterbuch-Änderung; `storage._names_for`
+  bereitet je **Sprache** statt je Stimme auf (`tts.cache_name`). Gemessen: Speicher-Übersicht für ein Buch mit 2128
+  Abschnitten × 59 Stimmen 5,1 s → 0,24 s; `is_cached` ×6 schneller (Bibliothek, Vorab erzeugen).
+- Bibliotheksliste zählt „vorbereitet“ außerhalb von `_doc_lock` (blockierte Vorlesen/Fortschritt-Speichern).
+- Vorab erzeugen zählt nicht mehr nach jedem Abschnitt alles neu (war O(n²)), sondern alle 20 Abschnitte die noch offenen.
+- Export dekodiert im Erzeuger-Thread (parallel) statt nacheinander im Schreib-Takt.
+- `settings.update` hält die Sperre über Lesen–Ändern–Schreiben (zwei schnelle Änderungen gingen sonst verloren).
+- Wortmarken und Edge-Stimmenliste atomar schreiben (halbe Datei → Whisper rechnete neu).
+- Oberfläche: `hlClasses` schaltet „current/done“ nur zwischen altem und neuem Abschnitt um.
+- Updates: Mac-Helfer stellt die bisherige App wieder her, wenn das Einsetzen scheitert (vorher war die App weg);
+  `latest.json` enthält `sha256` des kompletten Pakets, die App prüft es vor dem Einspielen (ältere Releases ohne Feld:
+  wie bisher nur Größe).
+- Schriften Inter + Literata liegen in `static/fonts/` (dieselben Dateien wie von Google Fonts, alle Schriftsysteme,
+  500 KB): offline gleiches Aussehen, keine Verbindung zu Google beim Start. Test `test_schriften_kommen_aus_der_app`.
+- Kompakte Ansicht (Simon, 10.11.): Bibliothek in der Seitenleiste war leer – Ursache: `.has-player .side-foot` ist so
+  hoch wie der Player (`--player-h`), kompakt ist der Player fensterhoch → Liste 0 px. Kompakt: Fußleiste `height: auto`.
+  Dazu auf Simons Wunsch nur kompakt: Abschnitt/Restzeit und Status aus, Knopfreihe oben rechts auf Höhe des Menüs;
+  Schlaf-Timer/Atmosphäre öffnen darunter, wenn oben kein Platz ist (`popAtBtn`), Pfeil am Stimmen-Knopf zeigt nach unten.
+  Test `test_kompakt_bibliothek_sichtbar_und_knopfreihe_oben`.
+- Nur zwei Ansichten (Simon, 10.11.): Mini-Player schon unter 1000 px Breite (vorher 640 px; dazwischen gab es eine
+  „Zwischenstufe“ mit eingeklappter Seitenleiste, die buggy wirkte) und auch in Einstellungen/Neuer Text (Ansicht darunter
+  bleibt, beim Größerziehen wieder da). Mini-Seitenleiste nur mit Bibliothek: keine Fußleiste, kein „Neuer Text“.
+  Ausnahme Bearbeiten (dort wird getippt) und ohne geöffneten Text (kein Player) → dort weiter die schmale Ansicht.
+- Mini-Player: Wort-Box der Mitlesezeile nach dem Einzoomen (98 % → 100 %, 320 ms) neu messen – mittendrin gemessen
+  saß sie ~25 px neben dem Wort (Stand-Aufnahme). Test `test_mini_wortbox_sitzt_nach_dem_umschalten`.
+- Zurück zum gerade spielenden Text (Bibliothek, „…“-Menü) lädt ihn nicht neu (`showOrOpen`) – vorher hielt die
+  Wiedergabe an. „…“-Menü hat als ersten Eintrag „Abspielen“ bzw. „Pause“.
+**Verworfen (UX-Risiko):** Wortmarkierung per Timer statt pro Bild (Box könnte hinterherhinken), Markierung über
+`transform` (runde Ecken verzerren), Bücher nach und nach aufbauen (Scrollen/Springen; nur nach Messung), kleineres
+Whisper-Modell (ungenauere Marken), Mikrofon beim Verlassen automatisch stoppen (Aufnahme läuft heute bewusst weiter).
+- Board 27 (von Simon im Canvas freigegeben, 10.11.): Play-Knopf pulsiert **einmal** beim Start des Abspielens
+  (`.play.pulse`, ausgelöst in `renderPlay` beim Wechsel aus „idle“; nicht nach jeder kurzen Ladepause) statt endlos.
+  Bibliothek: Hör-Stand-Balken gleitet linear im Takt der Player-Leiste (0,25 s statt 0,5 s mit Abbremsen);
+  `renderLibrary` passt bei gleichen Einträgen nur Ring/Stand/Zeit/Balken an (`libPatch`) statt alle 2 s neu zu bauen.
+  Test `test_playknopf_pulsiert_einmal_und_bibliothek_bleibt_stehen`. Auf Simons Wunsch ebenso einmal: Play-Knopf in der
+  Rundgang-Illustration (`.il .play`) und der aktive Einrichtungs-Schritt (`.cs-steps .dot`, je Schrittwechsel einmal).
+  Bewusst weiter in Schleife: Statusanzeigen, solange etwas läuft (Aufnahme, Diktat, Vorbereiten, Lade-Skelett).
+**Offen:** Windows-Teil-Update ohne Rückweg (nur auf Windows testbar).
+
+## 2026-11-10 · Eigene Stimme: Lüfter/Akku durch dreifaches Erzeugen (3.0.2)
+**Kontext:** Simon: Mac heiß, Lüfter laut, App „tat nichts“. Log: 335 Zeichen mit der eigenen Stimme → „Audio zu kurz
+(0.0 s)“ → neu → satzweise → „unknown format: 3“ → Piper. ~4,5 min Vollast, alles verworfen. Ursache: der Worker speichert
+den Float-Tensor per `torchaudio.save` als Gleitkomma-WAV (Format 3); Pythons `wave` kann das nicht, `_wav_secs` lieferte
+still 0,0 → die Abbruch-Prüfung aus 3.0.0 hielt **jeden** Abschnitt ab 6 Wörtern für abgebrochen.
+**Entscheidung:** Worker schreibt 16-Bit-PCM. `tts.py` liest WAV-Kopf selbst (`_wav_teile`, PCM und Float), unbekannte
+Dauer zählt nie als „zu kurz“ (lieber einmal ein Abbruch als stille Dreifach-Arbeit). Test mit echtem Float-WAV – die
+alten Tests nutzten nur PCM und sahen den Fehler nicht. Dazu: der Atmosphäre-Takt (80 ms) läuft nur noch beim
+Abspielen/Ausblenden, in Ruhe 1×/s; `play` der Stimme und Klangwahl wecken ihn sofort.
+**Verworfen:** Klon-Worker nach Leerlauf beenden – spart nur RAM (1,3 GB), kostet 15–20 s beim nächsten Schnelllesen.
+
+## 2026-11-10 · Ersatzstimme nur auf Wunsch (3.0.2, ersetzt den Automatismus aus 3.0.1)
+**Kontext:** Simon: die Ersatzstimme wird zu sehr aufgedrängt – nach 6 s las automatisch Piper.
+**Entscheidung:** Vorlesen im Text wechselt nie automatisch. Der Abschnitt wartet auf Edge (auch während der
+60-s-Sperre, `sperre=False`); nach 6 s wird der Statustext selbst zum Knopf „Online-Stimme hängt – zur Offline-Stimme
+wechseln“, im Fehlerfall steht „Offline-Stimme nutzen“ neben „Erneut versuchen“. Gewählt → `?offline=1`, bis der
+Nutzer per Statustext zurückwechselt oder die Stimme ändert. Ausnahme bleibt „* * *“ u. Ä. (Edge liefert kein Audio):
+diese eine Stelle überbrückt Piper wie bisher. Die Hintergrund-Edge-Aufträge (`_edge_auftrag`) sind wieder raus.
+
 ## 2026-11-09 · Ersatzstimme nur kurz, Vorladen ohne Ersatzstimme (3.0.1)
 **Kontext:** Tester-Rückmeldung: Wiedergabe stand still, danach las die Offline-Stimme weiter, obwohl Edge wieder ging.
 Log: Edge brauchte bis 29 s pro Abschnitt, dann Zeitlimit → 60 s Sperre → das Vorladen erzeugte in dieser Minute

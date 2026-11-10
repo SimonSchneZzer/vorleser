@@ -3,9 +3,18 @@
 /* ===================================================================== */
 /* Player-Oberfläche                                                      */
 /* ===================================================================== */
+/** „current“/„done“ an den Abschnitten: nur zwischen altem und neuem Abschnitt umschalten (lange Bücher: sonst bei
+ *  jedem Satzwechsel alle Tausend Abschnitte). Neuer Text (neue span-Liste) → einmal alle. */
+function hlClasses() {
+  const sp = st.spans, i = st.idx;
+  const set = (k) => { sp[k].classList.toggle("current", k === i); sp[k].classList.toggle("done", k < i); };
+  if (st.hl?.spans !== sp) { for (let k = 0; k < sp.length; k++) set(k); st.hl = { spans: sp, idx: i }; return; }
+  for (let k = Math.max(0, Math.min(st.hl.idx, i)); k <= Math.min(sp.length - 1, Math.max(st.hl.idx, i)); k++) set(k);
+  st.hl.idx = i;
+}
 function highlight(scroll) {
   if (!st.doc) return;
-  st.spans.forEach((s, i) => { s.classList.toggle("current", i === st.idx); s.classList.toggle("done", i < st.idx); });
+  hlClasses();
   if (markMode() !== "section" && (!st.words || st.words.idx !== st.idx || st.words.doc !== st.doc.id)) buildWords(st.idx);
   if (markMode() === "section") clearWords();
   const W = st.words;                                   // Markierungsart gewechselt → Wort-Box passend zeigen/verstecken
@@ -109,6 +118,8 @@ function loadingVisible() {               // „Laden“ erst zeigen, wenn es l�
 }
 function renderPlay() {
   const s = playState(), b = $("playBtn"), showLoad = loadingVisible();
+  if ((st.playWas ?? "idle") === "idle" && s !== "idle") { b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse"); }   // einmal beim Start
+  st.playWas = s;
   b.classList.toggle("is-playing", s === "playing" || (s === "loading" && !showLoad));
   document.body.classList.toggle("is-playing", s === "playing");          // Wellen-Animation der kompakten Ansicht
   b.classList.toggle("is-loading", showLoad);
@@ -152,12 +163,28 @@ function nowSync() {
   el.textContent = t;
   if (!reducedMotion.matches) { el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
 }
+const canOffline = () => !!st.doc && !st.doc.demo && !st.offline && st.doc.voice.startsWith("edge:");
+/** Offline-Stimme ein/aus – nur auf Wunsch (3.0.2). Liest an derselben Stelle weiter. */
+function setOffline(on) {
+  if (!st.doc) return;
+  st.offline = on; st.lastError = null;
+  const frac = st.loadedIdx === st.idx && audio.duration ? { frac: audio.currentTime / audio.duration } : 0;
+  const play = on || st.wantPlay;
+  if (play) audio.pause();
+  clearCache();
+  if (play) playFrom(st.idx, frac); else updateStatus();
+}
+$("status").addEventListener("click", (e) => {
+  if (e.target.closest("[data-offline]")) setOffline(true);
+  else if (e.target.closest("[data-online]")) setOffline(false);
+});
 function updateStatus(loading = false) {
   if (!st.doc) return;
   if (st.doc.demo) return setStatus(`<span class="dot"></span><span>Beispieltext</span>`);
   if (st.lastError && !st.wantPlay) {
     statusSt.html = "";                       // Knopf braucht frische Elemente + Handler
-    setStatus(`<span class="status-err">${icon("i-x", "i", "width:14px;height:14px")}<span>${esc(st.lastError.msg)}</span> · <button class="linkbtn" id="retryBtn">Erneut versuchen</button></span>`);
+    const off = canOffline() ? ` · <button class="linkbtn" data-offline>Offline-Stimme nutzen</button>` : "";
+    setStatus(`<span class="status-err">${icon("i-x", "i", "width:14px;height:14px")}<span>${esc(st.lastError.msg)}</span> · <button class="linkbtn" id="retryBtn">Erneut versuchen</button>${off}</span>`);
     $("retryBtn").onclick = () => { const r = st.lastError?.retry; st.lastError = null; r ? r() : play(); };
     return;
   }
@@ -165,12 +192,13 @@ function updateStatus(loading = false) {
   let ready = 0; for (let i = st.idx + 1; i < st.doc.chunks.length; i++) if (isReady(i)) ready++;   // alle kommenden, auch nach einer Lücke
   const last = st.idx >= st.doc.chunks.length - 1;
   const allReady = st.doc.chunks.every((_, i) => isReady(i));
-  let msg, kind = "", tip = "";
-  if (loadingVisible()) {
+  let msg, kind = "", act = "";
+  if (canOffline() && loadingVisible() && st.waitSince && Date.now() - st.waitSince > 6000) {
+    msg = "Online-Stimme hängt – zur Offline-Stimme wechseln"; kind = "busy"; act = "offline";   // der Text ist der Knopf
+  } else if (loadingVisible()) {
     msg = st.doc.voice.startsWith("clone:") ? "Eigene Stimme erzeugt …" : "Bereite vor …"; kind = "load";
-  } else if (st.cache.get(st.idx)?.fallback) {
-    msg = "Ersatzstimme – Online-Stimme antwortet gerade nicht"; kind = "busy";
-    tip = "Die Offline-Stimme liest, bis die Online-Stimme wieder antwortet – dann wird automatisch getauscht";
+  } else if (st.offline && st.doc.voice.startsWith("edge:")) {
+    msg = "Offline-Stimme liest – zurück zur Online-Stimme"; act = "online";
   } else if (st.wantPlay && !last && !isReady(st.idx + 1)) {
     msg = "Nächster Abschnitt wird erzeugt …"; kind = "busy";
   } else {
@@ -178,7 +206,7 @@ function updateStatus(loading = false) {
     if (!st.wantPlay) msg = ["Pausiert", st.pendingOffset > 0 ? "beim Lesezeichen" : msg].filter(Boolean).join(" · ");
   }
   const mark = kind === "load" ? '<span class="spin"></span>' : `<span class="dot${kind ? " busy" : ""}"></span>`;
-  setStatus(`<span class="st-in${kind ? " busy" : ""}"${tip ? ` title="${tip}"` : ""}>${mark}<span>${esc(msg)}</span></span>`);
+  setStatus(`<span class="st-in${kind ? " busy" : ""}">${mark}<span>${act ? `<button class="st-act" data-${act}>${esc(msg)}</button>` : esc(msg)}</span></span>`);
 }
 function updateMediaSession() {
   if (!("mediaSession" in navigator) || !st.doc) return;
@@ -240,7 +268,7 @@ function scrubShow(t, drag) {
 /** Geschätztes Zielwort beim Ziehen: im aktuellen Abschnitt das Wort-Element, sonst per Range im reinen Text. */
 function ghostRect(t) {
   const W = st.words;
-  if (W && W.idx === t.i && W.doc === st.doc.id) return W.list[wordAtFrac(W.list, t.frac)]?.el.firstElementChild?.getBoundingClientRect();
+  if (W && W.idx === t.i && W.doc === st.doc.id) { const w = W.list[wordAtFrac(W.list, t.frac)]?.el.firstElementChild; return w ? [...w.getClientRects()].find((x) => x.width) : null; }   // umbrochenes Wort: erstes Zeilenstück
   const node = st.spans[t.i]?.firstChild;
   if (!node || node.nodeType !== 3) return null;
   const toks = tokenize(node.data), tk = toks[wordAtFrac(toks, t.frac)];
@@ -303,7 +331,7 @@ async function changeDocVoice(v) {
   try { await api(`/api/docs/${st.doc.id}`, { method: "PATCH", body: JSON.stringify({ voice: v }) }); }
   catch (e) { return toastErr(e); }                     // erst speichern, dann stoppen: bei Fehler läuft alles weiter
   stop();
-  st.doc.voice = v; st.pendingOffset = 0; st.pendingFrac = null; st.srvCached = new Set();
+  st.doc.voice = v; st.offline = false; st.pendingOffset = 0; st.pendingFrac = null; st.srvCached = new Set();
   setVoicePill($("voiceAv"), $("voiceLbl"), v);
   updatePrep();
   wasPlaying ? playFrom(st.idx, 0) : (highlight(false), prefetch());
@@ -808,9 +836,7 @@ function sleepMenu(open) {
   const cur = schlaf.mode, last = sleepLast();
   $("sleepOpts").innerHTML = SLEEP_OPTS.map(([v, l], i) => `<button role="menuitemradio" aria-checked="${v === cur}" data-i="${i}" class="${v === cur ? "on" : ""}">${l}${v != null && v === last && v !== cur ? '<small>zuletzt</small>' : ""}</button>`).join("");
   m.classList.remove("hidden");
-  const r = $("sleepBtn").getBoundingClientRect();
-  m.style.left = `${Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left + r.width / 2 - m.offsetWidth / 2))}px`;
-  m.style.top = `${r.top - m.offsetHeight - 10}px`;
+  popAtBtn(m, $("sleepBtn"));
   animateIn(m, "enter");
 }
 $("sleepBtn").onclick = (e) => {
@@ -856,8 +882,19 @@ function atmoStep(target) {
   if (target > 0 && atmoAu.paused) atmoAu.play().catch(() => {});
   if (!target && !atmoAu.volume && !atmoAu.paused) atmoAu.pause();
 }
-setInterval(atmoTick, 80);
+// Nur beim Ein-/Ausblenden und Abspielen fein takten; in Ruhe 1×/s (12,5 Weckrufe/s kosteten Akku, 3.0.2).
+// Startet die Stimme, sofort wecken – sonst käme der Klang bis zu 1 s zu spät.
+let atmoT = 0;
+function atmoLoop() {
+  atmoTick();
+  const ruhig = atmoAu.paused && !atmoAu.volume && !(atmoKey() !== "aus" && st.wantPlay && view === "read");
+  atmoT = setTimeout(atmoLoop, ruhig ? 1000 : 80);
+}
+function atmoWake() { clearTimeout(atmoT); atmoT = setTimeout(atmoLoop, 0); }
+audio.addEventListener("play", atmoWake);
+atmoWake();
 function atmoRender() {
+  atmoWake();                                            // Klang gewechselt → sofort ein-/ausblenden
   const k = atmoKey(), on = k !== "aus";
   $("atmoBtn").classList.toggle("on", on);
   $("atmoLbl").textContent = on ? ATMO.find((a) => a[0] === k)[1] : "";
@@ -873,13 +910,17 @@ function atmoExportRender() {
   if (off) $("xAtmoHint").innerHTML = `Erst im Player über <svg class="i ico-inl" aria-hidden="true"><use href="#i-wave"/></svg> einen Klang wählen`;
   else $("xAtmoHint").textContent = atmoExport ? `${ATMO.find((a) => a[0] === k)[1]}, leise unter der Stimme` : "Aus – nur die Stimme";
 }
+/** Menü mittig über dem Knopf – passt es oben nicht hin (kompakte Ansicht: Knöpfe oben rechts), darunter. */
+function popAtBtn(m, btn) {
+  const r = btn.getBoundingClientRect(), h = m.offsetHeight, above = r.top - h - 10 >= 8;
+  m.style.left = `${Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left + r.width / 2 - m.offsetWidth / 2))}px`;
+  m.style.top = `${above ? r.top - h - 10 : r.bottom + 10}px`;
+}
 function atmoMenu(open) {
   const m = $("atmoMenu");
   if (!open) return m.classList.add("hidden");
   atmoRender(); m.classList.remove("hidden");
-  const r = $("atmoBtn").getBoundingClientRect();
-  m.style.left = `${Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left + r.width / 2 - m.offsetWidth / 2))}px`;
-  m.style.top = `${r.top - m.offsetHeight - 10}px`;
+  popAtBtn(m, $("atmoBtn"));
   animateIn(m, "enter");
 }
 $("atmoBtn").onclick = (e) => { e.stopPropagation(); atmoMenu($("atmoMenu").classList.contains("hidden")); };
@@ -941,8 +982,13 @@ function bmPlace() {
 new ResizeObserver(() => bmPlace()).observe($("reader"));
 // Auch links neben dem Absatz (dort sitzt das Symbol) – nicht nur über dem Text selbst
 function bmChunkAt(e) {
-  const c = e.target.closest?.(".chunk"); if (c) return c;
+  // Vom Satz nach links zum Symbol: beginnt er mitten in der Zeile, fährt die Maus über den vorigen Satz bzw. landet am
+  // Zeilenanfang bei ihm → solange sie auf einer Zeile des gezeigten Satzes nach links fährt (oder schon im Rand ist),
+  // diesen behalten (Tester-Rückmeldung 3.0.1). Nach rechts/oben/unten wechselt das Symbol wie gewohnt.
   const T = $("docText").getBoundingClientRect();
+  const cur = bmState.hoverI >= 0 ? st.spans[bmState.hoverI] : null;
+  if (cur && (e.movementX < 0 || e.clientX < T.left) && [...cur.getClientRects()].some((r) => e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2)) return cur;
+  const c = e.target.closest?.(".chunk"); if (c) return c;
   if (e.clientX >= T.left) return null;                   // irgendwo links vom Text – egal wie weit
   for (const dx of [4, 24, 60]) {
     const hit = document.elementFromPoint(T.left + dx, e.clientY)?.closest(".chunk");
@@ -1191,14 +1237,19 @@ new MutationObserver(() => { if ($("findBar").classList.contains("open") && fnd.
 /* Kompakte Ansicht (Fenster schmaler als 640 px oder niedriger als 560 px): nur noch der Player – groß, mit Wellen und
    Mitlesezeile. Vorher drängelte sich die Oberfläche und „glitchte“ (Rückmeldung Simon). Bibliothek über ☰. */
 /* ===================================================================== */
-const compactMq = matchMedia("(max-width: 640px), (max-height: 560px)");
+// Nur zwei Ansichten (Simon, 10.11.2026): normal mit Seitenleiste oder Mini-Player – keine Zwischenstufe. Ab 1000 px Breite
+// passt die Seitenleiste nicht mehr (siehe @media max-width 1000px) → Mini. Auch in Einstellungen/Neuer Text; die Ansicht
+// darunter bleibt erhalten und ist beim Größerziehen wieder da. Ausnahme Bearbeiten (dort wird getippt).
+const compactMq = matchMedia("(max-width: 1000px), (max-height: 560px)");
 function compactSync() {
-  const on = compactMq.matches && !!st.doc && view !== "edit" && view !== "settings" && view !== "new";
+  const on = compactMq.matches && !!st.doc && view !== "edit";
   if (document.body.classList.contains("compact") === on) return;
   document.body.classList.toggle("compact", on);
   nowSync();
-  if (on) $("player").animate?.([{ transform: "scale(.98)" }, { transform: "none" }], { duration: 320, easing: EASE_OUT });
+  const anim = on ? $("player").animate?.([{ transform: "scale(.98)" }, { transform: "none" }], { duration: 320, easing: EASE_OUT }) : null;
   mlSync();
+  // Wort-Box der Mitlesezeile nach dem Einzoomen neu messen – mittendrin (98 %) gemessen saß sie ~25 px daneben (10.11.2026)
+  anim?.finished.then(() => mlSync(), () => {});
 }
 compactMq.addEventListener?.("change", compactSync);
 setInterval(compactSync, 500);                            // Ansichtswechsel / Text geöffnet – billig, kein Haken nötig

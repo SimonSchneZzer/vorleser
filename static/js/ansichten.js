@@ -142,6 +142,7 @@ function renderLibrary() {
   // hinweg weiter: negative Verzögerung = bereits vergangene Zeit.
   const ago = st.libLand ? performance.now() - st.libLand.t : Infinity;
   const land = ago < 1800 ? st.libLand.id : null;
+  if (!stagger && !land && libPatch(ul, docs)) return;        // nur Zahlen geändert → an Ort und Stelle (Board 27)
   const prevPre = new Map([...ul.querySelectorAll("a[data-id]")].map((a) => [a.dataset.id, a.querySelector(".pre")?.style.width]));
   ul.innerHTML = docs.map((d, n) => {
     const pct = docPct(d), state = docState(d, pct);
@@ -149,7 +150,7 @@ function renderLibrary() {
     const ts = d.progress.updated || d.created;
     const full = new Date(ts * 1000).toLocaleString(LOC(), { dateStyle: "medium", timeStyle: "short" });
     const cls = d.id === land ? "landed" : stagger ? "enter" : "";
-    return `<li class="${cls}" style="--i:${Math.min(n, 12)}${d.id === land ? `;--ago:${-Math.round(ago)}ms` : ""}"><a href="#" class="${active}" data-id="${d.id}">
+    return `<li class="${cls}" style="--i:${Math.min(n, 12)}${d.id === land ? `;--ago:${-Math.round(ago)}ms` : ""}"><a href="#" class="${active}" data-id="${d.id}" data-k="${esc(libKey(d))}">
         <span class="row1">${jobRing(d.id)}<span class="t" data-noi18n>${esc(d.title)}</span><span class="when" title="${d.progress.updated ? "Zuletzt gehört" : "Erstellt"}: ${full}">${fmtWhen(ts)}</span></span>
         <span class="m"><b>${esc(d.lang.toUpperCase())}</b>·<span>${d.chapters ? `${d.chapters} Kapitel` : nAbschn(d.count)}</span>·<span class="st">${state}</span></span>
         <span class="bar"><i class="pre" style="width:${d.count ? Math.round((d.prepared || 0) / d.count * 100) : 0}%"></i><i class="pos" style="width:${pct}%"></i></span></a>
@@ -163,6 +164,31 @@ function renderLibrary() {
     if (from != null && bar && from !== bar.style.width && bar.animate && !reducedMotion.matches)
       bar.animate([{ width: from }, { width: bar.style.width }], { duration: 520, easing: EASE });
   }
+}
+/** Was sich an einem Eintrag nur durch Neuzeichnen ändern lässt (Titel, Sprache, Umfang). */
+function libKey(d) { return `${d.title}\u0001${d.lang}\u0001${d.chapters || 0}\u0001${d.count}`; }
+/** Gleiche Einträge in gleicher Reihenfolge → nur Ring, Stand, Zeit und Balken anpassen statt die Liste neu zu bauen.
+ *  Sonst (Abfrage alle 2 s beim Vorbereiten) gingen Hover/Fokus verloren und die „…“-Knöpfe flackerten. */
+function libPatch(ul, docs) {
+  const as = [...ul.querySelectorAll("a[data-id]")];
+  if (as.length !== docs.length || as.some((a, i) => a.dataset.id !== docs[i].id || a.dataset.k !== libKey(docs[i]))) return false;
+  docs.forEach((d, i) => {
+    const a = as[i], pct = docPct(d), state = docState(d, pct), ts = d.progress.updated || d.created;
+    a.classList.toggle("active", view === "read" && st.doc?.id === d.id);
+    const row = a.querySelector(".row1"), old = row.querySelector(".jobring"), ring = jobRing(d.id);
+    if (!ring) old?.remove();
+    else if (old?.dataset.h !== ring) {
+      const t = document.createElement("template"); t.innerHTML = ring;
+      const svg = t.content.firstElementChild; svg.dataset.h = ring;
+      old ? old.replaceWith(svg) : row.prepend(svg);
+    }
+    const s = a.querySelector(".st"); if (s.textContent !== state) s.textContent = state;
+    const w = a.querySelector(".when"), wt = fmtWhen(ts); if (w.textContent !== wt) w.textContent = wt;
+    w.title = `${d.progress.updated ? "Zuletzt gehört" : "Erstellt"}: ${new Date(ts * 1000).toLocaleString(LOC(), { dateStyle: "medium", timeStyle: "short" })}`;
+    a.querySelector(".pre").style.width = `${d.count ? Math.round((d.prepared || 0) / d.count * 100) : 0}%`;
+    a.querySelector(".pos").style.width = `${pct}%`;
+  });
+  return true;
 }
 /** Unterscheiden sich die Listen um genau einen Eintrag (einer dazu oder einer weg)? */
 function oneChanged(a, b) {
@@ -195,6 +221,9 @@ function libMenuOpen(dots, at) {
   closePops(true);
   if (was && !at) return;
   libMenuFor = dots.dataset.dots;
+  const playing = st.doc?.id === libMenuFor && st.wantPlay;   // erster Eintrag: Abspielen bzw. Pause
+  $("libPlayLbl").textContent = playing ? "Pause" : "Abspielen";
+  $("libPlayIc").innerHTML = `<use href="#${playing ? "i-pause" : "i-play"}"/>`;
   dots.classList.add("open"); dots.closest("li").classList.add("menu-open");
   openPop(m);
   const r = at ? { left: at.x, right: at.x, top: at.y, bottom: at.y } : dots.getBoundingClientRect();
@@ -219,17 +248,32 @@ $("library").onclick = async (e) => {
     return;
   }
   const a = e.target.closest("a[data-id]");
-  if (a) { e.preventDefault(); if (view === "edit" && edDirty() && !(await askDiscard())) return; openDoc(a.dataset.id); }
+  if (a) { e.preventDefault(); if (view === "edit" && edDirty() && !(await askDiscard())) return; showOrOpen(a.dataset.id); }
 };
 $("libMenu").onclick = async (e) => {
   const b = e.target.closest("[data-act]"); if (!b || !libMenuFor) return;
   const id = libMenuFor; closePops();
   if (b.dataset.act === "delete") return deleteDoc(id);
   if (view === "edit" && edDirty() && !(await askDiscard())) return;
-  if (st.doc?.id !== id || view !== "read") await openDoc(id);
+  if (b.dataset.act === "play") {                         // Abspielen direkt aus der Bibliothek (Simon, 10.11.2026)
+    const same = st.doc?.id === id && !st.doc.demo;
+    await showOrOpen(id);
+    if (same && st.wantPlay) pause(); else play();
+    return;
+  }
+  await showOrOpen(id);
   if (b.dataset.act === "edit") openEditor();
   if (b.dataset.act === "export") $("exportBtn").click();
 };
+/** Text zeigen: ist es der geöffnete, nur zurück zur Leseansicht – neu laden würde die Wiedergabe anhalten
+ *  (Simon, 10.11.2026: abspielen → Einstellungen → zurück zum Text hielt an). */
+async function showOrOpen(id) {
+  if (st.doc?.id === id && !st.doc.demo) {
+    if (view !== "read") { showView("read"); highlight(true); }
+    return;
+  }
+  await openDoc(id);
+}
 const askDiscard = () => ask({ title: "Änderungen verwerfen?", text: "Deine Änderungen am Text gehen verloren.", ok: "Verwerfen", danger: true, icon: "i-pen" });
 $("libSearch").oninput = renderLibrary;
 async function deleteDoc(id) {

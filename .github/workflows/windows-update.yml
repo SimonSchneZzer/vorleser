@@ -1,0 +1,60 @@
+# Update auf einem echten Windows-Rechner durchspielen (packaging/test_update_windows.py).
+# - e2e: gebaute App installieren → Teil-Update „Jetzt neu starten“, „Später“ + Beenden, komplettes Paket
+# - alt: veröffentlichte Vorversion → echtes Update (Diagnose, schlägt nie fehl)
+# Läuft manuell und bei Pushes auf den Branch windows-update-test; im Release-Build steckt derselbe e2e-Test.
+name: Windows-Update testen
+
+on:
+  push:
+    branches: [windows-update-test]
+  workflow_dispatch:
+    inputs:
+      alt:
+        description: "Alte Version für die Diagnose (leer = keine)"
+        default: "2.10.3"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          activate-environment: true
+      - run: uv pip install -r requirements.lock
+      - run: python -m piper.download_voices --download-dir voices de_DE-thorsten-medium en_US-lessac-medium
+      - run: pyinstaller --noconfirm --log-level WARN packaging/vorleser.spec
+      - name: Installer (aktuelle Version + Testversion 9.9.3)
+        run: |
+          mkdir -p build
+          python -c "from PIL import Image; Image.open('packaging/icon.png').save('build/icon.ico', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          [ -f "$ISCC" ] || choco install innosetup -y --no-progress
+          "$ISCC" "//DAppVersion=$(cat VERSION)" packaging/vorleser.iss
+          echo -n "9.9.3" > dist/Vorleser/_internal/VERSION
+          "$ISCC" "//DAppVersion=9.9.3" packaging/vorleser.iss
+          ls -la dist
+      - name: Update durchspielen
+        run: python packaging/test_update_windows.py e2e "dist/Vorleser-$(cat VERSION)-windows-setup.exe" dist/Vorleser-9.9.3-windows-setup.exe
+
+  alt:
+    if: github.event_name == 'push' || inputs.alt != ''
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Alte Version laden
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "v${{ inputs.alt || '2.10.3' }}" -R SimonSchneZzer/vorleser-download -p Vorleser-windows-setup.exe -D old
+      - name: Echtes Update der alten Version (Diagnose)
+        run: python packaging/test_update_windows.py alt old/Vorleser-windows-setup.exe

@@ -165,7 +165,7 @@ def test_latest_json_ist_hauptweg(release_server, monkeypatch):
     release_server.body = {"version": "1.3.0", "notes": "Neu: Export.", "page": "https://x",
                            "assets": {"Vorleser-mac.dmg": {"url": "http://dl/mac.dmg", "size": 7}}}
     latest = updater.check(force=True)
-    assert latest == {"version": "1.3.0", "url": "http://dl/mac.dmg", "size": 7, "notes": "Neu: Export.", "page": "https://x", "patch": None}
+    assert latest == {"version": "1.3.0", "url": "http://dl/mac.dmg", "size": 7, "notes": "Neu: Export.", "page": "https://x", "patch": None, "sha256": None}
     assert updater.status()["available"]
 
 
@@ -390,6 +390,32 @@ def test_mac_helfer_tauscht_vorbereitete_app(monkeypatch, tmp_path):
     assert (app / "Contents" / "neu").exists() and not (app / "Contents" / "alt").exists() and not staged.exists()
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Mac-Helfer")
+def test_mac_helfer_stellt_alte_app_wieder_her(monkeypatch, tmp_path):
+    """Scheitert das Einsetzen der neuen App, darf Vorleser nicht verschwinden (vorher: App weg)."""
+    app = tmp_path / "Vorleser.app"
+    (app / "Contents").mkdir(parents=True); (app / "Contents" / "alt").write_text("1")
+    ro = tmp_path / "ro"
+    staged = ro / "Vorleser.app.new"
+    (staged / "Contents").mkdir(parents=True)
+    ro.chmod(0o555)                                  # neue App lässt sich nicht herausbewegen
+    try:
+        monkeypatch.setattr(updater, "_app_path", lambda: app)
+        monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path)
+        monkeypatch.setattr(updater.os, "getpid", lambda: 999999)
+        monkeypatch.setattr(updater, "_ready", {"version": "9.9.9", "installer": "x", "staged": str(staged)})
+        monkeypatch.setattr(updater.paths, "DATA_DIR", tmp_path)
+        updater._launch_helper(relaunch=False)
+        for _ in range(50):
+            if "wiederhergestellt" in ((tmp_path / "update.log").read_text() if (tmp_path / "update.log").exists() else ""):
+                break
+            time.sleep(0.1)
+        assert "wiederhergestellt" in (tmp_path / "update.log").read_text()
+        assert (app / "Contents" / "alt").exists() and not (tmp_path / "Vorleser.app.old").exists()
+    finally:
+        ro.chmod(0o755)
+
+
 # --------------------------------------------------------------------------- #
 # Laden: Wiederholung bei Serverfehlern, Ausweichweg über die GitHub-API
 def _http(code):
@@ -462,6 +488,24 @@ def test_teilupdate_netzfehler_kein_komplettpaket(monkeypatch):
     assert updater._state["state"] == "error" and updater._state["error"] == updater.MSG_SERVER
 
 
+def test_komplettpaket_mit_falscher_pruefsumme_wird_verworfen(monkeypatch, tmp_path):
+    """latest.json nennt eine Prüfsumme (ab 3.0.2) → beschädigtes Paket nie einspielen, Datei weg (nächster Versuch lädt neu)."""
+    import hashlib
+    monkeypatch.setattr(paths, "APP_VERSION", "1.0.0")
+    inst = tmp_path / "1.1.0-Vorleser-mac.dmg"
+    inst.write_bytes(b"kaputt")
+    latest = {"version": "1.1.0", "url": "https://github.com/x/a.dmg", "size": 6, "notes": "", "page": "",
+              "sha256": hashlib.sha256(b"richtig").hexdigest()}
+    monkeypatch.setattr(updater, "check", lambda force=False: latest)
+    monkeypatch.setattr(updater, "_patch_for", lambda l: None)
+    monkeypatch.setattr(updater, "_download", lambda *a, **k: inst)
+    monkeypatch.setattr(updater, "_stage_mac", lambda *a: pytest.fail("darf nicht eingespielt werden"))
+    monkeypatch.setattr(updater, "_ready", None)
+    monkeypatch.setattr(updater, "_state", {"state": "downloading"})
+    updater._prepare()
+    assert updater._state["state"] == "error" and not inst.exists() and updater._ready is None
+
+
 def test_groesse_erst_nach_antwort(monkeypatch, tmp_path):
     """Vor der Antwort des Servers: connected=False und keine Größe; danach feste Größe aus Content-Length."""
     monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path)
@@ -482,3 +526,65 @@ def test_groesse_erst_nach_antwort(monkeypatch, tmp_path):
     updater._download_once({"version": "1.1.0", "size": 4}, "http://x/a", None, "a.dmg", {})
     assert seen["vorher"]["connected"] is False and seen["vorher"]["total"] == 0
     assert updater._state["connected"] is True and updater._state["total"] == 4 and updater._state["done"] == 4
+
+
+# --------------------------------------------------------------------------- #
+# Windows-Helfer (3.0.2): Skriptdatei, aus dem Job lösen, Rückweg, Neustart in jedem Fall
+def test_windows_helfer_skript_und_start(monkeypatch, tmp_path):
+    from pathlib import PureWindowsPath as W
+    monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path)
+    monkeypatch.setattr(updater, "_ready", {"version": "9.9.9", "patch": True, "staged": r"C:\U\Jürgen O'Neil\staged-9.9.9"})
+    calls = []
+
+    class Proc:
+        returncode = 0
+        def poll(self): return 0                                   # sofort beendet → steht im Log
+
+    def popen(args, creationflags=0, **kw):
+        calls.append(creationflags)
+        if creationflags & 0x01000000:
+            raise PermissionError("breakaway nicht erlaubt")       # z. B. Job ohne Breakaway-Recht
+        return Proc()
+    monkeypatch.setattr(updater.subprocess, "Popen", popen)
+    updater._launch_win_helper(W(r"C:\Programs\Vorleser\Vorleser.exe"), 4242, tmp_path / "update.log", True)
+    raw = (tmp_path / "install-9.9.9.ps1").read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf")                          # BOM: Windows PowerShell 5 liest sonst ANSI
+    ps = raw.decode("utf-8-sig")
+    assert "Jürgen O''Neil" in ps and "WaitForExit(60000)" in ps and "robocopy $S $R" in ps
+    assert "wiederhergestellt" in ps and "failed-9.9.9.txt" in ps
+    assert ps.index("finally") < ps.index("Start-Process -FilePath 'C:\\Programs\\Vorleser\\Vorleser.exe'")   # Neustart immer
+    assert calls == [0x01000200 | 0x08000000, 0x00000200 | 0x08000000]   # nie DETACHED_PROCESS (0x8): PowerShell stirbt
+    log = (tmp_path / "update.log").read_text("utf-8")
+    assert "starte Helfer" in log and "ohne Lösen aus dem Job" in log and "sofort beendet (Code 0)" in log
+
+
+def test_teilupdate_nach_fehler_komplettes_paket(monkeypatch, tmp_path):
+    monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path)
+    monkeypatch.setattr(paths, "APP_VERSION", "1.0.0")
+    monkeypatch.setattr(paths, "FROZEN", True)
+    latest = {"version": "1.1.0", "patch": {"url": "u", "from": ["1.0.0"]}}
+    assert updater._patch_for(latest)
+    updater._failed_marker("1.1.0").write_text("robocopy")
+    assert updater._patch_for(latest) is None
+
+
+def test_fehlerbericht_enthaelt_update_log(monkeypatch, tmp_path):
+    import bugreport
+    monkeypatch.setattr(paths, "DATA_DIR", tmp_path)
+    (tmp_path / "update.log").write_text("[x] Helfer gestartet\n[x] robocopy: 16\n", "utf-8")
+    assert "robocopy: 16" in bugreport.info()["log"]
+
+
+def test_aufraeumen_beim_start_laesst_vorbereitetes_update(monkeypatch, tmp_path):
+    """Aufräumen beim Start läuft verzögert – ein schon vorbereitetes Update darf es nicht löschen."""
+    monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path / "updates")
+    monkeypatch.setattr(updater, "LAST_VERSION_FILE", tmp_path / "last-version")
+    monkeypatch.setattr(updater, "status", lambda: {"enabled": False})
+    staged = tmp_path / "updates" / "staged-9.9.1"
+    staged.mkdir(parents=True)
+    monkeypatch.setattr(updater, "_state", {"state": "ready"})
+    updater.start_background()
+    assert staged.exists()
+    monkeypatch.setattr(updater, "_state", {"state": "idle"})
+    updater.start_background()
+    assert not staged.exists()                                   # ohne vorbereitetes Update: Rest weg

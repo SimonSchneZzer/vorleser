@@ -250,6 +250,8 @@ class Handler(BaseHTTPRequestHandler):
         ext = name.rsplit(".", 1)[1]
         if ext == "m4a":                                    # Atmosphäre-Klänge (Version 3.0)
             return self.send(200, (STATIC_DIR / name).read_bytes(), "audio/mp4", {"Cache-Control": "max-age=86400"})
+        if ext == "woff2":                                  # mitgelieferte Schriften (3.0.2, vorher Google Fonts)
+            return self.send(200, (STATIC_DIR / name).read_bytes(), "font/woff2", {"Cache-Control": "max-age=86400"})
         ctype = {"css": "text/css", "js": "text/javascript"}[ext] + "; charset=utf-8"
         self.send(200, (STATIC_DIR / name).read_bytes(), ctype, {"Cache-Control": "no-cache"})
 
@@ -318,13 +320,14 @@ class Handler(BaseHTTPRequestHandler):
     def list_docs(self):
         def summary(doc):                          # + wie viele Abschnitte schon fertig erzeugt sind (heller Balken)
             return {**doc_summary(doc), "prepared": sum(tts.is_cached(c["text"], doc["voice"], doc["id"]) for c in doc["chunks"])}
-        docs = []
-        with _doc_lock:
-            for p in DOCS_DIR.glob("*.json"):
+        loaded = []
+        with _doc_lock:                            # nur das Lesen unter der Sperre – das Zählen (pro Abschnitt eine
+            for p in DOCS_DIR.glob("*.json"):      # Datei-Abfrage) blockierte sonst Vorlesen und Fortschritt-Speichern
                 try:                               # eine kaputte Datei (Stromausfall, Sync-Tool) darf nicht alle verstecken
-                    docs.append(summary(upgrade_doc(json.loads(p.read_text("utf-8")))))
+                    loaded.append(upgrade_doc(json.loads(p.read_text("utf-8"))))
                 except Exception as e:
                     print(f"[server] Text-Datei {p.name} übersprungen (beschädigt?): {e!r}", flush=True)
+        docs = [summary(d) for d in loaded]
         docs.sort(key=lambda d: d["progress"].get("updated") or d["created"], reverse=True)
         self.json({"docs": docs})
 
@@ -644,7 +647,7 @@ class Handler(BaseHTTPRequestHandler):
             q = _quick.get(qid)
         if not q or int(idx) >= len(q["chunks"]):
             raise KeyError("Abschnitt")
-        data, mime, used = tts.synthesize(q["chunks"][int(idx)]["text"], q["voice"], q["lang"], geduld=tts.EDGE_GEDULD)
+        data, mime, used = tts.synthesize(q["chunks"][int(idx)]["text"], q["voice"], q["lang"])
         self.send(200, data, mime, {"Cache-Control": "no-store", "X-Voice-Used": used})
 
     def quick_marks(self, qid, idx):
@@ -673,11 +676,23 @@ class Handler(BaseHTTPRequestHandler):
         idx = int(idx)
         if idx >= len(doc["chunks"]):
             raise KeyError("Abschnitt")
-        # pre=1: Vorladen weiter vorne – keine Ersatzstimme (die bliebe sonst hängen), lieber später neu versuchen.
-        # Sonst (gerade gebraucht): höchstens EDGE_GEDULD Sekunden auf Edge warten, dann liest die Ersatzstimme.
-        pre = (parse_qs(urlparse(self.path).query).get("pre") or [""])[0] == "1"
-        data, mime, used = tts.synthesize(doc["chunks"][idx]["text"], doc["voice"], doc["lang"], doc_id=doc["id"],
-                                          fallback=not pre, geduld=None if pre else tts.EDGE_GEDULD)
+        # 3.0.2: nie automatisch zur Ersatzstimme wechseln (Rückmeldung Simon) – hängt die Online-Stimme, bietet der
+        # Player den Wechsel an; offline=1 = ausdrücklich gewählt. pre=1 (Vorladen): bei Sperre sofort Fehler, später neu.
+        q = parse_qs(urlparse(self.path).query)
+        pre, offline = (q.get("pre") or [""])[0] == "1", (q.get("offline") or [""])[0] == "1"
+        text = doc["chunks"][idx]["text"]
+        if offline:
+            fb = tts.fallback_voice(doc["lang"])
+            if not fb:
+                raise meldungen.Meldung(tts.KEINE_STIMME)
+            data, mime, used = tts.synthesize(text, fb, doc["lang"], doc_id=doc["id"])
+        else:
+            try:
+                data, mime, used = tts.synthesize(text, doc["voice"], doc["lang"], doc_id=doc["id"], fallback=False, sperre=pre)
+            except meldungen.Meldung as e:
+                if str(e) != tts.NICHTS_VORLESBAR:        # z. B. „* * *“: diese eine Stelle wie bisher überbrücken
+                    raise
+                data, mime, used = tts.synthesize(text, doc["voice"], doc["lang"], doc_id=doc["id"])
         self.send(200, data, mime, {"Cache-Control": "no-store", "X-Voice-Used": used})
 
     def marks(self, doc_id, idx):
@@ -891,7 +906,7 @@ D = r"([0-9a-f]{32})"
 ROUTES = [
     (r"/|/index\.html", "GET", Handler.index),
     (r"/mini", "GET", Handler.mini),
-    (r"/(app\.css|i18n\.js|js/[a-z0-9-]+\.js|klang/[a-z]+\.m4a)", "GET", Handler.static),
+    (r"/(app\.css|i18n\.js|js/[a-z0-9-]+\.js|klang/[a-z]+\.m4a|fonts/fonts\.css|fonts/[a-z-]+\.woff2)", "GET", Handler.static),
     (r"/api/settings", "GET", Handler.settings_get),
     (r"/api/settings", "PATCH", Handler.settings_patch),
     (r"/api/voices/preview", "GET", Handler.preview),

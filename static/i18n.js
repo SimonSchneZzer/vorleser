@@ -347,7 +347,7 @@ const I18N_EN = {
   "Abspielen": "Play", "Pause": "Pause", "Lädt … (klicken zum Stoppen)": "Loading … (click to stop)",
   "Tempo": "Speed", "Stimme wählen": "Choose voice", "Stimme wechseln": "Change voice", "Stimme": "Voice",
   "Bereite vor …": "Preparing …", "Eigene Stimme erzeugt …": "Your voice is generating …", "Lesezeichen": "Bookmark",
-  "Fertig gehört": "Finished", "Letzter Abschnitt": "Last section", "Alles bereit": "All ready", "Pausiert": "Paused", "beim Lesezeichen": "at bookmark", "Nächster Abschnitt wird erzeugt …": "Generating next section …", "Ersatzstimme – Online-Stimme antwortet gerade nicht": "Backup voice – online voice isn’t responding right now", "Die Offline-Stimme liest, bis die Online-Stimme wieder antwortet – dann wird automatisch getauscht": "The offline voice reads until the online voice responds again – then it switches back automatically",
+  "Fertig gehört": "Finished", "Letzter Abschnitt": "Last section", "Alles bereit": "All ready", "Pausiert": "Paused", "beim Lesezeichen": "at bookmark", "Nächster Abschnitt wird erzeugt …": "Generating next section …", "Online-Stimme hängt – zur Offline-Stimme wechseln": "Online voice is stuck – switch to the offline voice", "Offline-Stimme liest – zurück zur Online-Stimme": "Offline voice reading – back to the online voice", "Offline-Stimme nutzen": "Use offline voice",
   "Der nächste Abschnitt muss erst erzeugt werden": "The next section still has to be generated",
   "der nächste fehlt noch": "next one still missing",
   "Nächste Abschnitte sind bereit": "Next sections are ready", "Ersatzstimme": "Backup voice",

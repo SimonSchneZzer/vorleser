@@ -56,14 +56,19 @@ def _voice_ids(extra: set[str] = frozenset()) -> set[str]:
 def _names_for(texts, voice_ids, index: dict[str, int], doc_id: str | None = None) -> set[str]:
     """Cache-Dateien (Audio + Wortmarken) für diese Texte mit irgendeiner der Stimmen."""
     found = set()
+    by_lang: dict = {}                          # Aufbereitung hängt nur an der Sprache → einmal je Sprache, nicht je Stimme
+    for vid in voice_ids:
+        by_lang.setdefault(tts._voice_lang(vid), []).append(vid)
     for text in texts:
-        for vid in voice_ids:
-            p = tts.cache_path(text, vid, doc_id)
-            if p.name in index:
-                found.add(p.name)
-                marks = p.with_suffix(".marks.json").name
-                if marks in index:
-                    found.add(marks)
+        for lang, vids in by_lang.items():
+            said = tts.spoken(text, doc_id, lang)
+            for vid in vids:
+                name = tts.cache_name(vid, said)
+                if name in index:
+                    found.add(name)
+                    marks = name.rsplit(".", 1)[0] + ".marks.json"
+                    if marks in index:
+                        found.add(marks)
     return found
 
 

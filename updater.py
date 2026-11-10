@@ -116,7 +116,7 @@ def _check_via_json() -> dict | None:
         return None
     return {"version": str(data["version"]).lstrip("v"), "url": asset["url"], "size": asset.get("size") or 0,
             "notes": (data.get("notes") or "").strip()[:600], "page": data.get("page") or PAGE_URL,
-            "patch": asset.get("patch")}
+            "patch": asset.get("patch"), "sha256": asset.get("sha256")}
 
 
 def check(force: bool = False) -> dict | None:
@@ -188,6 +188,8 @@ def _patch_for(latest: dict | None) -> dict | None:
     """Teil-Update, wenn es für die installierte Version gebaut wurde (sonst komplettes Paket)."""
     p = (latest or {}).get("patch") or None
     ok = p and p.get("url") and paths.APP_VERSION in (p.get("from") or []) and paths.FROZEN and not os.environ.get("VORLESER_NO_PATCH")
+    if ok and latest and latest.get("version") and _failed_marker(latest["version"]).exists():   # Windows-Helfer meldete Fehler → komplettes Paket
+        return None
     return p if ok else None
 
 
@@ -426,43 +428,136 @@ exec >>"{log}" 2>&1
 echo "== $(date) Update auf {_ready['version']} (Neustart: {'ja' if relaunch else 'nein'})"
 while kill -0 {pid} 2>/dev/null; do sleep 0.1; done
 if [ -d "{staged}" ]; then
-  rm -rf "{app}.old" && mv "{app}" "{app}.old" && mv "{staged}" "{app}" && echo "installiert"
-  rm -rf "{app}.old" &
+  rm -rf "{app}.old"
+  if mv "{app}" "{app}.old"; then
+    if mv "{staged}" "{app}"; then
+      echo "installiert"
+      rm -rf "{app}.old" &
+    else
+      rm -rf "{app}"                       # evtl. halb kopiert – dann die bisherige Version zurück
+      mv "{app}.old" "{app}" && echo "Tausch fehlgeschlagen – bisherige Version wiederhergestellt"
+    fi
+  fi
 fi
 {f'open "{app}"' if relaunch else ''}
 """, "utf-8")
         script.chmod(0o755)
         subprocess.Popen(["/bin/bash", str(script)], start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    elif paths.IS_WIN and _ready.get("patch"):
-        L, S, A, R = _ps(log), _ps(_ready["staged"]), _ps(app), _ps(app.parent)
-        D, V = _ps(UPDATES_DIR / f"delete-{_ready['version']}.txt"), _ps(_ready["version"])
-        ps = (f"Add-Content -Path '{L}' -Value ('== ' + (Get-Date) + ' Teil-Update auf {V}'); "
-              f"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300; "
-              f"robocopy '{S}' '{R}' /E /R:5 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null; $rc = $LASTEXITCODE; "
-              f"Add-Content -Path '{L}' -Value ('robocopy: ' + $rc); "
-              f"if ($rc -lt 8) {{ Get-Content -Path '{D}' -ErrorAction SilentlyContinue | ForEach-Object {{ "
-              f"if ($_) {{ Remove-Item -LiteralPath (Join-Path '{R}' $_) -Force -ErrorAction SilentlyContinue }} }}; "
-              # Versionsanzeige unter „Apps“ (Inno Setup) nachziehen
-              f"foreach ($h in 'HKCU:','HKLM:') {{ $k = $h + '\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{{6E1B7C52-4D0A-4C1E-9F43-7A8C2B9D0E11}}_is1'; "
-              f"if (Test-Path $k) {{ Set-ItemProperty -Path $k -Name DisplayVersion -Value '{V}' -ErrorAction SilentlyContinue }} }}; "
-              f"Remove-Item -LiteralPath '{S}' -Recurse -Force -ErrorAction SilentlyContinue }}"
-              + (f"; Start-Process -FilePath '{A}'" if relaunch else ""))
-        flags = 0x00000008 | 0x00000200 | 0x08000000
-        subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-                          "-Command", ps], creationflags=flags, close_fds=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     elif paths.IS_WIN:
-        L, I, A = _ps(log), _ps(_ready["installer"]), _ps(app)
-        ps = (f"Add-Content -Path '{L}' -Value ('== ' + (Get-Date) + ' Update'); "
-              f"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; "
-              f"$p = Start-Process -FilePath '{I}' -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOCANCEL' -Wait -PassThru; "
-              f"Add-Content -Path '{L}' -Value ('Setup beendet: ' + $p.ExitCode)"
-              + (f"; Start-Process -FilePath '{A}'" if relaunch else ""))
-        flags = 0x00000008 | 0x00000200 | 0x08000000   # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
-        subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-                          "-Command", ps], creationflags=flags, close_fds=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _launch_win_helper(app, pid, log, relaunch)
+
+
+# Windows-Helfer (3.0.2, neu nach Rückmeldung David: 2.10.3 → 3.0.1 wurde nie eingespielt, App kam nicht wieder).
+# Als eigene .ps1-Datei (UTF-8 mit BOM – sonst liest Windows PowerShell 5 Umlaute in Pfaden falsch), schreibt sofort ins
+# Log, löst sich aus dem Job der App (sonst beendet Windows ihn mit), wartet höchstens 60 s auf das Ende der App,
+# beendet Reste aus dem App-Ordner (z. B. ffmpeg, sperren Dateien), sichert ersetzte Dateien und stellt sie bei einem
+# Fehler wieder her, startet die App in jedem Fall neu. Teil-Update gescheitert → Merker → nächstes Mal komplettes Paket.
+# Geprüft auf echtem Windows: .github/workflows/windows-update.yml (packaging/test_update_windows.py).
+_PS_HEAD = """$ErrorActionPreference = 'Continue'
+$log = '{L}'
+function L($m) {{ try {{ Add-Content -LiteralPath $log -Value ('[' + (Get-Date -Format s) + '] ' + $m) }} catch {{}} }}
+L 'Helfer gestartet: Update auf {V} ({kind}, Neustart: {re})'
+try {{
+  $p = Get-Process -Id {pid} -ErrorAction SilentlyContinue
+  if ($p -and -not $p.WaitForExit(60000)) {{ L 'App beendet sich nicht - wird beendet'; Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1 }}
+  Get-Process -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -and $_.Path.StartsWith('{R}\\', 'OrdinalIgnoreCase') }} | ForEach-Object {{ L ('beende ' + $_.Name); Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }}
+  Start-Sleep -Milliseconds 500
+"""
+_PS_PATCH = """  $S = '{S}'; $R = '{R}'; $B = '{B}'
+  L ('Quelle da: ' + (Test-Path -LiteralPath $S) + ', Ziel da: ' + (Test-Path -LiteralPath $R))
+  Remove-Item -LiteralPath $B -Recurse -Force -ErrorAction SilentlyContinue
+  Get-ChildItem -LiteralPath $S -Recurse -File | ForEach-Object {{
+    $rel = $_.FullName.Substring($S.Length + 1); $old = Join-Path $R $rel
+    if (Test-Path -LiteralPath $old) {{ $dst = Join-Path $B $rel; New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null; Copy-Item -LiteralPath $old -Destination $dst -Force }}
+  }}
+  $rc = 16
+  for ($i = 0; $i -lt 3 -and $rc -ge 8; $i++) {{
+    $out = robocopy $S $R /E /R:10 /W:1 /NFL /NDL /NP 2>&1; $rc = $LASTEXITCODE; L ('robocopy: ' + $rc)
+    if ($rc -ge 8) {{ $out | Where-Object {{ $_ -match 'ERROR|FEHLER|Fehler|\\S' }} | Select-Object -Last 12 | ForEach-Object {{ L ('  ' + $_) }}; Start-Sleep -Seconds 2 }}
+  }}
+  if ($rc -lt 8) {{
+    Get-Content -LiteralPath '{D}' -ErrorAction SilentlyContinue | ForEach-Object {{ if ($_) {{ Remove-Item -LiteralPath (Join-Path $R $_) -Force -ErrorAction SilentlyContinue }} }}
+    foreach ($h in 'HKCU:','HKLM:') {{ $k = $h + '\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{{6E1B7C52-4D0A-4C1E-9F43-7A8C2B9D0E11}}_is1'; if (Test-Path $k) {{ Set-ItemProperty -Path $k -Name DisplayVersion -Value '{V}' -ErrorAction SilentlyContinue }} }}
+    Remove-Item -LiteralPath $S -Recurse -Force -ErrorAction SilentlyContinue
+    L 'installiert'
+  }} else {{
+    if (Test-Path -LiteralPath $B) {{ robocopy $B $R /E /R:10 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null; L ('wiederhergestellt: ' + $LASTEXITCODE) }}
+    Set-Content -LiteralPath '{F}' -Value 'robocopy' -ErrorAction SilentlyContinue
+    L 'Teil-Update fehlgeschlagen - naechstes Mal komplettes Paket'
+  }}
+  Remove-Item -LiteralPath $B -Recurse -Force -ErrorAction SilentlyContinue
+"""
+_PS_SETUP = """  $p = Start-Process -FilePath '{I}' -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOCANCEL' -Wait -PassThru
+  L ('Setup beendet: ' + $p.ExitCode)
+"""
+_PS_TAIL = """}} catch {{ L ('Fehler: ' + $_) }}
+finally {{
+{relaunch}}}
+"""
+
+
+def _launch_win_helper(app: Path, pid: int, log: Path, relaunch: bool) -> None:
+    ver, patch = _ready["version"], bool(_ready.get("patch"))
+    R = app.parent
+    f = dict(L=_ps(log), V=_ps(ver), pid=pid, R=_ps(R), kind="Teil-Update" if patch else "Setup", re="ja" if relaunch else "nein")
+    body = (_PS_PATCH.format(S=_ps(_ready["staged"]), R=_ps(R), B=_ps(UPDATES_DIR / f"backup-{ver}"),
+                             D=_ps(UPDATES_DIR / f"delete-{ver}.txt"), F=_ps(_failed_marker(ver)), V=_ps(ver))
+            if patch else _PS_SETUP.format(I=_ps(_ready["installer"])))
+        # relaunch: in jedem Fall (auch nach Fehler) – sonst steht der Nutzer ohne App da
+    tail = _PS_TAIL.format(relaunch=(f"  L 'starte Vorleser'\n  Start-Process -FilePath '{_ps(app)}' -WorkingDirectory '{_ps(R)}' -WindowStyle Normal\n"
+                                     if relaunch else "  L 'fertig'\n"))
+    script = UPDATES_DIR / f"install-{ver}.ps1"
+    UPDATES_DIR.mkdir(parents=True, exist_ok=True)
+    script.write_text(_PS_HEAD.format(**f) + body + tail, "utf-8-sig")
+    _log_line(log, f"[app] starte Helfer ({f['kind']} auf {ver}, Neustart: {f['re']})")
+    args = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+            "-File", str(script)]
+    # KEIN DETACHED_PROCESS: Windows PowerShell braucht eine Konsole und beendet sich ohne sofort – genau das war der
+    # Fehler bis 3.0.1 (auf echtem Windows nachgestellt: Helfer schrieb keine einzige Zeile). CREATE_NO_WINDOW gibt ihm
+    # eine eigene, unsichtbare Konsole; NEW_PROCESS_GROUP trennt ihn von Strg+C der App.
+    base = 0x00000200 | 0x08000000                           # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+    for flags in (base | 0x01000000, base):                  # + CREATE_BREAKAWAY_FROM_JOB (nicht überall erlaubt)
+        try:
+            proc = subprocess.Popen(args, creationflags=flags, close_fds=True,
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            if flags & 0x01000000:
+                continue
+            _log_line(log, f"[app] Helfer ließ sich nicht starten: {e!r}")
+            raise
+        if not flags & 0x01000000:
+            _log_line(log, "[app] Helfer ohne Lösen aus dem Job gestartet")
+        _await_helper(proc, log)
+        return
+
+
+def _await_helper(proc, log: Path, wait: float = 5.0) -> None:
+    """Kurz prüfen, ob der Helfer sich meldet – sonst steht im Log wenigstens, dass (und wie) er nicht lief."""
+    end = time.time() + wait
+    while time.time() < end:
+        try:
+            if "Helfer gestartet" in log.read_text("utf-8", errors="replace")[-2000:]:
+                return
+        except OSError:
+            pass
+        if proc.poll() is not None:
+            _log_line(log, f"[app] Helfer sofort beendet (Code {proc.returncode})")
+            return
+        time.sleep(0.1)
+    _log_line(log, "[app] Helfer meldet sich nicht (läuft aber)")
+
+def _failed_marker(version: str) -> Path:
+    return UPDATES_DIR / f"failed-{version}.txt"
+
+
+def _log_line(log: Path, text: str) -> None:
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%dT%H:%M:%S')}] {text}\n")
+    except OSError:
+        pass
 
 
 def _prepare() -> None:
@@ -490,6 +585,9 @@ def _prepare() -> None:
         installer = _download(latest)
         with _lock:
             _state.update(state="preparing")
+        if latest.get("sha256") and _sha256(installer) != latest["sha256"]:   # ab 3.0.2 in latest.json; ältere ohne
+            installer.unlink(missing_ok=True)         # beschädigt → beim nächsten Versuch neu laden, nie einspielen
+            raise RuntimeError("Prüfsumme des Updates stimmt nicht")
         staged = str(_stage_mac(installer, _app_path())) if paths.IS_MAC else None
         _ready = {"version": latest["version"], "installer": str(installer), "staged": staged}
         with _lock:
@@ -546,9 +644,13 @@ def start_background() -> None:
     if prev and _ver(prev) < _ver(paths.APP_VERSION):
         _just_updated = paths.APP_VERSION
     LAST_VERSION_FILE.write_text(paths.APP_VERSION, "utf-8")
-    if UPDATES_DIR.exists():
+    # Aufräumen läuft im Hintergrund nach Stimmenliste + Offline-Stimme – wurde schon ein Update vorbereitet (früher
+    # Klick auf „Aktualisieren“), dessen Dateien nicht löschen (auf echtem Windows nachgestellt, 10.11.2026).
+    with _lock:
+        busy = _state.get("state") in ("downloading", "preparing", "ready", "installing")
+    if UPDATES_DIR.exists() and not busy:
         for p in UPDATES_DIR.iterdir():
-            if paths.APP_VERSION in p.name or p.suffix == ".part":
+            if paths.APP_VERSION in p.name or p.suffix == ".part" or p.name.startswith(("staged-", "backup-")):
                 shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
 
     app = _app_path() if paths.IS_MAC and paths.FROZEN else None

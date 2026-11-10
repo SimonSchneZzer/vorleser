@@ -211,6 +211,15 @@ def _ask_running_to_focus(port: int) -> bool:
 
 def _quit() -> None:
     ueberall.beenden()                 # wirklich beenden (nicht nur in die Menüleiste verstecken)
+    # Sicherheitsnetz: reagiert kein Fenster (z. B. nie angezeigt – auf echtem Windows nach einem Update-Neustart
+    # gesehen, 10.11.2026), trotzdem beenden – sonst wartet ein Update-Helfer vergeblich und „Beenden“ tut nichts.
+    def hart():
+        print("[desktop] Fenster reagierte nicht – beende trotzdem", flush=True)
+        _cleanup()
+        os._exit(0)
+    t = threading.Timer(8, hart)
+    t.daemon = True
+    t.start()
 
 
 def _closing():

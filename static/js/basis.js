@@ -35,6 +35,8 @@ const st = {
   loadedIdx: -1, wantPlay: false, token: 0, lastSave: 0, switching: false,
   voices: [], langs: {}, defaults: {}, features: {}, settings: null, docs: [],
   spans: [], readySet: new Set(), words: null, raf: 0,
+  offline: false,                // 3.0.2: Nutzer hat „Offline-Stimme nutzen“ gewählt (nie automatisch)
+  waitSince: 0,                  // seit wann der gebrauchte Abschnitt auf die Stimme wartet
   srvCached: new Set(),          // Abschnitte, die auf dem Server fertig im Cache liegen (eine Wahrheit für „vorbereitet“)
   newVoice: null, langManual: false,
 };

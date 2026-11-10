@@ -4,6 +4,33 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.2
+Lighter and smoother: a cleaner mini player, a faster library, and playback that keeps going when you switch views.
+
+- **Mini player:** in small windows Vorleser now shows either the full layout or the mini player – no in-between.
+  The mini player also takes over from Settings and brings you back where you were when the window grows again.
+  The buttons sit at the top next to the menu, and the library in the side panel is visible again.
+- **Playback keeps going:** returning to the text that is playing (e.g. from Settings) no longer pauses it.
+- **Play from the library:** the "…" menu of a text now starts with "Play" (or "Pause" for the one playing).
+- **Offline voice only when you want it:** if the online voice is slow, Vorleser offers to switch instead of
+  switching on its own.
+- **Your own voice:** fixed a bug that made every section be generated three times – loud fans, no audio.
+  The ambience sound no longer keeps the computer busy while nothing is playing.
+- **Calmer animations:** the play button pulses once when you press it instead of the whole time; the library
+  progress bar now moves in step with the player.
+- **Faster:** the storage overview, the library and "Prepare in advance" are much quicker with large books, and
+  exports of prepared books finish sooner.
+- **Updates on Windows work again:** "Restart now" installs the update and reopens Vorleser, and "Later" installs it
+  when you quit. If you use Windows with version 3.0.1 or older, please install 3.0.2 once from the website –
+  after that, updates are a single click.
+- **Safer updates:** if installing an update fails on the Mac, the previous version is restored; full update
+  packages are verified with a checksum before they are installed.
+- **Works offline and privately:** the fonts now ship with the app – no connection to Google Fonts on start.
+- The mini player for selected text no longer looks see-through while a hint is shown.
+- The bookmark icon no longer jumps to the previous sentence when a sentence starts mid-line.
+- Words with a hyphen that wrap onto the next line no longer highlight part of the paragraph twice.
+- The chapter button now sits left of the title in the top bar.
+
 ## 3.0.1
 Smoother playback when the online voice is slow, a cleaner player and a compact view for small windows.
 

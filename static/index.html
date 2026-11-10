@@ -16,9 +16,8 @@
   try { const t = JSON.parse(localStorage.getItem("vorleser.theme") || "null");
         if (t) { document.documentElement.dataset.theme = t.theme; for (const k in t.vars) document.documentElement.style.setProperty(k, t.vars[k]); } } catch {}
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<!-- Schriften liegen in der App (vorher Google Fonts: offline anderes Aussehen, Datenschutz) – gleiche Dateien -->
+<link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -89,8 +88,8 @@
     <section class="view hidden" id="viewRead">
       <header class="topbar">
         <button class="ib menu-btn" data-menu aria-label="Bibliothek öffnen"><svg class="i"><use href="#i-menu"/></svg></button>
-        <span class="tb-title" id="tbTitle" data-noi18n></span>
         <button class="pill hidden" id="chapterBtn" aria-label="Kapitel wählen" data-tip="Kapitel wählen"><svg class="i" style="width:16px;height:16px"><use href="#i-list"/></svg><span class="lbl" id="chapterLbl">Kapitel</span><svg class="i caret"><use href="#i-down"/></svg></button>
+        <span class="tb-title" id="tbTitle" data-noi18n></span>
         <span class="spacer"></span>
         <button class="pill hidden" id="prepBtn" data-tip="Erzeugt alle Abschnitte schon jetzt im Hintergrund. Danach spielt alles ohne Wartezeit – ideal für deine eigene Stimme, die pro Abschnitt etwas länger braucht."><svg class="i" style="width:16px;height:16px"><use href="#i-bolt" id="prepIc"/></svg><span class="lbl" id="prepLbl">Vorab erzeugen</span></button>
         <button class="ib hidden" id="prepX" aria-label="Vorab erzeugen abbrechen" data-tip="Vorab erzeugen abbrechen"><svg class="i" style="width:16px;height:16px"><use href="#i-x"/></svg></button>
@@ -472,6 +471,7 @@
 </div>
 <div class="pop menu hidden" id="chapterMenu" role="menu" data-noi18n></div>
 <div class="pop menu hidden" id="libMenu" role="menu">
+  <button data-act="play"><svg class="i fill" id="libPlayIc" style="width:15px;height:15px;margin:0 1.5px"><use href="#i-play"/></svg><span id="libPlayLbl">Abspielen</span></button>
   <button data-act="edit"><svg class="i"><use href="#i-pen"/></svg>Text bearbeiten</button>
   <button data-act="export"><svg class="i"><use href="#i-export"/></svg>Als Hörbuch exportieren</button>
   <hr>

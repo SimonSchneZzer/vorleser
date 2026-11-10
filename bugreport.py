@@ -60,6 +60,15 @@ def log_tail() -> str:
     return _scrub("\n".join(keep))[-LOG_CHARS:]
 
 
+def update_log_tail(n: int = 40) -> str:
+    """Letzte Zeilen des Update-Helfers (update.log) – nur dort steht, warum ein Update nicht eingespielt wurde."""
+    try:
+        lines = (paths.DATA_DIR / "update.log").read_text("utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    return _scrub("\n".join(lines[-n:]))[-3000:]
+
+
 def info() -> dict:
     return {
         "enabled": bool(WEB3FORMS_KEY),
@@ -68,5 +77,5 @@ def info() -> dict:
         "version": paths.APP_VERSION,
         "system": system(),
         "mode": "Desktop-App" if paths.FROZEN else "Entwicklung",
-        "log": log_tail(),
+        "log": log_tail() + (f"\n\n--- update.log ---\n{u}" if (u := update_log_tail()) else ""),
     }

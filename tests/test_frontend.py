@@ -341,3 +341,150 @@ def test_satzflaeche_folgt_der_wortbox(api):
         assert abs(w - b) <= 2, (w, b)
         api.call("DELETE", f"/api/docs/{d['id']}")
     _im_browser(api, szenario)
+
+
+@pytest.mark.browser
+def test_schriften_kommen_aus_der_app(api):
+    """Inter + Literata liegen in static/fonts (3.0.2) – laden ohne Internet, nichts von Google."""
+    async def sz(c):
+        ok = await c.js("""Promise.all([document.fonts.load('16px Inter'), document.fonts.load('600 16px Literata')])
+            .then(() => ['Inter', 'Literata'].every((f) => document.fonts.check(`16px ${f}`)
+                && [...document.fonts].some((x) => x.family.replace(/"|'/g, '') === f && x.status === 'loaded')))""")
+        assert ok is True
+        fremd = await c.js("performance.getEntriesByType('resource').map((r) => r.name).filter((n) => !n.startsWith(location.origin))")
+        assert fremd == [], fremd
+    _im_browser(api, sz)
+
+
+@pytest.mark.browser
+def test_kompakt_bibliothek_sichtbar_und_knopfreihe_oben(api):
+    """Kompakte Ansicht: Seitenleiste zeigt die Bibliothek (Fußleiste war fensterhoch → 0 px), Knopfreihe oben neben
+    dem Menü, Abschnitt/Restzeit/Status ausgeblendet; Schlaf-Timer öffnet unter dem Knopf statt außerhalb (10.11.2026)."""
+    _, d = api.json("POST", "/api/docs", {"title": "Kompakt", "text": "Ein Satz. " * 30})
+
+    async def sz(c):
+        await c.cmd("Emulation.setDeviceMetricsOverride", width=480, height=420, deviceScaleFactor=1, mobile=False)
+        await c.js("refreshLibrary()")
+        await c.js(f"openDoc('{d['id']}').then(() => 1)")
+        await asyncio.sleep(1.2)
+        r = await c.js("""(() => { const m = document.querySelector('.compact-menu').getBoundingClientRect(),
+            k = document.querySelector('.player .right').getBoundingClientRect(), vis = (id) => $(id).offsetParent !== null;
+            return { compact: document.body.classList.contains('compact'), mitte: Math.abs((m.top + m.bottom) / 2 - (k.top + k.bottom) / 2),
+                     posL: vis('posL'), posR: vis('posR'), status: vis('status') }; })()""")
+        assert r == {"compact": True, "mitte": r["mitte"], "posL": False, "posR": False, "status": False} and r["mitte"] <= 2, r
+        await c.js("document.querySelector('.compact-menu').click(); 1")
+        await asyncio.sleep(0.5)
+        assert await c.js("$('library').getBoundingClientRect().height") > 40
+        await c.js("document.body.click(); $('sleepBtn').click(); 1")
+        await asyncio.sleep(0.4)
+        assert await c.js("$('sleepMenu').getBoundingClientRect().top") >= 0
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_playknopf_pulsiert_einmal_und_bibliothek_bleibt_stehen(api):
+    """Board 27 (10.11.2026): Play-Knopf pulsiert beim Start einmal (vorher endlos → Akku); die Bibliothek passt beim
+    Neuzeichnen ohne Strukturänderung nur Zahlen an (Einträge bleiben dieselben Elemente → Hover/Fokus bleiben)."""
+    _, d = api.json("POST", "/api/docs", {"title": "Puls", "text": "Ein Satz. " * 30})
+
+    async def sz(c):
+        await c.js("refreshLibrary()")
+        await c.js(f"openDoc('{d['id']}').then(() => 1)")
+        await asyncio.sleep(0.8)
+        await c.js("st.playWas = 'idle'; st.wantPlay = true; renderPlay(); 1")
+        r = await c.js("""(() => { const b = $('playBtn'), cs = getComputedStyle(b);
+            return { pulse: b.classList.contains('pulse'), n: cs.animationIterationCount, name: cs.animationName }; })()""")
+        assert r == {"pulse": True, "n": "1", "name": "breathe"}, r
+        await c.js("renderPlay(); 1")                       # weiter abspielen → kein neuer Puls, nichts Endloses
+        assert "infinite" not in await c.js("getComputedStyle($('playBtn')).animationIterationCount")
+        await c.js("st.wantPlay = false; renderPlay(); 1")
+        a1 = await c.js(f"window._a = document.querySelector('#library a[data-id=\"{d['id']}\"]'); 1")
+        await c.js("st.docs[0].prepared = 7; renderLibrary(); 1")
+        same = await c.js(f"document.querySelector('#library a[data-id=\"{d['id']}\"]') === window._a")
+        assert a1 == 1 and same is True
+        assert await c.js("getComputedStyle(document.querySelector('#library .pos')).transitionTimingFunction") == "linear"
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_zurueck_zum_text_haelt_nicht_an_und_menue_spielt_ab(api):
+    """Simon, 10.11.2026: abspielen → Einstellungen → in der Bibliothek zurück zum Text hielt die Wiedergabe an
+    (openDoc lud neu → stop). Dazu „Abspielen“/„Pause“ als erster Eintrag im „…“-Menü der Bibliothek."""
+    _, d = api.json("POST", "/api/docs", {"title": "Weiter", "text": "Ein Satz. " * 30})
+
+    async def sz(c):
+        await c.js("refreshLibrary()")
+        await c.js(f"openDoc('{d['id']}').then(() => 1)")
+        await asyncio.sleep(0.6)
+        await c.js("st.wantPlay = true; $('settingsBtn').click(); 1")
+        await asyncio.sleep(0.5)
+        sel = f"#library a[data-id=\"{d['id']}\"]"
+        await c.js(f"document.querySelector('{sel}').click(); 1")
+        await asyncio.sleep(0.6)
+        assert await c.js("[view, st.wantPlay]") == ["read", True]
+        await c.js(f"libMenuOpen(document.querySelector('[data-dots=\"{d['id']}\"]')); 1")
+        assert await c.js("$('libPlayLbl').textContent") == "Pause"
+        await c.js("closePops(true); st.wantPlay = false; 1")
+        await c.js(f"libMenuOpen(document.querySelector('[data-dots=\"{d['id']}\"]')); 1")
+        assert await c.js("[$('libMenu').querySelector('button').dataset.act, $('libPlayLbl').textContent]") == ["play", "Abspielen"]
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_nur_mini_oder_normal_auch_in_einstellungen(api):
+    """Simon, 10.11.2026: keine Zwischenstufe – unter 1000 px Mini-Player, auch aus den Einstellungen; dort keine
+    Fußleiste (Einstellungen/Fehler melden) und kein „Neuer Text“. Größer ziehen → Einstellungen wie vorher."""
+    _, d = api.json("POST", "/api/docs", {"title": "Mini", "text": "Ein Satz. " * 30})
+
+    async def sz(c):
+        async def size(w, h):
+            await c.cmd("Emulation.setDeviceMetricsOverride", width=w, height=h, deviceScaleFactor=1, mobile=False)
+            await asyncio.sleep(0.8)
+        await c.js("refreshLibrary()")
+        await c.js(f"openDoc('{d['id']}').then(() => 1)")
+        await size(700, 620)
+        assert await c.js("document.body.classList.contains('compact')") is True
+        await size(1280, 800)
+        await c.js("$('settingsBtn').click(); 1")
+        await size(700, 620)
+        r = await c.js("[view, document.body.classList.contains('compact'), $('sideFoot').offsetParent === null, $('newBtn').offsetParent === null]")
+        assert r == ["settings", True, True, True], r
+        await size(1280, 800)
+        assert await c.js("[view, document.body.classList.contains('compact'), !$('viewSettings').classList.contains('hidden')]") == ["settings", False, True]
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+@pytest.mark.browser
+def test_mini_wortbox_sitzt_nach_dem_umschalten(api):
+    """Wechsel in den Mini-Player zoomt kurz (98 % → 100 %); die Wort-Box der Mitlesezeile wurde mittendrin gemessen und
+    saß danach ~25 px neben dem Wort (Stand-Aufnahme 10.11.2026)."""
+    text = "# Titel\n\n" + " ".join(f"Das ist Satz Nummer {n} mit einigen langen Wörtern wie Versteifungen und Bettdecke." for n in range(6))
+    _, d = api.json("POST", "/api/docs", {"title": "Box", "text": text, "lang": "de"})
+    api.json("PATCH", f"/api/docs/{d['id']}", {"progress": {"chunk": 1, "offset": 0, "frac": 0.6}})
+
+    async def sz(c):
+        await c.js("refreshLibrary()")
+        await c.js(f"openDoc('{d['id']}').then(() => 1)")
+        await asyncio.sleep(1.0)
+        await c.cmd("Emulation.setDeviceMetricsOverride", width=700, height=620, deviceScaleFactor=1, mobile=False)
+        await asyncio.sleep(1.2)
+        r = await c.js("""(() => { const b = document.querySelector('#mlWin .wbox'), w = document.querySelector('#mlWin .mw.cur');
+            if (!b || !w) return null; const a = b.getBoundingClientRect(), e = w.getBoundingClientRect();
+            return Math.abs((a.left + a.right) / 2 - (e.left + e.right) / 2); })()""")
+        assert r is not None and r <= 3, r
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")

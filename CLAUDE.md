@@ -39,7 +39,7 @@ Tokens oder privaten Daten committen. Lizenzhinweise der mitgelieferten Pakete: 
 ## Befehle
 ```bash
 uv venv --python 3.12 .venv-build && uv pip install --python .venv-build/bin/python -r requirements.lock
-.venv-build/bin/python -m pytest -q                      # alle Tests (~10 s), Browser-Test braucht Chrome
+.venv-build/bin/python -m pytest -q                      # alle Tests (~2 min), Browser-Tests brauchen Chrome
 VORLESER_TEST_ONLINE=1 .venv-build/bin/python -m pytest -q -m online   # + Edge-Stimmen übers Netz
 .venv-build/bin/python desktop.py                        # App-Fenster aus dem Quellcode
 ./start.sh                                               # nur Server, Oberfläche im Browser (Port 8765)
@@ -78,7 +78,7 @@ Weitere Variablen: `VORLESER_DEBUG=1` (DevTools), `VORLESER_VERSION`, `VORLESER_
   Hintergründe auf dem aktuellen Abschnitt verdecken sie → dort keine Hover-Hintergründe.
 - View Transitions (`withTransition`) rendern `backdrop-filter` nicht → während des Onboardings aus. Ebenso: ein Vorfahr mit
   `filter`/`opacity`-Animation schaltet die Unschärfe einer Glas-Leiste darin ab → solche Ansichten kinderweise animieren (`navIn`).
-  Auch umgekehrt: **kein `filter` in Animationen auf oder in Glas-Flächen** (Tutorial-Karte, Onboarding-Karte, Player) – WebKit
+  Auch umgekehrt: **kein `filter` in Animationen auf oder in Glas-Flächen** (Tutorial-Karte, Onboarding-Karte, Player, Mini-Player für markierten Text) – WebKit
   lässt die Unschärfe dann kurz fallen, der Bildschirm „blitzt“ (Tutorial, 9.11.2026).
 - Release-Dateinamen sind fest: `Vorleser-mac.dmg`, `Vorleser-windows-setup.exe` (Webseite + Updater).
 - App ist **unsigniert** (Entscheidung); Erstinstallation zeigt eine Warnung, Updates über den Updater nicht.

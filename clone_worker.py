@@ -120,7 +120,9 @@ def main():
                     model.prepare_conditionals(job["ref"])
                     cond_key = key
                 wav = model.generate(job["text"], language_id=job.get("lang", "de"))
-                ta.save(job["out"], wav.cpu(), model.sr)
+                # 16-Bit-PCM statt Gleitkomma (Format 3): das kann Pythons `wave` im Hauptprogramm nicht lesen →
+                # Längenprüfung hielt jeden Abschnitt für „0 s“ und erzeugte ihn dreifach (Akku/Lüfter, 3.0.2)
+                ta.save(job["out"], (wav.cpu().clamp(-1, 1) * 32767).to(torch.int16), model.sr)
             del wav
             log(f"{len(job['text'])} Zeichen in {time.time() - t0:.1f}s")
             reply({"ok": True})

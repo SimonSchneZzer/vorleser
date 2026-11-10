@@ -174,6 +174,10 @@ svg.i.fill { fill: currentColor; stroke: none; }
 .now .s { padding-left: 4px; margin-left: -4px; }                 /* Schein um den gelben Punkt nicht abschneiden */
 .now .s .st-in { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .now .s .st-in > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+/* Statustext als Knopf (3.0.2: „Online-Stimme hängt – zur Offline-Stimme wechseln“) */
+.now .s .st-act { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline;
+  text-decoration-style: dotted; text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.now .s .st-act:hover { text-decoration-style: solid; color: var(--ink); }
 .now .s .st-in.busy { color: color-mix(in srgb, #F5A524 70%, var(--muted)); }
 .now .s .st-in.busy .spin, .now .s .spin { border-top-color: #F5A524; }
 .now .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .7; flex-shrink: 0; transition: background-color .3s var(--ease), box-shadow .3s var(--ease); }
@@ -181,7 +185,7 @@ svg.i.fill { fill: currentColor; stroke: none; }
 @keyframes dotPulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, #F5A524 8%, transparent); } }
 #nowTitle.swap { animation: statusIn .32s cubic-bezier(.2, .9, .3, 1.15) both; }
 /* Titel des Texts in der Kopfleiste (3.0.1) */
-.tb-title { flex: 0 1 auto; min-width: 0; max-width: 42%; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 4px; }
+.tb-title { flex: 0 1 auto; min-width: 0; max-width: 42%; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: 6px; }
 .now .warn { color: var(--danger); }
 .spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--acc-text); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -515,6 +519,8 @@ body, .side, .player, .card, .box, .pill, .btn, .seg, .chip, .topbar, .search, .
 .lib a { transition: background-color .18s var(--ease), transform .18s var(--ease); }
 .lib a:active { transform: scale(.985); }
 .lib .bar i { transition: width .5s var(--ease); }
+/* Hör-Stand läuft gleichmäßig mit der Player-Leiste mit (Takt von timeupdate) – kein Nachziehen mit Abbremsen (Board 27) */
+.lib .bar i.pos { transition: width .25s linear; }
 
 /* Knöpfe: kleines Nachgeben beim Klicken */
 .btn, .pill, .ib, .btn-new, .navlink, .seg button, .sw, .star, .prev, .tabs button, .vrow > button.pick, .variant {
@@ -537,7 +543,8 @@ body, .side, .player, .card, .box, .pill, .btn, .seg, .chip, .topbar, .search, .
 .play.is-playing .pi-pause, .play.is-loading .pi-pause { opacity: 1; transform: none; }
 .play .ring { position: absolute; inset: -5px; border-radius: 50%; border: 2.5px solid transparent; border-top-color: var(--acc-text); border-right-color: var(--acc-text); opacity: 0; transition: opacity .2s; pointer-events: none; }
 .play.is-loading .ring { opacity: 1; animation: spin .9s linear infinite; }
-.play.is-playing { box-shadow: 0 0 0 0 var(--tint); animation: breathe 2.4s ease-in-out infinite; }
+/* Ein Puls beim Start des Abspielens, dann ruhig (Board 27, Variante B, 10.11.2026) – vorher pulsierte er endlos (Akku) */
+.play.pulse { animation: breathe 1.2s var(--ease-out) 1; }
 @keyframes breathe { 50% { box-shadow: 0 0 0 7px var(--tint); } }
 
 /* Fortschritt */
@@ -692,7 +699,7 @@ dialog[open]::backdrop { animation: fadeIn .3s var(--ease) both; }
 .cs-steps .dot { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; transition: all .35s var(--spring); }
 .cs-steps .dot svg { width: 12px; height: 12px; stroke: var(--on-acc); stroke-width: 3; opacity: 0; transform: scale(.4); transition: all .35s var(--spring); }
 .cs-steps li.on { color: var(--ink); font-weight: 600; }
-.cs-steps li.on .dot { border-color: var(--acc-text); box-shadow: 0 0 0 0 var(--tint); animation: breathe 2s ease-in-out infinite; }
+.cs-steps li.on .dot { border-color: var(--acc-text); box-shadow: 0 0 0 0 var(--tint); animation: breathe 1.2s var(--ease-out) 1; }   /* einmal beim Schrittwechsel (10.11.2026, vorher endlos) */
 .cs-steps li.done { color: var(--ink2); }
 .cs-steps li.done .dot { background: var(--acc-text); border-color: var(--acc-text); }
 .cs-steps li.done .dot svg { opacity: 1; transform: none; }
@@ -850,7 +857,7 @@ dialog.confirm .dlg-actions .btn { flex: 1; }
 .il .read { position: absolute; inset: 22px 20px auto; font: 17px/1.6 var(--read); color: var(--ink2); display: flex; flex-wrap: wrap; gap: 0 6px; }
 .il .read span { padding: 0 3px; border-radius: 4px; animation: say 3.2s steps(1) infinite; animation-delay: calc(var(--k) * .4s); }
 @keyframes say { 0% { background: var(--acc); color: var(--on-acc); } 12.5%, 100% { background: transparent; color: inherit; } }
-.il .play { position: absolute; left: 50%; bottom: 6px; width: 44px; height: 44px; margin-left: -22px; animation: breathe 2.4s ease-in-out infinite; }
+.il .play { position: absolute; left: 50%; bottom: 6px; width: 44px; height: 44px; margin-left: -22px; animation: breathe 1.2s var(--ease-out) .3s 1; }   /* einmal, wie der Play-Knopf (Board 27) */
 .il .play svg { position: static; width: 18px; height: 18px; }
 .il .cursor { display: inline-block; width: 2px; height: 18px; background: var(--acc-text); vertical-align: -3px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
@@ -1613,4 +1620,14 @@ body.compact #atmoLbl, body.compact #voiceLbl { display: none; }
 @media (max-height: 420px) { body.compact .viz { height: 40px; } body.compact .player { gap: 8px; padding: 14px; } }
 @media (prefers-reduced-motion: reduce) { body.compact .viz i { animation: none; } }
 body.compact .side { position: fixed; z-index: 40; inset: 0 auto 0 0; transform: translateX(-100%); transition: transform .2s; box-shadow: var(--shadow); }
-body.compact .side.open { transform: none; }
+body.compact .side.open { transform: none; box-shadow: var(--shadow), 0 0 0 100vmax rgba(0, 0, 0, .28); }
+/* Fußleiste der Seitenleiste ist sonst so hoch wie der Player – der ist kompakt fensterhoch → Bibliothek hatte 0 px (10.11.2026) */
+body.compact.has-player .side-foot { height: auto; padding: 8px 14px; }
+/* Mini: Seitenleiste nur zum Wechseln des Texts – keine Einstellungen/Neuer Text (darunter liegt die Ansicht ja verdeckt) */
+body.compact .side-foot, body.compact #newBtn { display: none; }
+body.compact #newBtn + .search.hidden + .label, body.compact #newBtn + .search.hidden + .week.hidden + .label { margin-top: 0; }
+/* Kompakt nur das Nötigste (Simon, 10.11.2026): keine Abschnitt-/Restzeit-Angaben, kein Status; Knopfreihe oben rechts neben dem Menü */
+body.compact #posL, body.compact #posR, body.compact #status { display: none; }
+body.compact .right { position: absolute; top: 15px; right: 14px; }
+body.compact .player { padding-top: 64px; }
+body.compact #voiceBtn .caret { transform: rotate(180deg); }   /* Menü öffnet hier nach unten */

@@ -33,6 +33,11 @@ Paketen bei (in der App unter `_internal/<paket>.dist-info/`) und sind auf den g
 | Python | PSF-2.0 | https://www.python.org |
 | PyInstaller (Bootloader) | GPL-2.0 mit Ausnahme für gebaute Apps | https://pyinstaller.org |
 
+## Schriften
+In `static/fonts/` (dieselben Dateien, die vorher von Google Fonts geladen wurden), beide unter der
+**SIL Open Font License 1.1**: **Inter** (Rasmus Andersson, https://github.com/rsms/inter) und **Literata**
+(TypeTogether für Google, https://github.com/googlefonts/literata).
+
 ## Klänge (Atmosphäre)
 Die Klang-Schleifen in `static/klang/` sind gekürzt, lautstärke-angeglichen und nahtlos geschnitten. Die Originale stehen unter
 **CC0 1.0 (gemeinfrei)**, Quelle BigSoundBank (Joseph Sardin, https://bigsoundbank.com). Eine Nennung ist freiwillig.

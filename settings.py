@@ -8,7 +8,7 @@ import threading
 from paths import DATA_DIR
 
 PATH = DATA_DIR / "settings.json"
-_lock = threading.Lock()
+_lock = threading.RLock()     # RLock: update() hält sie über Lesen + Schreiben (load() nimmt sie erneut)
 
 DEFAULTS = {
     "theme": "system",         # light | dark | system
@@ -58,6 +58,11 @@ def get(key: str):
 
 
 def update(patch: dict) -> dict:
+    with _lock:                   # Lesen–Ändern–Schreiben am Stück: zwei schnelle Änderungen dürfen sich nicht überschreiben
+        return _update(patch)
+
+
+def _update(patch: dict) -> dict:
     cur = load()
     for k, v in patch.items():
         if k in CHOICES and v in CHOICES[k]:
@@ -78,9 +83,8 @@ def update(patch: dict) -> dict:
             cur[k] = list(dict.fromkeys(str(x) for x in v))[:200]
         elif k == "defaultVoices" and isinstance(v, dict):
             cur[k] = {**cur["defaultVoices"], **{str(a): str(b) for a, b in v.items()}}
-    with _lock:
-        PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = PATH.with_suffix(".tmp")
-        tmp.write_text(json.dumps(cur, ensure_ascii=False, indent=2), "utf-8")
-        tmp.replace(PATH)
+    PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cur, ensure_ascii=False, indent=2), "utf-8")
+    tmp.replace(PATH)
     return cur

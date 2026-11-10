@@ -554,6 +554,82 @@ def test_lesezeichen_auch_links_neben_dem_absatz(api):
         api.call("DELETE", f"/api/docs/{d['id']}")
 
 
+def test_lesezeichen_satz_mitten_in_der_zeile(api):
+    """Tester-Rückmeldung: beginnt der Satz mitten in der Zeile, sprang das Symbol beim Hinfahren zum Absatzanfang."""
+    _, d = api.json("POST", "/api/docs", {"title": "Mitte", "text": " ".join(f"Satz {k} ist ein ganz gewöhnlicher Satz mit genug Wörtern, damit der Absatz lang wird." for k in range(30))})
+
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.6)
+        assert await c.js("st.spans.length") >= 2
+        x, y = await c.js("(() => { const r = st.spans[1].getClientRects()[0]; return [r.left + 10, r.top + r.height / 2]; })()")
+        await c.cmd("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
+        await asyncio.sleep(0.3)
+        assert await c.js("bmState.hoverI") == 1
+        gx = await c.js("$('docText').getBoundingClientRect().left - 30")
+        for k in range(1, 6):                                # nach links zum Symbol fahren, gleiche Höhe
+            await c.cmd("Input.dispatchMouseEvent", type="mouseMoved", x=x + (gx - x) * k / 5, y=y)
+            await asyncio.sleep(0.05)
+        await asyncio.sleep(0.3)
+        assert await c.js("bmState.hoverI") == 1
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+def test_umbrochenes_bindestrich_wort_keine_doppelte_flaeche(api):
+    """Tester-Rückmeldung: „cross-section“ brach am Bindestrich um → Satzfläche doppelt, Wort-Box kurz zwei Zeilen groß."""
+    text = " ".join(["Die Abbildung zeigt einen cross-section Schnitt und noch mehr Wörter"] * 6) + "."
+    _, d = api.json("POST", "/api/docs", {"title": "Strich", "text": text})
+
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.6)
+        await c.js("buildWords(st.idx); 1")
+        # Breite so wählen, dass ein „cross-section“ am Bindestrich umbricht
+        k = await c.js("""(() => { const r = $('reader'); for (let w = 700; w > 250; w -= 3) { r.style.width = w + 'px';
+            const k = st.words.list.findIndex((x) => x.el.firstElementChild.getClientRects().length > 1); if (k >= 0) return k; } return -1; })()""")
+        assert k >= 0, "kein umbrochenes Wort gefunden"
+        await c.js(f"setWord({k}, false); 1"); await asyncio.sleep(0.4)
+        r = await c.js("""(() => { const lh = st.words.list[0].el.firstElementChild.getClientRects()[0].height, b = $('wbox').getBoundingClientRect();
+            const boxes = [...$('sboxes').children].map((i) => i.getBoundingClientRect());
+            const overlap = boxes.some((a, i) => boxes.some((o, j) => j > i && a.top < o.bottom - 1 && o.top < a.bottom - 1 && a.left < o.right && o.left < a.right));
+            return { wbox: b.height < lh * 1.6, overlap }; })()""")
+        assert r == {"wbox": True, "overlap": False}, r
+        await c.js("$('reader').style.width = ''; 1")
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
+def test_offline_stimme_nur_auf_klick(api):
+    """3.0.2: hängt die Online-Stimme, wird der Statustext zum Knopf „zur Offline-Stimme wechseln“ – kein Automatismus."""
+    _, d = api.json("POST", "/api/docs", {"title": "Hängt", "text": "Ein Satz zum Vorlesen. Noch ein Satz."})
+    import server
+    with server._doc_lock:
+        doc = server.load_doc(d["id"]); doc["voice"] = "edge:de-DE-KatjaNeural"; server.save_doc(doc)
+
+    async def sz(c):
+        await _neu_laden(c)
+        await c.js(f"openDoc('{d['id']}').then(() => 1)"); await asyncio.sleep(0.5)
+        await c.js("st.wantPlay = true; st.loadedIdx = -1; st.loadSince = Date.now() - 1000; st.waitSince = Date.now() - 7000; statusSt.html = ''; updateStatus(); 1")
+        await asyncio.sleep(0.4)
+        assert await c.js("!!document.querySelector('#status [data-offline]')")
+        await c.js("document.querySelector('#status [data-offline]').click(); 1")
+        for _ in range(40):
+            if await c.js("!!st.cache.get(st.idx)?.used"):
+                break
+            await asyncio.sleep(0.1)
+        assert await c.js("st.offline && st.cache.get(st.idx).used.startsWith('piper:')")
+        await c.js("setOffline(false); pause(); 1")
+    try:
+        _im_browser(api, sz)
+    finally:
+        api.call("DELETE", f"/api/docs/{d['id']}")
+
+
 def test_markieren_springt_nicht_und_zeigt_menue(api):
     _, d = api.json("POST", "/api/docs", {"title": "Mark", "text": "Erster Absatz mit etwas Text.\n\nZweiter Absatz mit etwas mehr Text zum Markieren."})
 
