@@ -208,6 +208,14 @@ def wait_window(timeout: float = 30) -> bool:
 BASE_WINDOW: bool | None = None                      # zeigt dieser Rechner überhaupt Fenster? (erster Start)
 
 
+def quit_app() -> None:
+    """Beenden – die App darf sich so schnell schließen, dass die Antwort nicht mehr ankommt."""
+    try:
+        api("POST", "/api/quit")
+    except (ConnectionError, OSError):
+        pass
+
+
 def kill_all() -> None:
     subprocess.run(["taskkill", "/F", "/IM", "Vorleser.exe", "/T"], capture_output=True)
 
@@ -233,7 +241,7 @@ def step_restart(new: str, setup: Path | None = None, patch: bool = True, extra:
         if not wait_window():
             raise AssertionError("nach dem Neustart ist kein Vorleser-Fenster sichtbar")
         log("OK: Fenster nach dem Neustart sichtbar")
-    api("POST", "/api/quit")
+    quit_app()
     wait_down()
     time.sleep(2)
 
@@ -244,7 +252,7 @@ def step_later(new: str) -> None:
     wait_up()
     prepare_update()
     log("„Später“, dann Beenden")
-    api("POST", "/api/quit")
+    quit_app()
     p.wait(timeout=60)
     end = time.time() + 120                           # Helfer spielt nach dem Beenden ein
     while time.time() < end and installed_version() != new:
@@ -256,7 +264,7 @@ def step_later(new: str) -> None:
     if s.get("current") != new:
         raise AssertionError(f"nächster Start läuft {s.get('current')}, erwartet {new}")
     log(f"OK: beim Beenden eingespielt, nächster Start = {new}")
-    api("POST", "/api/quit")
+    quit_app()
     p.wait(timeout=60)
     time.sleep(2)
 

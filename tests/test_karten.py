@@ -407,10 +407,16 @@ def test_atmosphaere_im_browser(api):
         assert await c.js("$('atmoOpts').children.length") == 6
         await c.js("$('atmoOpts').querySelector('[data-a=\"regen\"]').click(); 1"); await asyncio.sleep(0.3)
         assert await c.js("$('atmoLbl').textContent") == "Regen"
-        await c.js("st.wantPlay = true; 1"); await asyncio.sleep(1.5)            # Stimme läuft → Klang blendet ein
-        assert await c.js("atmoAu.src.startsWith('blob:') && !atmoAu.paused && atmoAu.volume > 0.25")
-        await c.js("st.wantPlay = false; 1"); await asyncio.sleep(2.6)           # Pause → blendet aus
-        assert await c.js("atmoAu.volume === 0 && atmoAu.paused")
+        async def bis(cond, sek=6.0):            # Atmosphäre-Takt ruht 1×/s (3.0.2) → auf den Zustand warten statt fester Zeit
+            for _ in range(int(sek * 10)):
+                if await c.js(cond):
+                    return True
+                await asyncio.sleep(0.1)
+            return False
+        await c.js("st.wantPlay = true; window.atmoWake?.(); 1")              # Stimme läuft → Klang blendet ein
+        assert await bis("atmoAu.src.startsWith('blob:') && !atmoAu.paused && atmoAu.volume > 0.25")
+        await c.js("st.wantPlay = false; window.atmoWake?.(); 1")             # Pause → blendet aus
+        assert await bis("atmoAu.volume === 0 && atmoAu.paused")
         await c.js("$('exportBtn').click(); 1"); await asyncio.sleep(0.3)
         assert await c.js("$('xAtmoHint').textContent") == "Aus – nur die Stimme"     # im Export standardmäßig aus
         await c.js("$('xAtmoSw').click(); 1")
