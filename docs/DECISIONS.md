@@ -5,6 +5,19 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-11 · Windows: zwei Vorleser gleichzeitig; Markierung im eigenen Fenster
+**Kontext:** Tester-Rückmeldung (Windows 11, 3.0.5): Text im Vorleser markiert, Kürzel gedrückt → „Kein markierter Text
+gefunden“. Im Log startete jeder Vorleser doppelt; die zweite Kopie meldete „Kürzel belegt“ (der Tester wechselte darauf
+das Kürzel), dazu 403er, weil die zweite Kopie die Schlüsseldatei überschrieb.
+**Ursache:** Pythons HTTP-Server setzt `SO_REUSEADDR`. Unter Windows darf damit ein zweites Programm denselben Port belegen
+(macOS nicht) → die Prüfung „läuft schon?“ griff nie. Gegenprobe mit 3.0.5 auf echtem Windows bestätigt.
+**Entscheidung:** `_Server.allow_reuse_address` unter Windows aus → zweiter Start holt das bestehende Fenster nach vorne.
+Ist das Vorleser-Fenster vorne, liest das Kürzel die Markierung direkt aus der Seite (`_markierung_im_fenster`, auch
+Textfelder) statt per Strg+C/⌘C; Wartezeit auf losgelassene Zusatztasten unter Windows 0,6 → 1,5 s. Log-Zeile
+„[überall] vorlesen: N Zeichen (Fenster|Kopie|Zwischenablage)“ für künftige Meldungen.
+**Test:** `packaging/test_ueberall_windows.py` auf echtem Windows (Build + windows-update.yml): zweiter Start, Markierung
+im Fenster, Markierung in Notepad (Zwischenablage bleibt), Neustart sofort danach auf demselben Port.
+
 ## 2026-11-11 · ⌘W / „Beenden“ fror die App ein (macOS)
 **Kontext:** Simon: ⌘Q oder ⌘W → Vorleser hängt. Im Log „Fenster geschlossen – räume auf“, danach nichts mehr.
 **Ursache:** pywebview ruft den `closing`-Handler **synchron auf dem Haupt-Thread** auf. Beim ersten Schließen
