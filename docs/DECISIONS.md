@@ -5,6 +5,17 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-11 · ⌘W / „Beenden“ fror die App ein (macOS)
+**Kontext:** Simon: ⌘Q oder ⌘W → Vorleser hängt. Im Log „Fenster geschlossen – räume auf“, danach nichts mehr.
+**Ursache:** pywebview ruft den `closing`-Handler **synchron auf dem Haupt-Thread** auf. Beim ersten Schließen
+(`bgHintSeen` noch falsch) zeigt `beim_schliessen` den Hinweis über `evaluate_js` – das wartet auf eine Antwort, die
+nur der Haupt-Thread liefern kann → Deadlock (mit `sample` nachgewiesen: Haupt-Thread in `windowShouldClose` →
+`acquire_lock`). Zweiter Weg dorthin: „Beenden“ per Maus (App-Menü, Dock) wurde nicht als Beenden erkannt, weil nur
+die Taste ⌘Q geprüft wurde → gleicher Hinweis, gleicher Hänger. Nach einem Hänger reagiert auch ⌘Q nicht mehr.
+**Entscheidung:** `_main_js` führt `evaluate_js` vom Haupt-Thread aus im Hintergrund-Thread aus. `applicationShouldTerminate:`
+wird umhüllt und setzt `quitting`, bevor die Fenster gefragt werden → jedes Beenden (Taste, Menü, Dock, Abmelden) beendet.
+**Regel:** In Fenster-Ereignissen mit Rückgabewert (`closing`) nie auf WebKit/JS warten.
+
 ## 2026-11-10 · Links mit Raute-Pfad (orf.at/#/stories/…); Gliederung quetscht nicht
 **Kontext:** Simon fügte `https://orf.at/#/stories/3447805/` ein – geholt wurde die Startseite mit ~30 Schlagzeilen.
 Der Teil nach `#` geht nie an den Server (Einzelseiten-Apps leiten im Browser weiter). Die vielen Überschriften

@@ -74,6 +74,11 @@ def _main_js(code: str) -> None:
     w = _state["main"]
     if w is None:
         return
+    if threading.current_thread() is threading.main_thread():
+        # evaluate_js wartet auf die Antwort von WebKit, die nur über den Haupt-Thread kommt → von dort aus
+        # (z. B. im Schließen-Handler) eingefroren. Dann im Hintergrund ausführen (⌘W hing, 11.11.2026).
+        threading.Thread(target=_main_js, args=(code,), daemon=True).start()
+        return
     try:
         w.evaluate_js(code)
     except Exception as e:
@@ -171,6 +176,35 @@ def _on_main(fn) -> None:
     AppHelper.callAfter(fn)
 
 
+_JS_MARKIERUNG = """(() => {
+  if (!document.hasFocus()) return "";
+  const a = document.activeElement;
+  if (a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && /^(text|search)$/.test(a.type))))
+    return a.value.slice(a.selectionStart || 0, a.selectionEnd || 0);
+  return String(window.getSelection() || "");
+})()"""
+
+
+def _markierung_im_fenster() -> str | None:
+    """Ist das Vorleser-Fenster vorne, die Markierung direkt aus der Seite lesen – ohne Strg+C/⌘C über die
+    Zwischenablage (unter Windows kam die Kopie im eigenen Fenster nicht an, Tester-Rückmeldung 11.11.2026)."""
+    w = _state["main"]
+    if w is None:
+        return None
+    ergebnis = []
+
+    def frage():
+        try:
+            ergebnis.append(w.evaluate_js(_JS_MARKIERUNG))
+        except Exception as e:
+            print(f"[überall] Markierung im Fenster: {e!r}", flush=True)
+    t = threading.Thread(target=frage, daemon=True)
+    t.start()
+    t.join(1.5)                                       # Seite hängt / lädt gerade → nicht warten, Strg+C versuchen
+    text = ergebnis[0] if ergebnis and isinstance(ergebnis[0], str) else ""
+    return text.strip() or None
+
+
 def _markierung_holen() -> str | None:
     """⌘C an die vordere App senden und den neuen Inhalt der Zwischenablage lesen. Vorherigen Text zurücklegen."""
     if paths.IS_WIN:
@@ -224,12 +258,16 @@ def vorlesen(text: str | None = None, aus_ablage: bool = False) -> None:
                 _focus_main()
                 _main_js("window.ueberallErlaubnis && ueberallErlaubnis()")
                 return
-            text = _markierung_holen()
+            text, quelle = _markierung_im_fenster(), "Fenster"
+            if not text:
+                text, quelle = _markierung_holen(), "Kopie"
             if not text:                                             # nichts markiert → Zwischenablage anbieten
-                text, frage = _zwischenablage(), True
+                text, frage, quelle = _zwischenablage(), True, "Zwischenablage"
                 if not text:
+                    print("[überall] kein markierter Text, Zwischenablage leer", flush=True)
                     _main_js("window.toast && toast('Kein markierter Text gefunden', true)")
                     return
+            print(f"[überall] vorlesen: {len(text)} Zeichen ({quelle})", flush=True)
         elif aus_ablage:
             text = _zwischenablage()
             if not text:
@@ -457,6 +495,24 @@ def fenster_verstecken() -> None:
         _state["main"].hide()
 
 
+def _beenden_erkennen() -> None:
+    """Beenden über das App-Menü, das Dock oder beim Abmelden (nicht nur per ⌘Q-Taste) wirklich als Beenden
+    behandeln: macOS fragt dann zuerst die App (applicationShouldTerminate) und erst danach jedes Fenster
+    („closing“). Ohne diese Markierung versteckte „Beenden“ per Maus nur das Fenster bzw. zeigte den Hinweis."""
+    try:
+        import objc
+        from webview.platforms.cocoa import BrowserView
+        original = BrowserView.AppDelegate.applicationShouldTerminate_
+
+        def applicationShouldTerminate_(self, app):
+            _state["quitting"] = True
+            return original(self, app)
+        objc.classAddMethods(BrowserView.AppDelegate, [objc.selector(
+            applicationShouldTerminate_, selector=b"applicationShouldTerminate:", signature=original.signature)])
+    except Exception as e:
+        print(f"[überall] Beenden-Erkennung nicht eingerichtet: {e}", flush=True)
+
+
 def _dock_klick() -> None:
     """Klick aufs Dock-Symbol, während das Fenster versteckt ist → Fenster zurückholen (pywebview fängt das nicht ab)."""
     try:
@@ -489,6 +545,7 @@ def setup(main_window, port: int, token: str) -> None:
     _on_main(_menueleiste)
     _on_main(_kuerzel_anmelden)
     _on_main(_dock_klick)
+    _on_main(_beenden_erkennen)
     _on_main(_dienst_anmelden)
     print(f"[überall] Menüleiste + {kuerzel_label()} bereit (Erlaubnis: {'ja' if ist_erlaubt() else 'nein'})", flush=True)
 
