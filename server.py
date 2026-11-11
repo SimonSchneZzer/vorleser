@@ -1015,6 +1015,9 @@ class _Server(ThreadingHTTPServer):
     # War der Server kurz beschäftigt, wurden die übrigen abgewiesen und einzelne Skripte fehlten („… is not defined“).
     request_queue_size = 64
     daemon_threads = True
+    # Windows: SO_REUSEADDR lässt einen ZWEITEN Vorleser denselben Port belegen (macOS nicht) → die Prüfung „läuft schon?“
+    # griff nie, zwei Fenster teilten sich Port + Schlüsseldatei (403er, „Kürzel belegt“; Tester-Rückmeldung 11.11.2026).
+    allow_reuse_address = not paths.IS_WIN
 
 
 def bind(port: int = PORT) -> ThreadingHTTPServer:

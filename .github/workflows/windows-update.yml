@@ -1,6 +1,7 @@
 # Update auf einem echten Windows-Rechner durchspielen (packaging/test_update_windows.py).
 # - e2e: gebaute App installieren → Teil-Update „Jetzt neu starten“, „Später“ + Beenden, komplettes Paket
 # - alt: veröffentlichte Vorversion → echtes Update (Diagnose, schlägt nie fehl)
+# - vorher: markierten Text vorlesen (Fenster + Notepad) und zweiter Start (packaging/test_ueberall_windows.py)
 # Läuft manuell und bei Pushes auf den Branch windows-update-test; im Release-Build steckt derselbe e2e-Test.
 name: Windows-Update testen
 
@@ -31,6 +32,8 @@ jobs:
       - run: uv pip install -r requirements.lock
       - run: python -m piper.download_voices --download-dir voices de_DE-thorsten-medium en_US-lessac-medium
       - run: pyinstaller --noconfirm --log-level WARN packaging/vorleser.spec
+      - name: Überall vorlesen + Einzelstart (packaging/test_ueberall_windows.py)
+        run: python packaging/test_ueberall_windows.py dist/Vorleser/Vorleser.exe
       - name: Installer (aktuelle Version + Testversion 9.9.3)
         run: |
           mkdir -p build

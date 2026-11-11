@@ -137,11 +137,13 @@ def ablage_schreiben(text: str) -> None:
 def markierung_holen() -> str | None:
     """Strg+C an die vordere App senden und die neue Zwischenablage lesen. Vorherigen Text zurücklegen."""
     u32 = ctypes.windll.user32
-    # erst warten, bis Strg/Alt/Umschalt/Win losgelassen sind (bis 0,6 s) – sonst käme z. B. Strg+Alt+C an
-    for _ in range(30):
+    # erst warten, bis Strg/Alt/Umschalt/Win losgelassen sind (bis 1,5 s) – sonst käme z. B. Strg+Alt+C an
+    for _ in range(75):
         if not any(u32.GetAsyncKeyState(k) & 0x8000 for k in (VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN)):
             break
         time.sleep(0.02)
+    else:
+        print("[überall] Zusatztasten noch gedrückt – Strg+C kommt evtl. nicht als Kopie an", flush=True)
     vorher_nr, alt = u32.GetClipboardSequenceNumber(), ablage_lesen()
     for vk, flag in ((VK_CONTROL, 0), (VK_C, 0), (VK_C, KEYEVENTF_KEYUP), (VK_CONTROL, KEYEVENTF_KEYUP)):
         u32.keybd_event(vk, 0, flag, 0)
@@ -150,6 +152,7 @@ def markierung_holen() -> str | None:
         if u32.GetClipboardSequenceNumber() != vorher_nr:
             break
     if u32.GetClipboardSequenceNumber() == vorher_nr:
+        print("[überall] Strg+C: Zwischenablage unverändert (nichts markiert oder Kopie nicht angekommen)", flush=True)
         return None
     time.sleep(0.03)
     text = ablage_lesen()

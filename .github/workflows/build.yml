@@ -63,6 +63,12 @@ jobs:
           cat "$VORLESER_HOME/data/selftest.txt" || echo "keine Ausgabe"
           exit $rc
 
+      # Markierten Text vorlesen (eigenes Fenster + Notepad) und zweiter Start auf echtem Windows – beides kam
+      # bei einem Tester nicht an (11.11.2026): zwei Vorleser liefen gleichzeitig, das Kürzel fand keinen Text.
+      - name: Windows – Überall vorlesen + Einzelstart
+        if: matrix.name == 'windows'
+        run: python packaging/test_ueberall_windows.py dist/Vorleser/Vorleser.exe
+
       - name: macOS – DMG erstellen
         if: matrix.name == 'mac'
         run: bash packaging/make_dmg.sh
