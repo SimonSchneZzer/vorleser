@@ -4,6 +4,15 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.6
+Closing and quitting no longer freeze the app, and "Read anywhere" works reliably on Windows.
+
+- **Mac:** closing the window (⌘W) or quitting from the menu or Dock no longer freezes Vorleser.
+- **Windows:** opening Vorleser a second time now brings the open window to the front instead of starting a second
+  copy (which also made the shortcut look "taken by another app").
+- **Read anywhere:** text selected inside Vorleser itself is read directly; on Windows the shortcut gives you a little
+  more time to let go of the keys.
+
 ## 3.0.5
 Smaller updates, smoother menus and better link import.
 
