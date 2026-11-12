@@ -4,6 +4,15 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.7
+Prepared texts now export in seconds – and the export dialog shows it.
+
+- **Export dialog:** if a text is fully prepared, the dialog says so and every format shows its real size and
+  "in seconds". If only part is prepared, it shows how many sections are still generated during export.
+- **Faster export:** prepared texts are put together on all processor cores instead of one after the other – an
+  audiobook of about 50 minutes is ready as M4B in about 5 seconds on a Mac (before: about 17).
+- **Clearer progress:** while exporting a prepared text the dialog says "Putting it together" instead of "Generating audio".
+
 ## 3.0.6
 Closing and quitting no longer freeze the app, and "Read anywhere" works reliably on Windows.
 
