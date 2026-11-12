@@ -694,7 +694,7 @@ function xDocInfo() {
   const chars = d.chunks.reduce((s, c) => s + c.text.length, 0), sec = (real || chars / 15) / rate;   // mit Export-Tempo
   $("xInfo").textContent = [d.title, real ? fmtDuration(sec) : `ca. ${fmtDuration(sec)}`, d.chapters.length ? `${d.chapters.length} Kapitel` : ""].filter(Boolean).join(" · ");
   // Größe = Länge × Bytes je Sekunde des Formats (vom Server, passend zum dort genutzten Encoder) – mit echter Länge genau
-  const bps = { m4b: 8550, mp3: 8000, wav: 48000, ...(xInfoSrv?.bytesPerSec || {}) };
+  const bps = { m4b: 8450, mp3: 8000, wav: 48000, ...(xInfoSrv?.bytesPerSec || {}) };
   const est = { m4b: sec * bps.m4b, mp3: sec * bps.mp3, wav: sec * bps.wav };
   document.querySelectorAll("#xFmts [data-sz]").forEach((el) => {
     el.innerHTML = real ? `${esc(fmtMB(est[el.dataset.sz]))}<em>in Sekunden</em>` : esc(`≈ ${fmtMB(est[el.dataset.sz])}`);

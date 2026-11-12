@@ -129,9 +129,9 @@ def _codec(fmt: str) -> str:
     return "aac_at" if _aac_at else codec
 
 
-# Bytes je Sekunde Audio (gemessen mit 64 kbit/s, Sprache): Grundlage der Größe im Export-Dialog
+# Bytes je Sekunde Audio (gemessen mit 64 kbit/s, Sprache; Windows-AAC 8340–8540 je nach Länge): Größe im Export-Dialog
 def _bytes_per_sec(fmt: str) -> float:
-    return {"mp3": 8000, "wav": BYTES_PER_SEC, "m4b": 8100 if _codec("m4b") == "aac_at" else 8550}[fmt]
+    return {"mp3": 8000, "wav": BYTES_PER_SEC, "m4b": 8100 if _codec("m4b") == "aac_at" else 8450}[fmt]
 
 
 def _vorbereitet(doc: dict) -> bool:
