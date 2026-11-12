@@ -69,6 +69,12 @@ jobs:
         if: matrix.name == 'windows'
         run: python packaging/test_ueberall_windows.py dist/Vorleser/Vorleser.exe
 
+      # Export eines vorbereiteten Texts in der gebauten App: „Zusammensetzen“, Größe + Länge wie im Dialog angezeigt
+      - name: Export vorbereiteter Texte
+        run: |
+          if [ "${{ matrix.name }}" = "mac" ]; then APP="dist/Vorleser.app/Contents/MacOS/Vorleser"; else APP="dist/Vorleser/Vorleser.exe"; fi
+          python packaging/test_export_app.py "$APP"
+
       - name: macOS – DMG erstellen
         if: matrix.name == 'mac'
         run: bash packaging/make_dmg.sh

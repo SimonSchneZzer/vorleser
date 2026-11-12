@@ -34,6 +34,15 @@ jobs:
       - run: pyinstaller --noconfirm --log-level WARN packaging/vorleser.spec
       - name: Überall vorlesen + Einzelstart (packaging/test_ueberall_windows.py)
         run: python packaging/test_ueberall_windows.py dist/Vorleser/Vorleser.exe
+      - name: Export vorbereiteter Texte (packaging/test_export_app.py, mit Screenshots)
+        run: |
+          uv pip install playwright && python -m playwright install chromium
+          python packaging/test_export_app.py dist/Vorleser/Vorleser.exe build/export-shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: export-screenshots-windows
+          path: build/export-shots
       - name: Installer (aktuelle Version + Testversion 9.9.3)
         run: |
           mkdir -p build
