@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 import threading
@@ -108,6 +109,61 @@ def status(doc_id: str, kind: str = "export") -> dict:
         p = export_path(doc_id, job["format"])
         job["size"] = p.stat().st_size if p.exists() else 0
     return job
+
+
+_aac_at: bool | None = None
+
+
+def _codec(fmt: str) -> str:
+    """macOS: AAC über Apples AudioToolbox (`aac_at`) – gut doppelt so schnell wie ffmpegs eigener Encoder und etwas
+    kleiner (gemessen 11.11.2026). Windows/fehlend → `aac`."""
+    global _aac_at
+    codec = FORMATS[fmt][0]
+    if codec != "aac" or not paths.IS_MAC:
+        return codec
+    if _aac_at is None:
+        try:
+            _aac_at = b" aac_at " in tts.ffmpeg(["-encoders"])
+        except Exception:
+            _aac_at = False
+    return "aac_at" if _aac_at else codec
+
+
+# Bytes je Sekunde Audio (gemessen mit 64 kbit/s, Sprache): Grundlage der Größe im Export-Dialog
+def _bytes_per_sec(fmt: str) -> float:
+    return {"mp3": 8000, "wav": BYTES_PER_SEC, "m4b": 8100 if _codec("m4b") == "aac_at" else 8550}[fmt]
+
+
+def _pause(chunks: list, i: int) -> float:
+    """Stille vor Abschnitt i – dieselbe Regel wie beim Zusammensetzen in `_run`."""
+    ch = chunks[i]
+    if i == 0:
+        return 0.0
+    if ch.get("h"):
+        return PAUSE["heading_before"]
+    if chunks[i - 1].get("h"):
+        return PAUSE["heading_after"]
+    return PAUSE["par"] if ch.get("par") else PAUSE["chunk"]
+
+
+def info(doc: dict) -> dict:
+    """Für den Export-Dialog: wie viel ist vorbereitet, und – wenn alles – wie lang wird das Hörbuch wirklich
+    (Tempo 1, Pausen eingerechnet). Daraus rechnet die Oberfläche die Größe je Format (64 kbit/s bzw. WAV roh)."""
+    chunks, voice = doc["chunks"], tts.normalize_voice_id(doc["voice"])
+    prepared, seconds = 0, 0.0
+    for i, c in enumerate(chunks):
+        p = tts.cache_path(c["text"], voice, doc["id"])
+        sec = tts.audio_seconds(p) if p.exists() else None
+        if p.exists():
+            prepared += 1
+        if seconds is not None:
+            seconds = None if sec is None else seconds + sec + _pause(chunks, i)
+    real = seconds is not None and prepared == len(chunks)
+    return {"prepared": prepared, "total": len(chunks), "seconds": round(seconds, 1) if real else None,
+            "bytesPerSec": {f: _bytes_per_sec(f) for f in FORMATS}}
+
+
+TEMPO_MIN, TEMPO_MAX = 0.5, 15.0
 
 
 TEMPO_MIN, TEMPO_MAX = 0.5, 15.0
@@ -225,6 +281,12 @@ def _run(doc: dict, fmt: str, ambient: tuple[Path, float] | None = None, rate: f
     doc_id = doc["id"]
     chunks = doc["chunks"]
     is_edge = doc["voice"].startswith("edge:")
+    voice = tts.normalize_voice_id(doc["voice"])
+    # Alles vorbereitet → nur noch aufbereiten + zusammensetzen: parallel auf allen Kernen (vorher einzeln, ~8 s bei 200)
+    vorbereitet = all(tts.cache_path(c["text"], voice, doc_id).exists() for c in chunks)
+    workers = min(8, os.cpu_count() or 2) if vorbereitet else tts.EDGE_PARALLEL if is_edge else 1
+    if vorbereitet:
+        _update(doc_id, phase="Zusammensetzen")
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             raw_path = Path(tmpdir) / "all.pcm"
@@ -239,20 +301,14 @@ def _run(doc: dict, fmt: str, ambient: tuple[Path, float] | None = None, rate: f
                 return tts.ffmpeg(["-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", str(RATE), "pipe:1"], data)
 
             silence = lambda sec: b"\0\0" * int(RATE * sec)  # noqa: E731
-            with open(raw_path, "wb") as raw, ThreadPoolExecutor(tts.EDGE_PARALLEL if is_edge else 1) as pool:
+            with open(raw_path, "wb") as raw, ThreadPoolExecutor(workers) as pool:
                 try:
                     futures = []
-                    for i, ch in enumerate(chunks):
-                        if i == 0:
-                            pass
-                        elif ch.get("h"):
-                            raw.write(silence(PAUSE["heading_before"]))
-                        elif chunks[i - 1].get("h"):
-                            raw.write(silence(PAUSE["heading_after"]))
-                        else:
-                            raw.write(silence(PAUSE["par"] if ch.get("par") else PAUSE["chunk"]))
+                    for i in range(len(chunks)):
+                        if i:
+                            raw.write(silence(_pause(chunks, i)))
                         # nur ein kleines Fenster vorausschicken, damit der Speicher klein bleibt
-                        while len(futures) <= i + tts.EDGE_PARALLEL * 2 and len(futures) < len(chunks):
+                        while len(futures) <= i + max(workers, tts.EDGE_PARALLEL) * 2 and len(futures) < len(chunks):
                             futures.append(pool.submit(synth, len(futures)))
                         data = futures[i].result()
                         futures[i] = None
@@ -282,7 +338,8 @@ def _run(doc: dict, fmt: str, ambient: tuple[Path, float] | None = None, rate: f
             meta_path.write_text("\n".join(meta) + "\n", "utf-8")
 
             _update(doc_id, phase="Kodieren")
-            codec, muxer, _ = FORMATS[fmt]
+            _, muxer, _ = FORMATS[fmt]
+            codec = _codec(fmt)
             out = export_path(doc_id, fmt)
             tmp_out = out.with_suffix(f".part.{fmt}")
             # Eingänge: 0 = Stimme (roh), [1 = Kapitel-Metadaten], [letzter = Atmosphäre als Endlosschleife]

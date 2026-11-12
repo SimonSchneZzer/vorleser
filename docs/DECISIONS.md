@@ -5,6 +5,21 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-12 · Export vorbereiteter Texte: Anzeige, echte Größe, schneller
+**Kontext:** Simon: Artikel komplett vorbereitet, im Export-Dialog nur geschätzte Größen (23/23/140 MB) – nicht zu
+sehen, welches Format „schon vorbereitet“ ist, Export fühlte sich wie neu vertonen an.
+**Klarstellung:** „Vorab erzeugen“ füllt den Cache je Abschnitt – unabhängig vom Format. Es gibt kein vorbereitetes
+Format; alle drei sind gleich weit. Der Export setzt nur noch zusammen + kodiert (gemessen 47 min: M4B 17 s, MP3 13 s, WAV 8 s).
+**Entscheidung (Simons Antworten: Anzeige ja, echte Größe ja, keine Datei im Voraus, direkt bauen):**
+`GET /api/docs/<id>/export/info` → vorbereitet x/y + echte Länge (aus den Cache-Dateien ohne Dekodieren:
+`tts.audio_seconds` – Edge-MP3 feste 48 kbit/s, WebM-Kopf) + Bytes/s je Format. Dialog holt das vor dem Öffnen (nichts
+springt): grüner Hinweis „Vorbereitet …“, je Format echte Größe + „in Sekunden“; teilweise → wie viele noch fehlen.
+Export eines vorbereiteten Texts: Phase „Zusammensetzen“, Abschnitte parallel auf allen Kernen aufbereiten; M4B am Mac
+mit `aac_at` (AudioToolbox, ~2× schneller, etwas kleiner). Jetzt: M4B 5,5 s, MP3 6,7 s, WAV 1,7 s; Größe ±0,1 MB.
+**Verworfen:** nach dem Vorab erzeugen automatisch eine M4B-Datei anlegen (Simon: nein – Speicher).
+**Stolperfalle:** Fehlt die Klon-Umgebung, kennt `_voice_lang` die Sprache der eigenen Stimme nicht → „e.g.“ wird
+anders aufbereitet → andere Cache-Schlüssel (in einer Datenkopie ohne Klon-Umgebung gesehen: 189 statt 196 vorbereitet).
+
 ## 2026-11-11 · Windows: zwei Vorleser gleichzeitig; Markierung im eigenen Fenster
 **Kontext:** Tester-Rückmeldung (Windows 11, 3.0.5): Text im Vorleser markiert, Kürzel gedrückt → „Kein markierter Text
 gefunden“. Im Log startete jeder Vorleser doppelt; die zweite Kopie meldete „Kürzel belegt“ (der Tester wechselte darauf

@@ -137,7 +137,7 @@ def doc_voice(api, doc):
 
 
 @needs_piper
-@pytest.mark.parametrize("fmt", ["mp3", "wav"])
+@pytest.mark.parametrize("fmt", ["mp3", "wav", "m4b"])
 def test_export(api, doc, fmt):
     assert api.json("POST", f"/api/docs/{doc['id']}/export", {"format": fmt})[0] == 200
     for _ in range(120):
@@ -150,6 +150,30 @@ def test_export(api, doc, fmt):
     assert s == 200 and len(body) > 1000
     assert f".{fmt}" in headers["Content-Disposition"]
     assert ffprobe_duration(body) > 1
+
+
+@needs_piper
+def test_export_vorbereitet_zeigt_echte_laenge_und_setzt_nur_zusammen(api, doc):
+    """Vorbereitete Texte: Dialog kennt die echte Länge (→ echte Größe), Export heißt „Zusammensetzen“ (11.11.2026)."""
+    info = api.json("GET", f"/api/docs/{doc['id']}/export/info")[1]
+    assert info["total"] > 0 and info["seconds"] is None                   # noch nichts erzeugt → keine echte Länge
+    full = api.json("GET", f"/api/docs/{doc['id']}")[1]
+    for i in range(len(full["chunks"])):                                   # alles vorbereiten
+        assert api.call("GET", f"/api/docs/{doc['id']}/audio/{i}")[0] == 200
+    info = api.json("GET", f"/api/docs/{doc['id']}/export/info")[1]
+    assert info["prepared"] == info["total"] and info["seconds"] > 1
+    assert api.json("POST", f"/api/docs/{doc['id']}/export", {"format": "wav"})[0] == 200
+    phasen = set()
+    for _ in range(120):
+        st = api.json("GET", f"/api/docs/{doc['id']}/export")[1]
+        phasen.add(st.get("phase"))
+        if st["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert st["status"] == "ready", st
+    assert "Vertonen" not in phasen - {None} or len(phasen) == 1, phasen
+    body = api.call("GET", f"/api/docs/{doc['id']}/export/file")[2]
+    assert abs(ffprobe_duration(body) - info["seconds"]) < 0.5            # Länge (und damit Größe) stimmt
 
 
 def test_export_falsches_format(api, doc):

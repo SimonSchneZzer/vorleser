@@ -688,12 +688,22 @@ function xMsg(text) {
   if ($("xMsg").textContent === text) return;
   xChange(() => { $("xMsg").textContent = text; $("xMsg").classList.toggle("hidden", !text); });
 }
+let xInfoSrv = null;   // vom Server: { prepared, total, seconds } – seconds = echte Länge, wenn alles vorbereitet ist
 function xDocInfo() {
-  const d = st.doc, chars = d.chunks.reduce((s, c) => s + c.text.length, 0), sec = chars / 15 / (+$("xRate").value || 1);   // mit Export-Tempo
-  $("xInfo").textContent = [d.title, `ca. ${fmtDuration(sec)}`, d.chapters.length ? `${d.chapters.length} Kapitel` : ""].filter(Boolean).join(" · ");
-  // Größe grob schätzen: M4B/MP3 mit 64 kbit/s, WAV unkomprimiert (24 kHz, 16 bit, mono)
-  const est = { m4b: sec * 8000, mp3: sec * 8000, wav: sec * 48000 };
-  document.querySelectorAll("#xFmts [data-sz]").forEach((el) => (el.textContent = `≈ ${fmtMB(est[el.dataset.sz])}`));
+  const d = st.doc, rate = +$("xRate").value || 1, real = xInfoSrv?.seconds;
+  const chars = d.chunks.reduce((s, c) => s + c.text.length, 0), sec = (real || chars / 15) / rate;   // mit Export-Tempo
+  $("xInfo").textContent = [d.title, real ? fmtDuration(sec) : `ca. ${fmtDuration(sec)}`, d.chapters.length ? `${d.chapters.length} Kapitel` : ""].filter(Boolean).join(" · ");
+  // Größe = Länge × Bytes je Sekunde des Formats (vom Server, passend zum dort genutzten Encoder) – mit echter Länge genau
+  const bps = { m4b: 8550, mp3: 8000, wav: 48000, ...(xInfoSrv?.bytesPerSec || {}) };
+  const est = { m4b: sec * bps.m4b, mp3: sec * bps.mp3, wav: sec * bps.wav };
+  document.querySelectorAll("#xFmts [data-sz]").forEach((el) => {
+    el.innerHTML = real ? `${esc(fmtMB(est[el.dataset.sz]))}<em>in Sekunden</em>` : esc(`≈ ${fmtMB(est[el.dataset.sz])}`);
+  });
+  const p = xInfoSrv, alle = p && p.total && p.prepared === p.total, teil = p && p.prepared > 0 && !alle;
+  $("xPrep").classList.toggle("hidden", !alle && !teil);
+  $("xPrep").classList.toggle("part", !!teil);
+  $("xPrepTxt").textContent = alle ? "Vorbereitet – alle Abschnitte sind schon erzeugt. Jedes Format ist in Sekunden fertig."
+    : teil ? `Teilweise vorbereitet – ${p.total - p.prepared} von ${p.total} Abschnitten werden beim Export noch erzeugt.` : "";
   // Fortschritt in Kapitel geteilt (bei sehr vielen Kapiteln ein durchgehender Balken)
   const n = d.chunks.length, starts = d.chapters.map((c) => c.chunk).filter((c) => c > 0);
   const bounds = starts.length && starts.length < 30 ? [0, ...starts, n] : [0, n];
@@ -703,7 +713,7 @@ function xDocInfo() {
 function xRunRender(j) {
   const coding = j.phase === "Kodieren", d = st.doc, done = coding ? j.total : j.done;
   const pct = coding ? 100 : j.total ? (j.done / j.total) * 100 : 0;
-  $("xPhase").textContent = coding ? "Datei wird erstellt …" : "Wird vertont …";
+  $("xPhase").textContent = coding ? "Datei wird erstellt …" : j.phase === "Zusammensetzen" ? "Wird zusammengesetzt …" : "Wird vertont …";
   $("xPct").textContent = `${Math.floor(pct)} %`;
   const b = xDocInfo.bounds || [0, j.total];
   $("xSegs").querySelectorAll("i").forEach((el, k) => {
@@ -750,7 +760,11 @@ async function exportPoll() {
     xMsg(j.status === "error" ? j.error || "Export fehlgeschlagen" : j.status === "cancelled" ? "Abgebrochen" : "");
   }
 }
-$("exportBtn").onclick = () => {
+$("exportBtn").onclick = async () => {
+  // Vorbereitet? Echte Länge? Vor dem Öffnen holen (lokal, schnell) – so steht der Dialog gleich richtig da, nichts springt
+  const id = st.doc?.id;
+  try { xInfoSrv = id ? await api(`/api/docs/${id}/export/info`) : null; } catch { xInfoSrv = null; }
+  if (!st.doc || st.doc.id !== id) return;
   xDocInfo(); atmoExport = false; atmoExportRender();
   $("xRate").innerHTML = $("rate").innerHTML; $("xRate").value = $("rate").value; xDocInfo();   // vorausgewählt: Tempo beim Hören
   xPrev = null; xView = null;

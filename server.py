@@ -708,6 +708,12 @@ class Handler(BaseHTTPRequestHandler):
         load_doc(doc_id)
         self.json(exporter.status(doc_id))
 
+    def export_info(self, doc_id):
+        """Export-Dialog: vorbereitet? + echte Länge (→ echte Größe je Format)."""
+        with _doc_lock:
+            doc = load_doc(doc_id)
+        self.json(exporter.info(doc))
+
     def export_start(self, doc_id):
         with _doc_lock:
             doc = load_doc(doc_id)
@@ -945,6 +951,7 @@ ROUTES = [
     (rf"/api/docs/{D}/audio/(\d+)", "GET", Handler.audio),
     (rf"/api/docs/{D}/text", "GET", Handler.get_text),
     (rf"/api/docs/{D}/text", "PUT", Handler.put_text),
+    (rf"/api/docs/{D}/export/info", "GET", Handler.export_info),
     (rf"/api/docs/{D}/export", "GET", Handler.export_status),
     (rf"/api/docs/{D}/export", "POST", Handler.export_start),
     (rf"/api/docs/{D}/export", "DELETE", Handler.export_cancel),

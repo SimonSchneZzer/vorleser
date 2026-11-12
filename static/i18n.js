@@ -460,7 +460,8 @@ const I18N_EN = {
   "Kapitelmarken werden gesetzt": "Adding chapter marks", "Format": "Format",
   "Du kannst den Dialog schließen – der Export läuft im Hintergrund weiter. Die Bibliothek zeigt den Fortschritt, und wir melden uns, wenn er fertig ist.":
     "You can close this dialog – the export keeps running in the background. The library shows the progress, and we’ll let you know when it’s done.",
-  "Export starten": "Start export", "Neu exportieren": "Export again", "Herunterladen": "Download", "Wird vertont …": "Generating audio …",
+  "Export starten": "Start export", "Neu exportieren": "Export again", "Herunterladen": "Download", "Wird vertont …": "Generating audio …", "Wird zusammengesetzt …": "Putting it together …", "in Sekunden": "in seconds",
+  "Vorbereitet – alle Abschnitte sind schon erzeugt. Jedes Format ist in Sekunden fertig.": "Prepared – all sections are already generated. Every format is ready in seconds.",
   "Datei wird erstellt …": "Creating file …", "Abgebrochen": "Cancelled",
 
   // Eigene Stimme anlegen
@@ -568,6 +569,7 @@ const I18N_PATTERNS = [
   [/^von (\d+)$/, (m, n) => `of ${n}`],
   [/^(\d+) Abschnitte? bereit$/, (m, n) => `${plural(n, "section", "sections")} ready`],
   [/^(\d+) Abschnitte? vorbereitet$/, (m, n) => `${plural(n, "section", "sections")} ready`],
+  [/^Teilweise vorbereitet – (\d+) von (\d+) Abschnitten werden beim Export noch erzeugt\.$/, (m, a, b) => `Partly prepared – ${a} of ${b} sections are still generated during export.`],
   [/^(\d+) von (\d+) Abschnitten$/, (m, a, b) => `${a} of ${b} sections`],
   [/^(\d+) Abschnitte?$/, (m, n) => plural(n, "section", "sections")],
   [/^(\d+) Kapitel$/, (m, n) => plural(n, "chapter", "chapters")],

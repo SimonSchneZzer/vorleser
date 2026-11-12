@@ -997,6 +997,13 @@ dialog.confirm .dlg-actions .btn { flex: 1; }
 .xseg { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; min-width: 4px; }
 .xseg i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--acc-text); transition: width .6s var(--ease-out); }
 .xsub { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.xprep { display: flex; gap: 10px; margin-top: 16px; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5;
+  color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.xprep svg { margin-top: 2px; flex: none; }
+.xprep.part { color: var(--muted); background: var(--bg); }
+.xprep.part svg { display: none; }
+.xprep + .xfmts { margin-top: 10px; }
+.xfmt .sz em { display: block; font-style: normal; font-size: 11.5px; color: var(--ok); text-align: right; }
 .xhint { display: flex; gap: 10px; margin-top: 18px; padding: 12px 14px; border-radius: 12px; background: var(--bg); color: var(--muted); font-size: 13px; line-height: 1.5; }
 .xhint svg { margin-top: 2px; }
 .xgrow { flex: 1; }

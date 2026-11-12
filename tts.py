@@ -888,6 +888,45 @@ def get_marks(text: str, voice_id: str, lang: str | None = None, compute: bool =
         return None
 
 
+_dauer_cache: dict[tuple[str, float], float | None] = {}
+
+
+def audio_seconds(path: Path) -> float | None:
+    """Länge einer Cache-Datei ohne Dekodieren: Edge-MP3 hat feste 48 kbit/s, WebM trägt die Dauer im Kopf
+    (`to_opus` schreibt in eine Datei, `fix_webm_durations` hat alte nachgetragen). None = unbekannt."""
+    import struct
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    key = (str(path), st.st_mtime)
+    if key in _dauer_cache:
+        return _dauer_cache[key]
+    sec = None
+    if path.suffix == ".mp3":
+        sec = st.st_size * 8 / 48000
+    elif path.suffix == ".webm":
+        try:
+            with open(path, "rb") as f:
+                head = f.read(4096)
+            scale = 1_000_000                                      # TimecodeScale (ns), Vorgabe 1 ms
+            i = head.find(b"\x2a\xd7\xb1")
+            if i >= 0:
+                n = head[i + 3] & 0x0F if head[i + 3] & 0x80 else 0  # 1-Byte-Größe (0x8n)
+                if n:
+                    scale = int.from_bytes(head[i + 4:i + 4 + n], "big")
+            i = head.find(b"\x44\x89")
+            if i >= 0 and head[i + 2] in (0x84, 0x88):
+                val = struct.unpack(">f" if head[i + 2] == 0x84 else ">d", head[i + 3:i + 3 + (head[i + 2] & 0x0F)])[0]
+                sec = val * scale / 1e9
+        except (OSError, struct.error, IndexError):
+            sec = None
+    if sec is not None and not (0 < sec < 3600):
+        sec = None
+    _dauer_cache[key] = sec
+    return sec
+
+
 def is_cached(text: str, voice_id: str, doc_id: str | None = None) -> bool:
     return cache_path(text, normalize_voice_id(voice_id), doc_id).exists()
 

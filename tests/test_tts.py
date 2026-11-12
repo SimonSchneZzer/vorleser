@@ -103,6 +103,19 @@ def test_erster_start_wartet_auf_onlinestimmen(monkeypatch, tmp_path):
 
 
 @needs_piper
+def test_laenge_aus_cache_datei_ohne_dekodieren(tmp_path):
+    """Export-Dialog: Länge aus WebM-Kopf bzw. MP3-Größe (Edge: feste 48 kbit/s) – wie ffprobe."""
+    webm = tmp_path / "a.webm"
+    webm.write_bytes(tts.to_opus(sine_wav(2.3)))
+    assert abs(tts.audio_seconds(webm) - ffprobe_duration(webm)) < 0.01
+    mp3 = tmp_path / "b.mp3"
+    mp3.write_bytes(b"\0" * 6000 * 3)
+    assert abs(tts.audio_seconds(mp3) - 3.0) < 0.01
+    kaputt = tmp_path / "c.webm"
+    kaputt.write_bytes(b"kein webm")
+    assert tts.audio_seconds(kaputt) is None
+
+
 def test_piper_spricht_mit_dauer():
     name = tts._piper_voices()[0]["id"].split(":", 1)[1]
     webm = tts._synth_piper("Hallo, das ist ein kurzer Test.", name)
