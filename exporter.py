@@ -134,6 +134,11 @@ def _bytes_per_sec(fmt: str) -> float:
     return {"mp3": 8000, "wav": BYTES_PER_SEC, "m4b": 8100 if _codec("m4b") == "aac_at" else 8550}[fmt]
 
 
+def _vorbereitet(doc: dict) -> bool:
+    voice = tts.normalize_voice_id(doc["voice"])
+    return all(tts.cache_path(c["text"], voice, doc["id"]).exists() for c in doc["chunks"])
+
+
 def _pause(chunks: list, i: int) -> float:
     """Stille vor Abschnitt i – dieselbe Regel wie beim Zusammensetzen in `_run`."""
     ch = chunks[i]
@@ -186,12 +191,13 @@ def start(doc: dict, fmt: str, ambient: bool = False, rate: float = 1.0) -> dict
     if fmt not in FORMATS and fmt != "prepare":
         raise ValueError("Format muss mp3, m4b, wav oder prepare sein")
     key = doc["id"] + ("#prep" if fmt == "prepare" else "")
+    phase = "Zusammensetzen" if fmt != "prepare" and _vorbereitet(doc) else "Vertonen"   # gleich richtig (kein kurzes „Vertonen“)
     with _lock:
         cur = _jobs.get(key)
         if cur and cur["status"] == "running":
             return dict(cur)
         _jobs[key] = {"status": "running", "format": fmt, "done": 0,
-                      "total": len(doc["chunks"]), "phase": "Vertonen", "started": time.time()}
+                      "total": len(doc["chunks"]), "phase": phase, "started": time.time()}
     if fmt == "prepare":
         set_pending(doc["id"], True)
     amb = _ambient() if ambient and fmt != "prepare" else None
@@ -281,9 +287,8 @@ def _run(doc: dict, fmt: str, ambient: tuple[Path, float] | None = None, rate: f
     doc_id = doc["id"]
     chunks = doc["chunks"]
     is_edge = doc["voice"].startswith("edge:")
-    voice = tts.normalize_voice_id(doc["voice"])
     # Alles vorbereitet → nur noch aufbereiten + zusammensetzen: parallel auf allen Kernen (vorher einzeln, ~8 s bei 200)
-    vorbereitet = all(tts.cache_path(c["text"], voice, doc_id).exists() for c in chunks)
+    vorbereitet = _vorbereitet(doc)
     workers = min(8, os.cpu_count() or 2) if vorbereitet else tts.EDGE_PARALLEL if is_edge else 1
     if vorbereitet:
         _update(doc_id, phase="Zusammensetzen")

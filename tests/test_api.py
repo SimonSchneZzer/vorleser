@@ -171,7 +171,7 @@ def test_export_vorbereitet_zeigt_echte_laenge_und_setzt_nur_zusammen(api, doc):
             break
         time.sleep(0.05)
     assert st["status"] == "ready", st
-    assert "Vertonen" not in phasen - {None} or len(phasen) == 1, phasen
+    assert "Vertonen" not in phasen, phasen                                # auch nicht kurz am Anfang (Windows-CI)
     body = api.call("GET", f"/api/docs/{doc['id']}/export/file")[2]
     assert abs(ffprobe_duration(body) - info["seconds"]) < 0.5            # Länge (und damit Größe) stimmt
 
