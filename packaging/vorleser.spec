@@ -16,6 +16,7 @@ datas = [
     (str(ROOT / "clone_worker.py"), "."),        # läuft später in der nachinstallierten Klon-Umgebung
     (str(ROOT / "VERSION"), "."),                # für die Update-Prüfung
     (str(ROOT / "CHANGELOG.md"), "."),           # „Was ist neu“ in der App (offline)
+    (str(ROOT / "edge_voices_bekannt.json"), "."),  # Online-Stimmen, die Microsoft nicht mehr auflistet
     (str(ROOT / "LICENSE"), "."),                # GPL: Lizenz + Hinweise liegen der App bei
     (str(ROOT / "THIRD_PARTY_NOTICES.md"), "."),
 ]

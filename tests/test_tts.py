@@ -208,3 +208,35 @@ def test_klon_abschnitt_nicht_doppelt_erzeugen(monkeypatch, tmp_path):
     t1.join(5)
     assert len(calls) == 1 and len(res) == 2 and res[0][0] == res[1][0] == b"OggS-fake-audio"
     tts.cache_path(text, vid).unlink(missing_ok=True)
+
+
+def test_verschwundene_onlinestimmen_bleiben(monkeypatch, tmp_path):
+    """Meldung 14.11.2026: Microsoft listet Conrad, Katja, Seraphina … nicht mehr, sie sprechen aber weiter."""
+    import asyncio
+    liste = tmp_path / "edge_voices.json"
+    monkeypatch.setattr(tts, "EDGE_LIST_FILE", liste)
+    monkeypatch.setattr(tts, "_edge_cache", {"voices": [], "loaded": 0.0})
+    liste.write_text('[{"id": "edge:de-DE-AltNeural", "engine": "edge", "lang": "de", "region": "DE", '
+                     '"label": "Alt (DE)", "gender": "Male", "name": "Alt", "meta": ""}]', "utf-8")
+
+    monkeypatch.setattr(asyncio, "run", lambda coro: (coro.close(), [
+        {"ShortName": "de-DE-TanjaNeural", "Locale": "de-DE", "Gender": "Female", "Status": "GA"}])[1])
+    tts.refresh_edge_voices()
+    ids = [v["id"] for v in tts._edge_voices()]
+    assert "edge:de-DE-TanjaNeural" in ids                      # neu aus der Online-Liste
+    assert "edge:de-DE-AltNeural" in ids                        # aus der bisher gespeicherten Liste
+    assert "edge:de-DE-ConradNeural" in ids                     # aus der mitgelieferten Grundliste
+    assert len(ids) == len(set(ids))
+    assert tts.default_voice("de") == "edge:de-DE-SeraphinaMultilingualNeural"
+    assert "edge:de-DE-ConradNeural" in liste.read_text("utf-8")   # auch gespeichert
+
+
+def test_grundliste_ohne_gespeicherte_liste(monkeypatch, tmp_path):
+    """Erster Start ohne Netz bzw. alte gespeicherte Liste: Grundliste ergänzt."""
+    monkeypatch.setattr(tts, "EDGE_LIST_FILE", tmp_path / "edge_voices.json")
+    monkeypatch.setattr(tts, "_edge_cache", {"voices": [], "loaded": time.time()})
+    ev = tts._edge_ready.__class__()
+    ev.set()
+    monkeypatch.setattr(tts, "_edge_ready", ev)
+    ids = [v["id"] for v in tts._edge_voices()]
+    assert "edge:de-DE-ConradNeural" in ids and "edge:en-US-AvaMultilingualNeural" in ids

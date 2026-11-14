@@ -168,7 +168,7 @@ def refresh_edge_voices(timeout: float = 10) -> None:
             for v in raw
             if v["Locale"].split("-")[0] in LANGS and v.get("Status", "GA") != "Deprecated"
         ]
-        voices.sort(key=lambda v: (v["lang"], v["region"] not in ("DE", "US"), v["region"], v["label"]))
+        voices = _mit_bekannten(voices)
         _write_atomic(EDGE_LIST_FILE, json.dumps(voices, ensure_ascii=False).encode())
         with _edge_lock:
             _edge_cache.update(voices=voices, loaded=time.time())
@@ -179,18 +179,41 @@ def refresh_edge_voices(timeout: float = 10) -> None:
         _edge_ready.set()
 
 
+def _bekannte_edge_voices() -> list[dict]:
+    """Bisher gespeicherte Liste + mitgelieferte Grundliste."""
+    out = []
+    for f in (EDGE_LIST_FILE, paths.KNOWN_EDGE_VOICES):
+        try:
+            out += json.loads(f.read_text("utf-8"))
+        except (OSError, ValueError):
+            pass
+    return out
+
+
+def _mit_bekannten(voices: list[dict]) -> list[dict]:
+    """Microsoft nimmt Stimmen aus der Liste, die weiter sprechen (Nov. 2026: Conrad, Katja, Seraphina …).
+    Darum bleiben einmal bekannte Stimmen erhalten; die Online-Liste ergänzt nur."""
+    ids = {v["id"] for v in voices}
+    for v in _bekannte_edge_voices():
+        if v.get("id", "").startswith("edge:") and v["id"] not in ids and v.get("lang") in LANGS:
+            voices.append(v)
+            ids.add(v["id"])
+    voices.sort(key=lambda v: (v["lang"], v["region"] not in ("DE", "US"), v["region"], v["label"]))
+    return voices
+
+
 def _edge_voices() -> list[dict]:
     # Allererster Start: noch keine gespeicherte Liste → kurz auf die Online-Abfrage warten,
     # sonst wird die Offline-Stimme (Piper) zur Standardstimme.
     if not _edge_cache["voices"] and not EDGE_LIST_FILE.exists():
         _edge_ready.wait(8)
     with _edge_lock:
-        if not _edge_cache["voices"] and EDGE_LIST_FILE.exists():
-            try:
-                _edge_cache["voices"] = json.loads(EDGE_LIST_FILE.read_text("utf-8"))
+        if not _edge_cache["voices"]:
+            # gespeicherte Liste (evtl. schon ohne die verschwundenen Stimmen) + Grundliste;
+            # ohne beides (erster Start offline) nur die Grundliste
+            _edge_cache["voices"] = _mit_bekannten([])
+            if EDGE_LIST_FILE.exists():
                 _edge_cache["loaded"] = EDGE_LIST_FILE.stat().st_mtime
-            except ValueError:
-                pass
         for v in _edge_cache["voices"]:
             if "name" not in v:
                 raw = {"ShortName": v["id"].split(":", 1)[1], "Locale": f"{v['lang']}-{v['region']}", "Gender": v.get("gender")}

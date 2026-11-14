@@ -1,0 +1,572 @@
+[
+{
+"id": "edge:de-DE-AmalaNeural",
+"engine": "edge",
+"lang": "de",
+"region": "DE",
+"label": "Amala (DE) ♀",
+"gender": "Female",
+"name": "Amala",
+"meta": "Weiblich · Deutschland"
+},
+{
+"id": "edge:de-DE-ConradNeural",
+"engine": "edge",
+"lang": "de",
+"region": "DE",
+"label": "Conrad (DE) ♂",
+"gender": "Male",
+"name": "Conrad",
+"meta": "Männlich · Deutschland"
+},
+{
+"id": "edge:de-DE-FlorianMultilingualNeural",
+"engine": "edge",
+"lang": "de",
+"region": "DE",
+"label": "Florian (DE, mehrsprachig) ♂",
+"gender": "Male",
+"name": "Florian",
+"meta": "Männlich · Deutschland · mehrsprachig"
+},
+{
+"id": "edge:de-DE-KatjaNeural",
+"engine": "edge",
+"lang": "de",
+"region": "DE",
+"label": "Katja (DE) ♀",
+"gender": "Female",
+"name": "Katja",
+"meta": "Weiblich · Deutschland"
+},
+{
+"id": "edge:de-DE-KillianNeural",
+"engine": "edge",
+"lang": "de",
+"region": "DE",
+"label": "Killian (DE) ♂",
+"gender": "Male",
+"name": "Killian",
+"meta": "Männlich · Deutschland"
+},
+{
+"id": "edge:de-DE-SeraphinaMultilingualNeural",
+"engine": "edge",
+"lang": "de",
+"region": "DE",
+"label": "Seraphina (DE, mehrsprachig) ♀",
+"gender": "Female",
+"name": "Seraphina",
+"meta": "Weiblich · Deutschland · mehrsprachig"
+},
+{
+"id": "edge:de-AT-IngridNeural",
+"engine": "edge",
+"lang": "de",
+"region": "AT",
+"label": "Ingrid (AT) ♀",
+"gender": "Female",
+"name": "Ingrid",
+"meta": "Weiblich · Österreich"
+},
+{
+"id": "edge:de-AT-JonasNeural",
+"engine": "edge",
+"lang": "de",
+"region": "AT",
+"label": "Jonas (AT) ♂",
+"gender": "Male",
+"name": "Jonas",
+"meta": "Männlich · Österreich"
+},
+{
+"id": "edge:de-CH-JanNeural",
+"engine": "edge",
+"lang": "de",
+"region": "CH",
+"label": "Jan (CH) ♂",
+"gender": "Male",
+"name": "Jan",
+"meta": "Männlich · Schweiz"
+},
+{
+"id": "edge:de-CH-LeniNeural",
+"engine": "edge",
+"lang": "de",
+"region": "CH",
+"label": "Leni (CH) ♀",
+"gender": "Female",
+"name": "Leni",
+"meta": "Weiblich · Schweiz"
+},
+{
+"id": "edge:en-US-AnaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Ana (US) ♀",
+"gender": "Female",
+"name": "Ana",
+"meta": "Weiblich · USA"
+},
+{
+"id": "edge:en-US-AndrewNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Andrew (US) ♂",
+"gender": "Male",
+"name": "Andrew",
+"meta": "Männlich · USA"
+},
+{
+"id": "edge:en-US-AndrewMultilingualNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Andrew (US, mehrsprachig) ♂",
+"gender": "Male",
+"name": "Andrew",
+"meta": "Männlich · USA · mehrsprachig"
+},
+{
+"id": "edge:en-US-AriaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Aria (US) ♀",
+"gender": "Female",
+"name": "Aria",
+"meta": "Weiblich · USA"
+},
+{
+"id": "edge:en-US-AvaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Ava (US) ♀",
+"gender": "Female",
+"name": "Ava",
+"meta": "Weiblich · USA"
+},
+{
+"id": "edge:en-US-AvaMultilingualNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Ava (US, mehrsprachig) ♀",
+"gender": "Female",
+"name": "Ava",
+"meta": "Weiblich · USA · mehrsprachig"
+},
+{
+"id": "edge:en-US-BrianNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Brian (US) ♂",
+"gender": "Male",
+"name": "Brian",
+"meta": "Männlich · USA"
+},
+{
+"id": "edge:en-US-BrianMultilingualNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Brian (US, mehrsprachig) ♂",
+"gender": "Male",
+"name": "Brian",
+"meta": "Männlich · USA · mehrsprachig"
+},
+{
+"id": "edge:en-US-ChristopherNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Christopher (US) ♂",
+"gender": "Male",
+"name": "Christopher",
+"meta": "Männlich · USA"
+},
+{
+"id": "edge:en-US-EmmaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Emma (US) ♀",
+"gender": "Female",
+"name": "Emma",
+"meta": "Weiblich · USA"
+},
+{
+"id": "edge:en-US-EmmaMultilingualNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Emma (US, mehrsprachig) ♀",
+"gender": "Female",
+"name": "Emma",
+"meta": "Weiblich · USA · mehrsprachig"
+},
+{
+"id": "edge:en-US-EricNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Eric (US) ♂",
+"gender": "Male",
+"name": "Eric",
+"meta": "Männlich · USA"
+},
+{
+"id": "edge:en-US-GuyNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Guy (US) ♂",
+"gender": "Male",
+"name": "Guy",
+"meta": "Männlich · USA"
+},
+{
+"id": "edge:en-US-JennyNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Jenny (US) ♀",
+"gender": "Female",
+"name": "Jenny",
+"meta": "Weiblich · USA"
+},
+{
+"id": "edge:en-US-MichelleNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Michelle (US) ♀",
+"gender": "Female",
+"name": "Michelle",
+"meta": "Weiblich · USA"
+},
+{
+"id": "edge:en-US-RogerNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Roger (US) ♂",
+"gender": "Male",
+"name": "Roger",
+"meta": "Männlich · USA"
+},
+{
+"id": "edge:en-US-SteffanNeural",
+"engine": "edge",
+"lang": "en",
+"region": "US",
+"label": "Steffan (US) ♂",
+"gender": "Male",
+"name": "Steffan",
+"meta": "Männlich · USA"
+},
+{
+"id": "edge:en-AU-NatashaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "AU",
+"label": "Natasha (AU) ♀",
+"gender": "Female",
+"name": "Natasha",
+"meta": "Weiblich · Australien"
+},
+{
+"id": "edge:en-AU-WilliamMultilingualNeural",
+"engine": "edge",
+"lang": "en",
+"region": "AU",
+"label": "William (AU, mehrsprachig) ♂",
+"gender": "Male",
+"name": "William",
+"meta": "Männlich · Australien · mehrsprachig"
+},
+{
+"id": "edge:en-CA-ClaraNeural",
+"engine": "edge",
+"lang": "en",
+"region": "CA",
+"label": "Clara (CA) ♀",
+"gender": "Female",
+"name": "Clara",
+"meta": "Weiblich · Kanada"
+},
+{
+"id": "edge:en-CA-LiamNeural",
+"engine": "edge",
+"lang": "en",
+"region": "CA",
+"label": "Liam (CA) ♂",
+"gender": "Male",
+"name": "Liam",
+"meta": "Männlich · Kanada"
+},
+{
+"id": "edge:en-GB-LibbyNeural",
+"engine": "edge",
+"lang": "en",
+"region": "GB",
+"label": "Libby (GB) ♀",
+"gender": "Female",
+"name": "Libby",
+"meta": "Weiblich · Großbritannien"
+},
+{
+"id": "edge:en-GB-MaisieNeural",
+"engine": "edge",
+"lang": "en",
+"region": "GB",
+"label": "Maisie (GB) ♀",
+"gender": "Female",
+"name": "Maisie",
+"meta": "Weiblich · Großbritannien"
+},
+{
+"id": "edge:en-GB-RyanNeural",
+"engine": "edge",
+"lang": "en",
+"region": "GB",
+"label": "Ryan (GB) ♂",
+"gender": "Male",
+"name": "Ryan",
+"meta": "Männlich · Großbritannien"
+},
+{
+"id": "edge:en-GB-SoniaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "GB",
+"label": "Sonia (GB) ♀",
+"gender": "Female",
+"name": "Sonia",
+"meta": "Weiblich · Großbritannien"
+},
+{
+"id": "edge:en-GB-ThomasNeural",
+"engine": "edge",
+"lang": "en",
+"region": "GB",
+"label": "Thomas (GB) ♂",
+"gender": "Male",
+"name": "Thomas",
+"meta": "Männlich · Großbritannien"
+},
+{
+"id": "edge:en-HK-SamNeural",
+"engine": "edge",
+"lang": "en",
+"region": "HK",
+"label": "Sam (HK) ♂",
+"gender": "Male",
+"name": "Sam",
+"meta": "Männlich · Hongkong"
+},
+{
+"id": "edge:en-HK-YanNeural",
+"engine": "edge",
+"lang": "en",
+"region": "HK",
+"label": "Yan (HK) ♀",
+"gender": "Female",
+"name": "Yan",
+"meta": "Weiblich · Hongkong"
+},
+{
+"id": "edge:en-IE-ConnorNeural",
+"engine": "edge",
+"lang": "en",
+"region": "IE",
+"label": "Connor (IE) ♂",
+"gender": "Male",
+"name": "Connor",
+"meta": "Männlich · Irland"
+},
+{
+"id": "edge:en-IE-EmilyNeural",
+"engine": "edge",
+"lang": "en",
+"region": "IE",
+"label": "Emily (IE) ♀",
+"gender": "Female",
+"name": "Emily",
+"meta": "Weiblich · Irland"
+},
+{
+"id": "edge:en-IN-NeerjaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "IN",
+"label": "Neerja (IN) ♀",
+"gender": "Female",
+"name": "Neerja",
+"meta": "Weiblich · Indien"
+},
+{
+"id": "edge:en-IN-NeerjaExpressiveNeural",
+"engine": "edge",
+"lang": "en",
+"region": "IN",
+"label": "NeerjaExpressive (IN) ♀",
+"gender": "Female",
+"name": "NeerjaExpressive",
+"meta": "Weiblich · Indien"
+},
+{
+"id": "edge:en-IN-PrabhatNeural",
+"engine": "edge",
+"lang": "en",
+"region": "IN",
+"label": "Prabhat (IN) ♂",
+"gender": "Male",
+"name": "Prabhat",
+"meta": "Männlich · Indien"
+},
+{
+"id": "edge:en-KE-AsiliaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "KE",
+"label": "Asilia (KE) ♀",
+"gender": "Female",
+"name": "Asilia",
+"meta": "Weiblich · Kenia"
+},
+{
+"id": "edge:en-KE-ChilembaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "KE",
+"label": "Chilemba (KE) ♂",
+"gender": "Male",
+"name": "Chilemba",
+"meta": "Männlich · Kenia"
+},
+{
+"id": "edge:en-NG-AbeoNeural",
+"engine": "edge",
+"lang": "en",
+"region": "NG",
+"label": "Abeo (NG) ♂",
+"gender": "Male",
+"name": "Abeo",
+"meta": "Männlich · Nigeria"
+},
+{
+"id": "edge:en-NG-EzinneNeural",
+"engine": "edge",
+"lang": "en",
+"region": "NG",
+"label": "Ezinne (NG) ♀",
+"gender": "Female",
+"name": "Ezinne",
+"meta": "Weiblich · Nigeria"
+},
+{
+"id": "edge:en-NZ-MitchellNeural",
+"engine": "edge",
+"lang": "en",
+"region": "NZ",
+"label": "Mitchell (NZ) ♂",
+"gender": "Male",
+"name": "Mitchell",
+"meta": "Männlich · Neuseeland"
+},
+{
+"id": "edge:en-NZ-MollyNeural",
+"engine": "edge",
+"lang": "en",
+"region": "NZ",
+"label": "Molly (NZ) ♀",
+"gender": "Female",
+"name": "Molly",
+"meta": "Weiblich · Neuseeland"
+},
+{
+"id": "edge:en-PH-JamesNeural",
+"engine": "edge",
+"lang": "en",
+"region": "PH",
+"label": "James (PH) ♂",
+"gender": "Male",
+"name": "James",
+"meta": "Männlich · Philippinen"
+},
+{
+"id": "edge:en-PH-RosaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "PH",
+"label": "Rosa (PH) ♀",
+"gender": "Female",
+"name": "Rosa",
+"meta": "Weiblich · Philippinen"
+},
+{
+"id": "edge:en-SG-LunaNeural",
+"engine": "edge",
+"lang": "en",
+"region": "SG",
+"label": "Luna (SG) ♀",
+"gender": "Female",
+"name": "Luna",
+"meta": "Weiblich · Singapur"
+},
+{
+"id": "edge:en-SG-WayneNeural",
+"engine": "edge",
+"lang": "en",
+"region": "SG",
+"label": "Wayne (SG) ♂",
+"gender": "Male",
+"name": "Wayne",
+"meta": "Männlich · Singapur"
+},
+{
+"id": "edge:en-TZ-ElimuNeural",
+"engine": "edge",
+"lang": "en",
+"region": "TZ",
+"label": "Elimu (TZ) ♂",
+"gender": "Male",
+"name": "Elimu",
+"meta": "Männlich · Tansania"
+},
+{
+"id": "edge:en-TZ-ImaniNeural",
+"engine": "edge",
+"lang": "en",
+"region": "TZ",
+"label": "Imani (TZ) ♀",
+"gender": "Female",
+"name": "Imani",
+"meta": "Weiblich · Tansania"
+},
+{
+"id": "edge:en-ZA-LeahNeural",
+"engine": "edge",
+"lang": "en",
+"region": "ZA",
+"label": "Leah (ZA) ♀",
+"gender": "Female",
+"name": "Leah",
+"meta": "Weiblich · Südafrika"
+},
+{
+"id": "edge:en-ZA-LukeNeural",
+"engine": "edge",
+"lang": "en",
+"region": "ZA",
+"label": "Luke (ZA) ♂",
+"gender": "Male",
+"name": "Luke",
+"meta": "Männlich · Südafrika"
+}
+]

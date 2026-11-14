@@ -5,6 +5,16 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-14 · Online-Stimmen: einmal bekannt, bleibt in der Liste
+**Kontext:** Meldung übers Formular: Conrad sei verschwunden (auch nach Neuinstallation). Microsoft listet seit ca. 13.11.
+Conrad, Katja, Seraphina, Florian, Amala, Killian nicht mehr (neu: Tanja, Christoph) – sie sprechen aber weiter
+(geprüft; eine erfundene Stimme liefert `NoAudioReceived`). Die App übernahm die Online-Liste 1:1.
+**Entscheidung:** `refresh_edge_voices` führt die Online-Liste mit der bisher gespeicherten Liste und der
+mitgelieferten Grundliste `edge_voices_bekannt.json` (Stand 12.11.2026, de+en) zusammen; ohne gespeicherte Liste
+(erster Start offline) gilt die Grundliste.
+**Folgen:** Schaltet Microsoft eine Stimme wirklich ab, bleibt sie sichtbar; beim Vorlesen greift dann wie bei jedem
+Edge-Fehler Piper als Ersatz. Falls das vorkommt: nicht mehr sprechende Stimmen beim Aktualisieren aussortieren.
+
 ## 2026-11-12 · Export vorbereiteter Texte: Anzeige, echte Größe, schneller
 **Kontext:** Simon: Artikel komplett vorbereitet, im Export-Dialog nur geschätzte Größen (23/23/140 MB) – nicht zu
 sehen, welches Format „schon vorbereitet“ ist, Export fühlte sich wie neu vertonen an.

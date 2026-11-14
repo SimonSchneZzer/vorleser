@@ -4,6 +4,13 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.0.8
+German voices Conrad, Katja, Seraphina and others are back in the voice list.
+
+- **Voices:** Microsoft removed several German online voices from its voice list (Conrad, Katja, Seraphina,
+  Florian, Amala, Killian), although they still work. Vorleser now keeps every voice it has known, so they no
+  longer disappear – also after a reinstall. The new German voices Tanja and Christoph appear as well.
+
 ## 3.0.7
 Prepared texts now export in seconds – and the export dialog shows it.
 
