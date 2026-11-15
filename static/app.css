@@ -1793,3 +1793,41 @@ body.st-on .toast:not(.st-toast) { bottom: 176px; }
 @keyframes soA3 { 0%, 20% { transform: translateY(30px); } 38%, 60% { transform: none; } 78%, 100% { transform: translateY(30px); } }
 @keyframes soB3 { 0%, 20% { transform: translateY(60px); } 38%, 60% { transform: translateY(30px); } 78%, 100% { transform: translateY(60px); } }
 @keyframes soC3 { 0%, 20% { transform: none; } 38%, 60% { transform: translateY(60px); } 78%, 100% { transform: none; } }
+
+/* ===================== Update-Karte: fertig geladen / aktualisiert (3.2) ===================== */
+/* „ist bereit“ (Board „Paket landet“): Paket fällt in die Kachel, Kachel federt, Paket fällt hinaus, Haken zeichnet sich,
+   sechs Funken. „aktualisiert“: Haken, geänderte Stellen der Versionsnummer rollen, ein Glanz streicht einmal über die
+   Karte. Alles einmal; die Karte ist Glas → nur transform/opacity/stroke, kein filter. */
+.upd-icw { position: relative; flex-shrink: 0; width: 38px; height: 38px; }
+.upd-ic { position: relative; overflow: hidden; }
+.upd-ic .ic-box, .upd-ic .ic-chk { position: absolute; left: 10px; top: 10px; width: 18px; height: 18px; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.upd-ic .ic-chk { stroke-width: 2.6; }
+.upd-ic .ic-chk path { stroke-dasharray: 26; stroke-dashoffset: 26; }
+.upd-icw .sp { position: absolute; left: 17px; top: 17px; width: 4px; height: 4px; border-radius: 50%; background: var(--acc); opacity: 0; pointer-events: none; }
+.upd.got .ic-main, .upd.fresh .ic-main { opacity: 0; }
+.upd.got .ic-box { opacity: 1; animation: updBoxDrop .55s var(--spring) .35s both, updBoxOut .3s cubic-bezier(.5, 0, .75, 0) 1.15s forwards; }
+.upd.got .upd-ic { animation: cfPop .45s var(--spring) .1s both, updSquash .45s var(--spring) .72s both; }
+.upd.got .ic-chk, .upd.fresh .ic-chk { opacity: 1; }
+.upd.got .ic-chk path { animation: updDraw .42s var(--ease-out) 1.4s both; }
+.upd.got .sp { animation: updSpark .65s var(--ease-out) 1.45s both; }
+.upd.news.fresh .upd-ic { animation: updTilePop .5s var(--spring) .2s both; }
+.upd.fresh .ic-chk path { animation: updDraw .45s var(--ease-out) .35s both; }
+.upd-shine { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.upd-shine::after { content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; opacity: 0;
+  background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--acc) 22%, transparent), transparent); }
+.upd.fresh .upd-shine::after { animation: updShine 1.1s cubic-bezier(.4, 0, .2, 1) 1.2s both; }
+.upd b { line-height: 1.25em; }                          /* gleiche Zeilenhöhe wie das Zählwerk → Ziffern auf einer Linie */
+.upd .odo { display: inline-flex; vertical-align: top; height: 1.25em; line-height: 1.25em; overflow: hidden; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.upd .odo .c { display: inline-flex; flex-direction: column; }
+.upd .odo .c.roll { animation: updOdo .7s var(--spring) .7s both; }
+@keyframes updBoxDrop { from { transform: translateY(-44px); } to { transform: none; } }
+@keyframes updBoxOut { to { transform: translateY(26px); opacity: 0; } }
+@keyframes updSquash { 0% { transform: none; } 30% { transform: scale(1.08, .86); } 100% { transform: none; } }
+@keyframes updTilePop { 0% { transform: none; } 35% { transform: scale(.88); } 100% { transform: none; } }
+@keyframes updDraw { to { stroke-dashoffset: 0; } }
+@keyframes updSpark { 0% { opacity: 1; transform: rotate(var(--a)) translateX(14px) scale(1); } 100% { opacity: 0; transform: rotate(var(--a)) translateX(34px) scale(.4); } }
+@keyframes updShine { 0% { opacity: 1; } 100% { left: 110%; opacity: 1; } }
+@keyframes updOdo { to { transform: translateY(-1.25em); } }
+.auto-bar { display: block; width: min(240px, 100%); height: 4px; margin-top: 7px; }

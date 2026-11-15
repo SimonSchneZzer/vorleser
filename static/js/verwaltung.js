@@ -82,11 +82,29 @@ document.addEventListener("scroll", () => byPop(null), true);
 function openExternal(url) {
   const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.click();
 }
+/** Lädt die App gerade still im Hintergrund (automatisch, 3.2)? Dann keine Karte – nur der Stand in Einstellungen › App. */
+const updSilent = (s) => !!s.auto && (s.state === "downloading" || s.state === "preparing");
+const updBusy = (s) => !updSilent(s) && ["downloading", "preparing", "installing"].includes(s.state);
+const updAuto = () => st.settings?.autoUpdate !== false;
+/** Erste Zeile der Release-Notiz (Text der Update-Karte). */
+const updLead = (s) => (s.notes || "").split("\n").map((x) => x.trim()).find((x) => x && !/^https?:/.test(x)) || "";
+function updTitleText(t) { const b = $("updTitle"); delete b.dataset.k; b.textContent = t; }
+/** „Auf Version 3.2.0 aktualisiert“ – nur die geänderten Stellen rollen weiter wie ein Zählwerk (einmal). */
+function updOdoTitle(from, to) {
+  const b = $("updTitle"), k = `${from}>${to}`;
+  if (b.dataset.k === k) return;                           // schon da → Animation nicht neu starten
+  const col = (a, z) => `<span class="c${a === z ? "" : " roll"}"><span>${esc(a)}</span>${a === z ? "" : `<span>${esc(z)}</span>`}</span>`;
+  const odo = !from || from === to ? esc(to) : from.length === to.length
+    ? `<span class="odo">${[...to].map((z, i) => col(from[i], z)).join("")}</span>` : `<span class="odo">${col(from, to)}</span>`;
+  const plain = `${L("Auf Version", "Updated to version")} ${to}${L(" aktualisiert", "")}`;
+  b.innerHTML = `<span class="sr-only" data-noi18n>${esc(plain)}</span><span aria-hidden="true" data-noi18n>${L("Auf Version", "Updated to version")} ${odo}${L(" aktualisiert", "")}</span>`;
+  b.dataset.k = k;
+}
 function updRender() {
   const s = upd.s; if (!s || !s.enabled) return;
   // Wechsel Knöpfe ↔ Ladebalken (z. B. nach „Aktualisieren“): Karte ändert ihre Höhe weich, Balken bzw.
   // Knöpfe und Texte gleiten einmal herein.
-  const card = $("upd"), busy = ["downloading", "preparing", "installing"].includes(s.state);
+  const card = $("upd"), busy = updBusy(s);
   const flip = !card.classList.contains("hidden") && !card.classList.contains("leaving") && card.classList.contains("busy") !== busy;
   const done = flip ? heightFrom(card) : null;
   updRenderCard();
@@ -94,43 +112,46 @@ function updRender() {
 }
 function updRenderCard() {
   const s = upd.s, card = $("upd");
-  card.classList.remove("news"); updIcon("i-dl"); $("updLater").textContent = "Später";
+  card.classList.remove("news", "got", "fresh"); updIcon("i-dl"); $("updLater").textContent = "Später";
   $("updRow").classList.remove("hidden");
+  updAutoRow(s);
   $("updPage").classList.add("hidden");
   $("verTxt").textContent = `Version ${s.current}`;
   $("updNote").textContent = s.available ? `Version ${s.latest} ist verfügbar` : s.latest ? "Du hast die neueste Version" : "Prüft bei jedem Start automatisch";
-  const busy = s.state === "downloading" || s.state === "preparing" || s.state === "installing";
+  const busy = updBusy(s);
+  if (updSilent(s)) return updShow(false);              // still im Hintergrund – die Karte kommt, wenn alles bereit ist
   $("upd").classList.toggle("busy", busy);
   $("updBar").classList.toggle("hidden", !busy);
   $("updBtns").classList.toggle("hidden", busy);
   if (s.state === "downloading") {
     const pct = s.connected && s.total ? Math.round((s.done / s.total) * 100) : 0;
-    $("updTitle").textContent = "Update wird geladen";
+    updTitleText("Update wird geladen");
     $("updText").textContent = s.connected && s.total ? `${fmtMB(s.done)} von ${fmtMB(s.total)}` : "Verbindung wird hergestellt …";
     $("updFill").style.width = `${pct}%`;
     return updShow(true);
   }
   if (s.state === "preparing") {
-    $("updTitle").textContent = "Update wird vorbereitet";
+    updTitleText("Update wird vorbereitet");
     $("updText").textContent = "Einen Moment – du kannst weiter vorlesen.";
     $("updFill").style.width = "100%";
     return updShow(true);
   }
-  if (s.state === "ready") {
-    $("updTitle").textContent = "Update bereit";
-    $("updText").textContent = `Version ${s.readyVersion} startet beim nächsten Öffnen von Vorleser – oder gleich jetzt.`;
+  if (s.state === "ready") {                            // fertig geladen: Paket fällt in die Kachel, Haken, Funken (einmal)
+    card.classList.add("got");
+    updTitleText(`Vorleser ${s.readyVersion} ist bereit`);
+    $("updText").textContent = [s.latest === s.readyVersion ? updLead(s) : "", "Startet beim nächsten Öffnen – oder gleich jetzt."].filter(Boolean).join(" ");
     $("updGo").textContent = "Jetzt neu starten";
     return upd.later ? updShow(false) : updShow(true);
   }
   if (s.state === "installing") {
-    $("updTitle").textContent = "Startet neu …";
+    updTitleText("Startet neu …");
     $("updText").textContent = "Vorleser ist gleich in der neuen Version zurück.";
     $("updFill").style.width = "100%";
     return updShow(true);
   }
   if (s.state === "error") {
     if (upd.errLater) return updShow(false);            // „Später“ → erst nach dem nächsten Start wieder fragen
-    $("updTitle").textContent = "Update fehlgeschlagen";
+    updTitleText("Update fehlgeschlagen");
     const other = "Das Update ließ sich nicht vorbereiten. Versuch es noch einmal oder lade die neue Version von der Webseite.";
     $("updText").textContent = s.error || other;
     $("updPage").classList.toggle("hidden", (s.error || other) !== other);   // nur, wenn die Webseite wirklich hilft
@@ -145,17 +166,19 @@ function updRenderCard() {
       if (!upd.sortT) upd.sortT = setTimeout(() => { upd.sortT = 0; sortTourDue() === true ? sortTourStart() : updRender(); }, sd === "wait" ? 700 : 900);
       return;
     }
-    card.classList.add("news"); updIcon("i-check");
-    $("updTitle").textContent = `Auf Version ${s.current} aktualisiert`;
+    card.classList.add("news", "fresh"); updIcon("i-check");
+    updOdoTitle(s.updatedFrom, s.current);
     $("updText").textContent = news.data?.releases.find((r) => r.version === s.current)?.lead || "";
     $("updLater").textContent = "Schließen";
     $("updGo").textContent = "Was ist neu";
     if (!news.data) newsLoad().then(() => newsPending() && updRender()).catch(() => {});
     return updShow(true);
   }
-  if (s.available && !updDismissed(s.latest)) {
-    $("updTitle").textContent = `Vorleser ${s.latest} ist da`;
-    const first = (s.notes || "").split("\n").map((x) => x.trim()).find((x) => x && !/^https?:/.test(x)) || "";
+  // Automatisch laden an → keine „ist da“-Karte: die App lädt gleich still. Nur wenn das dauerhaft scheitert (autoFailed),
+  // automatisch laden aus ist oder die App sich nicht selbst ersetzen kann, wie bisher fragen.
+  if (s.available && !updDismissed(s.latest) && (!s.canInstall || !updAuto() || s.autoFailed)) {
+    updTitleText(`Vorleser ${s.latest} ist da`);
+    const first = updLead(s);
     $("updText").textContent = s.canInstall
       ? [first, "Wird im Hintergrund geladen, du kannst weiter vorlesen."].filter(Boolean).join(" ")
       : s.reason;
@@ -179,6 +202,27 @@ async function updRefresh(force = false) {
   else if (upd.s.enabled && !upd.s.checked && (upd.polls = (upd.polls || 0) + 1) < 60) upd.timer = setTimeout(updRefresh, 2000);   // erste Prüfung nach dem Start abwarten
   return upd.s;
 }
+/** Einstellungen › App: Schalter „Updates automatisch laden“ + Stand beim stillen Laden. */
+function updAutoRow(s) {
+  const on = updAuto(), sw = $("autoUpdSw");
+  $("autoUpdRow").classList.toggle("hidden", !s.canInstall);
+  sw.classList.toggle("on", on); sw.setAttribute("aria-checked", String(on));
+  const silent = updSilent(s), pct = s.connected && s.total ? Math.round((s.done / s.total) * 100) : 0;
+  const note = !on ? "Aus: Neue Versionen werden nur gemeldet und per Klick geladen."
+    : silent && s.state === "downloading" ? `Version ${s.latest} wird im Hintergrund geladen · ${pct} %`
+    : silent ? `Version ${s.latest} wird vorbereitet`
+    : s.state === "ready" ? `Version ${s.readyVersion} ist bereit – startet beim nächsten Öffnen`
+    : "Lädt neue Versionen im Hintergrund. Neu gestartet wird erst, wenn du willst.";
+  const n = $("autoUpdNote"); if (n.textContent !== note) n.textContent = note;
+  const bar = $("autoUpdBar"), was = !bar.classList.contains("hidden");
+  bar.classList.toggle("hidden", !silent);
+  if (silent && !was) animateIn(bar);
+  $("autoUpdFill").style.width = `${s.state === "preparing" ? 100 : pct}%`;
+}
+$("autoUpdSw").onclick = async () => {
+  await saveSettings({ autoUpdate: !updAuto() });
+  if (updAuto()) await updRefresh(true); else updRender();   // an → gleich prüfen und still loslegen
+};
 $("updLater").onclick = () => {
   if ($("upd").classList.contains("news")) { newsSeen(); return updShow(false); }
   if (upd.s?.state === "ready") { upd.later = true; return updShow(false); }   // wird beim Beenden eingespielt

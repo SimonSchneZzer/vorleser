@@ -6,7 +6,7 @@
 
 e2e: installiert die gebaute App in einen Wegwerf-Ordner und spielt nacheinander durch, was ein Nutzer tut:
   1. Teil-Update → „Jetzt neu starten“      → App muss von selbst in 9.9.1 wiederkommen
-  2. Teil-Update → „Später“ + Beenden        → beim Beenden eingespielt, nächster Start = 9.9.2
+  2. Teil-Update still von selbst geladen (3.2) → „Später“ + Beenden → beim Beenden eingespielt, nächster Start = 9.9.2
   3. komplettes Paket (Setup) → „Jetzt neu starten“ → 9.9.3
 Die neuen Versionen sind Kopien der installierten App mit anderer VERSION (+ einer neuen Datei), Teil-Updates
 entstehen mit packaging/make_patch.py, ausgeliefert über einen kleinen Server auf 127.0.0.1 (wie latest.json).
@@ -109,14 +109,19 @@ def wait_down(timeout: float = 60) -> None:
     raise TimeoutError("App beendet sich nicht")
 
 
-def prepare_update(wait_ready: float = 300) -> dict:
-    api("POST", "/api/update/check", timeout=30)
-    api("POST", "/api/update/install", timeout=30)
+def prepare_update(wait_ready: float = 300, manual: bool = True) -> dict:
+    """manual=False: nichts anstoßen – die App lädt von selbst still im Hintergrund (autoUpdate, 3.2)."""
+    if manual:
+        api("POST", "/api/update/check", timeout=30)
+        api("POST", "/api/update/install", timeout=30)
     end = time.time() + wait_ready
     while time.time() < end:
         s = api("GET", "/api/update")
         if s.get("state") == "ready":
-            log(f"Update bereit: {s.get('latest')} ({'Teil-Update' if s.get('partial') else 'komplett'})")
+            log(f"Update bereit: {s.get('latest')} ({'Teil-Update' if s.get('partial') else 'komplett'}, "
+                f"{'still von selbst' if s.get('auto') else 'per Klick'})")
+            if not manual and not s.get("auto"):
+                raise AssertionError("Update wurde nicht von selbst geladen")
             return s
         if s.get("state") == "error":
             raise RuntimeError(f"Update-Fehler: {s.get('error')}")
@@ -250,7 +255,7 @@ def step_later(new: str) -> None:
     publish(new)
     p = start_app(UPDATE_ENV)
     wait_up()
-    prepare_update()
+    prepare_update(manual=False)                      # automatisch geladen (nichts angeklickt)
     log("„Später“, dann Beenden")
     quit_app()
     p.wait(timeout=60)

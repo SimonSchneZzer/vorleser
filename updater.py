@@ -49,6 +49,12 @@ _latest: dict | None = None
 _checked = 0.0
 _api_tried = 0.0
 _just_updated: str | None = None
+_updated_from: str | None = None       # Version vor dem Update (Karte „aktualisiert“ lässt die Nummer weiterrollen)
+# Still im Hintergrund laden (Einstellung autoUpdate, 3.2): nach Fehlschlägen später erneut; nach AUTO_GIVE_UP
+# Fehlschlägen für diese Version aufgeben → Oberfläche zeigt wieder die Karte mit „Aktualisieren“.
+AUTO_RETRY = (600, 1800, 3600)
+AUTO_GIVE_UP = 3
+_auto = {"version": None, "fails": 0, "next": 0.0}
 
 
 def _ver(v: str) -> tuple:
@@ -180,6 +186,8 @@ def status() -> dict:
                 "available": available, "notes": latest["notes"] if latest else "",
                 "size": (patch or latest)["size"] if latest else 0, "partial": bool(patch),
                 "canInstall": ok, "reason": why, "page": PAGE_URL, "justUpdated": _just_updated, "checked": _checked_once,
+                "updatedFrom": _updated_from, "autoFailed": bool(latest) and _auto["version"] == latest["version"]
+                and _auto["fails"] >= AUTO_GIVE_UP,
                 "readyVersion": _ready["version"] if _ready else None,
                 "enabled": paths.FROZEN or bool(os.environ.get("VORLESER_UPDATE_URL"))}
 
@@ -606,11 +614,56 @@ def install(quit_app=None) -> dict:
         raise ValueError(why)
     with _lock:
         if _state["state"] in ("downloading", "preparing", "ready", "installing"):
+            if _state["state"] != "installing":
+                _state["auto"] = False                     # von Hand angestoßen → Fortschritt in der Karte zeigen
             return dict(_state)
         _state.clear()
         _state.update(state="downloading", connected=False, done=0, total=0)   # Größe erst, wenn der Server antwortet
     threading.Thread(target=_prepare, daemon=True).start()
     return status()
+
+
+def _auto_wanted() -> bool:
+    try:
+        import settings                                    # erst hier: Tests setzen den Datenordner vorher
+        return settings.get("autoUpdate") is not False
+    except Exception:
+        return True
+
+
+def auto_step() -> None:
+    """Hintergrund (nach jeder Prüfung): neue Version still laden. Fertig → state „ready“, die Karte meldet sich.
+    Liegt schon eine Version bereit und gibt es inzwischen eine neuere, wird die neueste geladen."""
+    global _ready
+    latest = _latest
+    if not latest or _ver(latest["version"]) <= _ver(paths.APP_VERSION) or not _auto_wanted() or not can_install()[0]:
+        return
+    with _lock:
+        cur = _state.get("state")
+        if cur in ("downloading", "preparing", "installing"):
+            return
+        if cur == "ready":
+            if not _ready or _ver(latest["version"]) <= _ver(_ready["version"]):
+                return
+            print(f"[update] {latest['version']} ist neuer als das bereitliegende {_ready['version']} – lade die neueste", flush=True)
+            _ready = None
+        if _auto["version"] != latest["version"]:
+            _auto.update(version=latest["version"], fails=0, next=0.0)
+        if _auto["fails"] >= AUTO_GIVE_UP or time.time() < _auto["next"]:
+            return
+        _state.clear()
+        _state.update(state="downloading", auto=True, connected=False, done=0, total=0)
+    print(f"[update] lade {latest['version']} still im Hintergrund", flush=True)
+
+    def run():
+        _prepare()
+        with _lock:
+            if _state.get("state") == "error" and _state.get("auto"):
+                _auto["fails"] += 1
+                _auto["next"] = time.time() + AUTO_RETRY[min(_auto["fails"], len(AUTO_RETRY)) - 1]
+                print(f"[update] stilles Laden fehlgeschlagen ({_auto['fails']}/{AUTO_GIVE_UP})", flush=True)
+                _state.clear(); _state.update(state="idle")    # still bleiben; später erneut bzw. Karte „Aktualisieren“
+    threading.Thread(target=run, daemon=True).start()
 
 
 def restart_now(quit_app) -> dict:
@@ -636,13 +689,14 @@ def install_on_exit() -> None:
 
 def start_background() -> None:
     """Beim Start: „gerade aktualisiert?“ merken, alte Downloads löschen, regelmäßig prüfen."""
-    global _just_updated
+    global _just_updated, _updated_from
     try:
         prev = LAST_VERSION_FILE.read_text("utf-8").strip()
     except OSError:
         prev = ""
     if prev and _ver(prev) < _ver(paths.APP_VERSION):
         _just_updated = paths.APP_VERSION
+        _updated_from = prev
     LAST_VERSION_FILE.write_text(paths.APP_VERSION, "utf-8")
     # Aufräumen läuft im Hintergrund nach Stimmenliste + Offline-Stimme – wurde schon ein Update vorbereitet (früher
     # Klick auf „Aktualisieren“), dessen Dateien nicht löschen (auf echtem Windows nachgestellt, 10.11.2026).
@@ -660,8 +714,10 @@ def start_background() -> None:
     def loop():
         time.sleep(1)                       # bei jedem Start kurz nach dem Öffnen prüfen
         check(force=True)
+        auto_step()
         while True:
             time.sleep(CHECK_EVERY)
             check()
+            auto_step()
     if status()["enabled"]:
         threading.Thread(target=loop, daemon=True).start()

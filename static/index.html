@@ -430,6 +430,7 @@
               <div class="sto-row"><span class="nm">Rundgang<small>Alle Funktionen in einer Minute</small></span><button class="btn sm" id="tourBtn">Starten</button></div>
               <div class="sto-row" id="newsRow"><span class="nm">Was ist neu<small>Was in welcher Version dazugekommen ist</small></span><button class="btn sm" id="newsBtn">Anzeigen</button></div>
               <div class="sto-row hidden" id="updRow"><span class="nm">Updates<small id="updNote">Prüft bei jedem Start automatisch</small></span><button class="btn sm" id="updCheck">Jetzt suchen</button></div>
+              <div class="sto-row hidden" id="autoUpdRow"><span class="nm">Updates automatisch laden<small id="autoUpdNote">Lädt neue Versionen im Hintergrund. Neu gestartet wird erst, wenn du willst.</small><span class="bar8 auto-bar hidden" id="autoUpdBar"><i id="autoUpdFill"></i></span></span><button class="tg" id="autoUpdSw" role="switch" aria-checked="true" aria-label="Updates automatisch laden"></button></div>
               <div class="sto-row hidden" id="bugRow"><span class="nm">Fehler melden<small>Kurz beschreiben, was nicht klappt</small></span><button class="btn sm" id="bugBtn">Melden</button></div>
               <div class="sto-row"><span class="nm">Open Source<small>Freie Software unter GPL-3.0 · Quellcode und Lizenzen auf GitHub</small></span><button class="btn sm" id="srcBtn">Ansehen</button></div>
               <div class="sto-row"><span class="nm">Beenden<small id="appNote">Gestartet wird der Vorleser per Doppelklick auf Vorleser.app.</small></span><button class="btn sm" id="quitBtn">Beenden</button></div>
@@ -718,7 +719,8 @@
   </div>
 </div>
 <div class="upd hidden" id="upd" role="status" aria-live="polite">
-  <div class="upd-ic" id="updIc"><svg class="i" style="width:18px;height:18px"><use href="#i-dl"/></svg></div>
+  <span class="upd-shine" aria-hidden="true"></span>
+  <div class="upd-icw"><div class="upd-ic" id="updIc"><svg class="i ic-main" style="width:18px;height:18px"><use href="#i-dl"/></svg><svg class="ic-box" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8"/></svg><svg class="ic-chk" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><i class="sp" style="--a:-90deg"></i><i class="sp" style="--a:-30deg"></i><i class="sp" style="--a:30deg"></i><i class="sp" style="--a:90deg"></i><i class="sp" style="--a:150deg"></i><i class="sp" style="--a:210deg"></i></div>
   <div class="upd-body">
     <b id="updTitle"></b>
     <p id="updText"></p>

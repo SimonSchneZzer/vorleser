@@ -5,6 +5,21 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-15 · Updates automatisch laden (3.2)
+**Kontext:** Simon: Updates sollen von selbst laden und erst dann unten rechts den Neustart vorschlagen. Entwurf im
+Design-Canvas freigegeben (Animation „Paket landet“, Zählwerk nach dem Neustart, Schalter standardmäßig an).
+**Entscheidung:** Einstellung `autoUpdate` (an). `updater.auto_step()` läuft nach jeder Prüfung (minütlich + „Jetzt
+suchen“): neue Version → `_prepare` still im Hintergrund (`state.auto = True`); die Oberfläche zeigt dabei keine Karte,
+nur den Stand in Einstellungen › App. Bei „ready“ kommt die Karte „Vorleser X ist bereit“ (wie bisher: Neustart oder beim
+Beenden einspielen). Neuere Version, während eine bereitliegt → die neueste laden. Fehlschläge bleiben still
+(Wiederholung nach 10/30/60 min); nach 3 Fehlschlägen pro Version (`autoFailed`) kommt wieder die Karte „ist da“ mit
+„Aktualisieren“. Ebenso, wenn der Schalter aus ist oder die App sich nicht selbst ersetzen kann. „Aktualisieren“ während
+des stillen Ladens schaltet auf sichtbaren Fortschritt (`auto = False`). Karte „aktualisiert“: `updatedFrom` vom Server,
+nur geänderte Stellen der Versionsnummer rollen. Die Karte ist Glas → Animationen nur mit transform/opacity/stroke.
+**Test:** `tests/test_auto_update.py`; auf echtem Windows lädt Schritt 2 von `packaging/test_update_windows.py` jetzt
+ohne Klick (still) und spielt beim Beenden ein.
+**Kein Kurz-Tutorial:** nichts zu bedienen, die Karte erklärt sich selbst (Regel „Neue Features vorstellen“).
+
 ## 2026-11-15 · Bibliothek: eigene Reihenfolge (3.1)
 **Kontext:** Wunsch eines Nutzers per Mail: Texte umsortieren. Bisher sortierte der Server fest nach „zuletzt gehört“ –
 jedes Anhören schob den Text nach oben, eine eigene Ordnung war nicht möglich. Entwurf im Design-Canvas (Vorschlag 02/03)

@@ -539,6 +539,13 @@ const I18N_EN = {
   "Halte einen Text fest und zieh ihn nach oben oder unten – er rastet hörbar ein. Ohne Ziehen geht es über „…“ › Nach oben / Nach unten.":
     "Hold a text and drag it up or down – it clicks into place. Without dragging, use “…” › Move up / Move down.",
   "Deine Reihenfolge bleibt": "Your order stays",
+  // Updates automatisch laden (3.2)
+  "Updates automatisch laden": "Download updates automatically", "Startet beim nächsten Öffnen – oder gleich jetzt.": "Starts the next time you open Vorleser – or right now.",
+  "Lädt neue Versionen im Hintergrund. Neu gestartet wird erst, wenn du willst.": "Downloads new versions in the background. Vorleser only restarts when you want.",
+  "Aus: Neue Versionen werden nur gemeldet und per Klick geladen.": "Off: new versions are only announced and downloaded with a click.",
+  "Deine Reihenfolge": "Your order",
+  "Mit dem Symbol neben „Bibliothek“ wechselst du zwischen „Zuletzt gehört“ und deiner eigenen Reihenfolge – zieh Texte einfach an ihren Platz.":
+    "The icon next to “Library” switches between “Recently played” and your own order – just drag texts into place.",
   "Wechselst du zurück zu „Zuletzt gehört“ und später wieder hierher, ist deine Reihenfolge noch da. Beim Anhören springt dann nichts mehr nach oben.":
     "If you switch back to “Recently played” and later return, your order is still there. Listening no longer moves anything to the top.",
   "Das war nur eine Vorführung – deine Bibliothek bleibt, wie sie war.": "That was just a demo – your library stays as it was.",
@@ -600,6 +607,11 @@ const I18N_PATTERNS = [
   [/^noch ca\. (\d+) Min\.$/, (m, n) => `about ${n} min left`],
   [/^Version ([\d.]+) ist verfügbar$/, (m, v) => `Version ${v} is available`],
   [/^Vorleser ([\d.]+) ist da$/, (m, v) => `Vorleser ${v} is here`],
+  [/^Vorleser ([\d.]+) ist bereit$/, (m, v) => `Vorleser ${v} is ready`],
+  [/^(.*) Startet beim nächsten Öffnen – oder gleich jetzt\.$/s, (m, t) => `${t} Starts the next time you open Vorleser – or right now.`],
+  [/^Version ([\d.]+) wird im Hintergrund geladen · (\d+) %$/, (m, v, n) => `Version ${v} is downloading in the background · ${n} %`],
+  [/^Version ([\d.]+) wird vorbereitet$/, (m, v) => `Preparing version ${v}`],
+  [/^Version ([\d.]+) ist bereit – startet beim nächsten Öffnen$/, (m, v) => `Version ${v} is ready – starts the next time you open Vorleser`],
   [/^Version ([\d.]+) startet beim nächsten Öffnen von Vorleser – oder gleich jetzt\.$/, (m, v) => `Version ${v} starts the next time you open Vorleser – or right now.`],
   [/^(.*) Wird im Hintergrund geladen, du kannst weiter vorlesen\.$/s, (m, t) => `${t} Downloads in the background, you can keep listening.`],
   [/^Deine Texte und Lesezeichen \((\d+)\)$/, (m, n) => `Your texts and bookmarks (${n})`],

@@ -4,6 +4,16 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.2.0
+Updates now download by themselves – Vorleser tells you when one is ready.
+
+- **Automatic updates:** new versions download quietly in the background. A card only appears once everything is
+  ready – restart right away or later (the update is then installed when you quit). You can turn this off under
+  Settings › App.
+- **New animations:** the update card shows when an update has landed, and after restarting the new version number
+  rolls into place.
+- **Tour:** the first-start tour now also shows how to sort your library.
+
 ## 3.1.0
 Sort your library your way: drag texts into the order you like.
 

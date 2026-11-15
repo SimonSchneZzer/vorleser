@@ -884,6 +884,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def update_check(self):
         updater.check(force=True)
+        updater.auto_step()                        # gefunden + automatisch laden an → gleich still loslegen
         self.json(updater.status())
 
     def update_install(self):

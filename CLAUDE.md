@@ -57,6 +57,10 @@ Weitere Variablen: `VORLESER_DEBUG=1` (DevTools), `VORLESER_VERSION`, `VORLESER_
   bekommen immer eine Bewegung (Höhe gleitet, Inhalt blendet mit, Pfeile drehen sich). Helfer:
   `heightFrom`/`smoothHeight`, `collapseOut`, `animateIn` (`js/basis.js`), `slideBar` (`js/ansichten.js`), `boxIn` (`js/dokument.js`); `<details>` klappt automatisch weich.
   Animationen laufen einmal (keine Endlosschleifen) und respektieren `prefers-reduced-motion`.
+- **Neue Features vorstellen (Simon, 15.11.2026):** Wo es Sinn ergibt (sichtbare Bedienung, nicht selbsterklärend), bekommt
+  ein neues Feature ein Kurz-Tutorial, das einmal nach dem Update vor „Was ist neu“ läuft (Vorbild: `SORT_TOUR` in
+  `js/einfuehrung.js`, Rundgang-Technik, Vorführung ohne zu speichern), **und** einen Schritt im Rundgang beim ersten Start
+  (`TOUR_ALL`). Kleine Korrekturen und unsichtbare Verbesserungen brauchen keins.
 - **`static/js/`: Ladereihenfolge beachten.** Code, der beim Laden läuft (`$("x").onclick = fn`), darf nur Namen
   aus derselben oder einer früher eingebundenen Datei nutzen. Neue Datei → in `index.html` eintragen (Test prüft).
 - **HTML aus Strings:** fremde Texte (Titel, Namen, Meldungen) immer über `esc()` – `tests/test_html_escape.py` prüft.

@@ -29,6 +29,7 @@ DEFAULTS = {
     "ambientVol": 35,          # Lautstärke der Atmosphäre in Prozent (0–100)
     "libSort": "recent",       # Bibliothek: recent (zuletzt gehört oben) | own (eigene Reihenfolge), Version 3.1
     "libOrder": [],            # eigene Reihenfolge (Text-IDs, oben zuerst) – bleibt beim Umschalten auf „recent“ erhalten
+    "autoUpdate": True,        # neue Versionen still im Hintergrund laden; Karte erst, wenn bereit (Version 3.2)
 }
 CHOICES = {"theme": ("light", "dark", "system"), "mark": ("section", "sentence", "word"), "uiLang": ("de", "en"),
            "ahead": ("low", "normal", "high", "all"), "ambient": ("aus", "regen", "kamin", "cafe", "wald", "rauschen"),
@@ -74,7 +75,7 @@ def _update(patch: dict) -> dict:
             cur[k] = v.upper()
         elif k == "cacheMB" and isinstance(v, (int, float)) and 50 <= v <= 100_000:
             cur[k] = int(v)
-        elif k in ("background", "bgHintSeen", "recap") and isinstance(v, bool):
+        elif k in ("background", "bgHintSeen", "recap", "autoUpdate") and isinstance(v, bool):
             cur[k] = v
         elif k == "ambientVol" and isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100:
             cur[k] = int(v)

@@ -150,6 +150,8 @@ const TOUR_ALL = [
     p: "Ist der Text drin, legt „Vorbereiten“ ihn in deiner Bibliothek an und macht ihn bereit zum Hören – hier mit einem Beispieltext." },
   { view: "read", via: "#createBtn", target: () => $("library").querySelector(`a[data-id="${st.docs.find((d) => d.sample)?.id || "demo"}"]`)?.closest("li") || $("library").firstElementChild, il: "lib", t: "In deiner Bibliothek",
     p: "Gespeichert – der Text liegt jetzt in deiner Bibliothek. Der Balken zeigt, wie weit du bist; ein Klick macht genau dort weiter." },
+  { view: "read", target: "#libSortBtn", il: "sort2", t: "Deine Reihenfolge",
+    p: "Mit dem Symbol neben „Bibliothek“ wechselst du zwischen „Zuletzt gehört“ und deiner eigenen Reihenfolge – zieh Texte einfach an ihren Platz." },
   { view: "read", chap: true, target: "#chapterMenu", il: "chapters", t: "Kapitel & Lesezeichen",
     p: "Springe direkt zu einem Kapitel – oder zu deinen Lesezeichen. Eines setzt du, indem du links neben einen Absatz fährst; im Beispieltext ist schon eins gesetzt." },
   { view: "read", target: () => st.spans[3], il: "say", t: "Markieren & Aussprache",
