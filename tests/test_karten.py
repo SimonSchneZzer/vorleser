@@ -300,7 +300,11 @@ def test_lesezeichen_im_browser(api):
         assert await c.js("!!$('chapterMenu').querySelector('.cm-bm')")              # Reiter „Lesezeichen“ offen
         await c.js("$('bmHintOk').click(); 1"); await asyncio.sleep(0.5)
         await c.js("document.querySelector('.bm-mark').click(); 1"); await asyncio.sleep(0.4)
-        await c.js("$('bmPopDel').click(); 1"); await asyncio.sleep(0.6)
+        await c.js("$('bmPopDel').click(); 1")
+        for _ in range(20):                        # Ausblenden (220 ms) + Anfrage – unter CI-Last auf Windows > 0,6 s
+            await asyncio.sleep(0.15)
+            if await c.js("st.doc.bookmarks.length") == 0:
+                break
         assert await c.js("st.doc.bookmarks.length") == 0
     try:
         _im_browser(api, sz)
