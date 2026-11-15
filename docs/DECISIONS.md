@@ -5,6 +5,15 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-15 · Klick neben einen Dialog schließt ihn (3.2.1)
+**Kontext:** Simon: Dialoge sollen auch beim Klick daneben schließen, nicht nur über „Abbrechen“ – bei jedem Dialog.
+**Entscheidung:** Ein Handler in `js/basis.js` (neben dem weichen Schließen) für alle `<dialog>`: Klick auf den Hintergrund
+(Ziel ist der Dialog selbst, Punkt außerhalb seines Rechtecks) löst `cancel` aus – also genau wie Esc (weiches Schließen,
+`ask()` liefert „Nein“). Nur wenn Drücken UND Loslassen draußen sind, damit Text markieren, das neben dem Dialog endet,
+nicht schließt. Gilt automatisch für neue Dialoge.
+**Folgen:** Wie bei Esc gehen eingegebene Texte (z. B. „Fehler melden“) beim Schließen verloren; laufende Vorgänge
+(Export) laufen weiter wie bisher beim Schließen.
+
 ## 2026-11-15 · Updates automatisch laden (3.2)
 **Kontext:** Simon: Updates sollen von selbst laden und erst dann unten rechts den Neustart vorschlagen. Entwurf im
 Design-Canvas freigegeben (Animation „Paket landet“, Zählwerk nach dem Neustart, Schalter standardmäßig an).

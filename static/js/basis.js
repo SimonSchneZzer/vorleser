@@ -349,6 +349,18 @@ function snapSound() {
   document.addEventListener("cancel", (e) => {
     if (e.target instanceof HTMLDialogElement && !reducedMotion.matches) { e.preventDefault(); e.target.close(); }
   }, true);
+  // Klick neben den Dialog (auf den abgedunkelten Hintergrund) schließt ihn wie Esc – bei jedem Dialog (Simon, 15.11.2026).
+  // Nur wenn Drücken UND Loslassen draußen sind: Text markieren, das neben dem Dialog endet, schließt nicht.
+  const outside = (d, e) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
+  let downOn = null;
+  document.addEventListener("pointerdown", (e) => {
+    downOn = e.target instanceof HTMLDialogElement && e.target.open && outside(e.target, e) ? e.target : null;
+  }, true);
+  document.addEventListener("click", (e) => {
+    const d = downOn; downOn = null;
+    if (!d || e.target !== d || !d.open || !outside(d, e)) return;
+    if (d.dispatchEvent(new Event("cancel", { cancelable: true }))) d.close();   // wie Esc (weich, außer bei weniger Bewegung)
+  }, true);
 }
 /** Sichtbar und nicht gerade am Schließen (für Knöpfe, die ein Menü auf/zu schalten). */
 function isShown(el) { return !!el && !el.classList.contains("hidden") && !el._soft; }

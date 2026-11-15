@@ -163,3 +163,33 @@ def test_gliederung_mit_vielen_kapiteln_ueberlappt_nicht(api):
         await c.js("ntSet('', ''); 1")
         assert r["n"] == 30 and not r["overlap"] and r["minH"] >= 24 and r["scrolls"], r
     _im_browser(api, sz)
+
+
+@pytest.mark.browser
+def test_klick_neben_dialog_schliesst(api):
+    """Jeder Dialog schließt bei Klick auf den Hintergrund wie mit Esc (Simon, 15.11.2026) – aber nicht, wenn nur das
+    Loslassen draußen ist (Text im Dialog markiert und neben dem Dialog losgelassen)."""
+    async def klick(c, x0, y0, x1, y1):
+        await c.cmd("Input.dispatchMouseEvent", type="mouseMoved", x=x0, y=y0)
+        await c.cmd("Input.dispatchMouseEvent", type="mousePressed", x=x0, y=y0, button="left", buttons=1, clickCount=1)
+        await c.cmd("Input.dispatchMouseEvent", type="mouseMoved", x=x1, y=y1, button="left", buttons=1)
+        await c.cmd("Input.dispatchMouseEvent", type="mouseReleased", x=x1, y=y1, button="left", buttons=0, clickCount=1)
+        await asyncio.sleep(0.6)
+
+    async def sz(c):
+        offen = "document.querySelector('dialog[open]:not(.closing)')?.id || null"
+        await c.js("window.__r = 'offen'; ask({ title: 'Wirklich?', text: 'Test' }).then((v) => (window.__r = v)); 1"); await asyncio.sleep(0.5)
+        assert await c.js(offen) == "confirmDlg"
+        await klick(c, 20, 20, 20, 20)                                         # daneben → zu, wie „Abbrechen“
+        assert await c.js(offen) is None and await c.js("window.__r") is False
+        await c.js("ask({ title: 'Nochmal' }); 1"); await asyncio.sleep(0.5)
+        mx, my = await c.js("(() => { const r = $('confirmDlg').getBoundingClientRect(); return [r.left + r.width / 2, r.top + 30]; })()")
+        await klick(c, mx, my, 20, 20)                                         # drinnen gedrückt, draußen losgelassen → bleibt
+        assert await c.js(offen) == "confirmDlg"
+        await klick(c, mx, my, mx, my)                                         # Klick in den Dialog → bleibt
+        assert await c.js(offen) == "confirmDlg"
+        await c.js("$('confirmDlg').close(); openNews(); 1"); await asyncio.sleep(0.8)
+        assert await c.js(offen) == "newsDlg"
+        await klick(c, 1260, 780, 1260, 780)                                   # anderer Dialog, andere Ecke
+        assert await c.js(offen) is None
+    _im_browser(api, sz)

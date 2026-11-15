@@ -4,6 +4,12 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.2.1
+Dialogs now close when you click next to them.
+
+- **Dialogs:** clicking the dimmed background closes any dialog, just like Cancel or Esc. Selecting text inside a
+  dialog and releasing the mouse outside does not close it.
+
 ## 3.2.0
 Updates now download by themselves – Vorleser tells you when one is ready.
 
