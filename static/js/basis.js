@@ -314,6 +314,21 @@ function chime() {
     o.connect(g).connect(c.destination); o.start(t0 + d); o.stop(t0 + d + 1);
   }
 }
+/** Leises „Einrasten“ (3.1, Bibliothek sortieren): kurzes gefiltertes Rauschen (der Klick) + tiefer, fallender Ton
+ *  (der dumpfe Teil). Selbst erzeugt wie chime(), keine Datei. */
+function snapSound() {
+  try { chimeCtx ||= new (window.AudioContext || window.webkitAudioContext)(); chimeCtx.resume?.(); } catch { return; }
+  const c = chimeCtx, t = c.currentTime + 0.005, n = Math.floor(c.sampleRate * 0.035);
+  const buf = c.createBuffer(1, n, c.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4);
+  const src = c.createBufferSource(), bp = c.createBiquadFilter(), g1 = c.createGain();
+  src.buffer = buf; bp.type = "bandpass"; bp.frequency.value = 2600; bp.Q.value = 1.3; g1.gain.value = 0.22;
+  src.connect(bp).connect(g1).connect(c.destination); src.start(t);
+  const o = c.createOscillator(), g2 = c.createGain();
+  o.type = "sine"; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(110, t + 0.08);
+  g2.gain.setValueAtTime(0, t); g2.gain.linearRampToValueAtTime(0.13, t + 0.006); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+  o.connect(g2).connect(c.destination); o.start(t); o.stop(t + 0.13);
+}
 /* Dialoge schließen weich (3.0.3, Simon: „harter Cut bei Abbrechen“): close() – auch über Esc – blendet den Dialog und
    den Hintergrund kurz aus und schließt erst dann. `open` gilt währenddessen schon als zu; showModal() in der Zeit
    bricht das Schließen ab (der Dialog bleibt einfach offen). Dialoge sind keine Glasflächen → opacity ist erlaubt. */

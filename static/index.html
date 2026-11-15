@@ -31,6 +31,10 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
   <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
   <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></symbol>
@@ -75,7 +79,8 @@
       <div class="wk-total" id="weekTotal"></div><div class="wk-sub" id="weekSub"></div>
       <div class="wk-bars" id="weekBars"></div>
     </div>
-    <div class="label">Bibliothek</div>
+    <div class="label lib-head"><span>Bibliothek</span>
+      <button class="lib-sort" id="libSortBtn" aria-label="Sortierung umschalten"><span class="roll"><span class="strip"><svg class="i"><use href="#i-clock"/></svg><svg class="i fill"><use href="#i-grip"/></svg></span></span></button></div>
     <ul class="lib" id="library"></ul>
     <div class="side-foot" id="sideFoot">
       <button class="navlink hidden" id="bugSideBtn"><svg class="i"><use href="#i-bug"/></svg>Fehler melden</button>
@@ -484,6 +489,9 @@
   <button data-act="play"><svg class="i fill" id="libPlayIc" style="width:15px;height:15px;margin:0 1.5px"><use href="#i-play"/></svg><span id="libPlayLbl">Abspielen</span></button>
   <button data-act="edit"><svg class="i"><use href="#i-pen"/></svg>Text bearbeiten</button>
   <button data-act="export"><svg class="i"><use href="#i-export"/></svg>Als Hörbuch exportieren</button>
+  <hr>
+  <button data-act="up" id="libUp"><svg class="i"><use href="#i-arrow-up"/></svg>Nach oben</button>
+  <button data-act="down" id="libDown"><svg class="i"><use href="#i-arrow-down"/></svg>Nach unten</button>
   <hr>
   <button data-act="delete" style="color:var(--danger)"><svg class="i"><use href="#i-trash"/></svg>Löschen …</button>
 </div>

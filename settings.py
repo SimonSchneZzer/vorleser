@@ -27,9 +27,12 @@ DEFAULTS = {
     "hotkey": {"code": "KeyV", "ctrl": True, "alt": True, "shift": False, "meta": False},
     "ambient": "aus",          # Atmosphäre unter der Stimme: aus | regen | kamin | cafe | wald | rauschen
     "ambientVol": 35,          # Lautstärke der Atmosphäre in Prozent (0–100)
+    "libSort": "recent",       # Bibliothek: recent (zuletzt gehört oben) | own (eigene Reihenfolge), Version 3.1
+    "libOrder": [],            # eigene Reihenfolge (Text-IDs, oben zuerst) – bleibt beim Umschalten auf „recent“ erhalten
 }
 CHOICES = {"theme": ("light", "dark", "system"), "mark": ("section", "sentence", "word"), "uiLang": ("de", "en"),
-           "ahead": ("low", "normal", "high", "all"), "ambient": ("aus", "regen", "kamin", "cafe", "wald", "rauschen")}
+           "ahead": ("low", "normal", "high", "all"), "ambient": ("aus", "regen", "kamin", "cafe", "wald", "rauschen"),
+           "libSort": ("recent", "own")}
 DEFAULT_FAVORITES = ["edge:de-DE-SeraphinaMultilingualNeural", "edge:de-DE-ConradNeural", "edge:de-DE-KatjaNeural",
                      "edge:en-US-AvaMultilingualNeural", "edge:en-US-AndrewMultilingualNeural", "edge:en-GB-SoniaNeural"]
 
@@ -81,6 +84,8 @@ def _update(patch: dict) -> dict:
             cur[k] = v
         elif k == "favorites" and isinstance(v, list):
             cur[k] = list(dict.fromkeys(str(x) for x in v))[:200]
+        elif k == "libOrder" and isinstance(v, list):
+            cur[k] = list(dict.fromkeys(x for x in v if isinstance(x, str) and re.fullmatch(r"[0-9a-f]{32}", x)))[:20_000]
         elif k == "defaultVoices" and isinstance(v, dict):
             cur[k] = {**cur["defaultVoices"], **{str(a): str(b) for a, b in v.items()}}
     PATH.parent.mkdir(parents=True, exist_ok=True)

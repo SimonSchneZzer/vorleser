@@ -43,6 +43,28 @@ svg.i.fill { fill: currentColor; stroke: none; }
 .btn-new + .search.hidden + .label,
 .btn-new + .search.hidden + .week.hidden + .label { margin-top: 18px; }   /* „Bibliothek“ klebte am Knopf */
 .label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 0 12px 8px; }
+/* Kopf der Bibliothek mit Sortier-Symbol (3.1): Uhr = zuletzt gehört oben, Punkte = eigene Reihenfolge. Das Symbol rollt
+   beim Wechsel wie ein Zählwerk (kein Überblenden). */
+.lib-head { display: flex; align-items: center; padding-right: 2px; padding-bottom: 4px; margin-bottom: 2px; }
+.lib-head > span { flex: 1; }
+.lib-sort { width: 28px; height: 28px; margin: -6px 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0;
+  transition: background-color .15s var(--ease), color .2s var(--ease), transform .2s var(--ease-out); }
+.lib-sort:hover { background: var(--subtle); color: var(--ink); }
+.lib-sort:active { transform: scale(.88); }
+.lib-sort.own { color: var(--acc-text); }
+.lib-sort .roll { width: 16px; height: 16px; overflow: hidden; position: relative; }
+.lib-sort .strip { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: 8px; transition: transform .46s var(--spring); }
+.lib-sort .strip .i { width: 16px; height: 16px; flex-shrink: 0; }
+.lib-sort.own .strip { transform: translateY(-24px); }
+/* Ziehen zum Sortieren: der gehaltene Eintrag hebt sich an, die anderen gleiten zur Seite */
+.lib.sorting li { transition: transform .32s var(--ease-out); }
+.lib.sorting li.dragging { transition: none; z-index: 5; }
+.lib li.dragging > a { cursor: grabbing; background: var(--subtle); transform: scale(1.03);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .28), 0 0 0 1px color-mix(in srgb, var(--acc-text) 40%, transparent); }
+.lib li.dragging .dots, .lib li.dragging .when { opacity: 0; }
+.lib.sorting a { pointer-events: none; }
+body.lib-grab, body.lib-grab * { cursor: grabbing !important; }
+.menu button:disabled { color: var(--muted); opacity: .55; background: transparent; cursor: default; }
 .lib { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
 .lib li { position: relative; }
 .lib a { display: flex; flex-direction: column; gap: 6px; padding: 10px 36px 10px 12px; border-radius: var(--radius); text-decoration: none; color: var(--ink); }
@@ -493,7 +515,7 @@ body, .side, .player, .card, .box, .pill, .btn, .seg, .chip, .topbar, .search, .
 /* Bibliothek: Einträge gestaffelt einblenden */
 .lib li.enter { animation: libIn .35s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 35ms); }
 @keyframes libIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
-.lib a { transition: background-color .18s var(--ease), transform .18s var(--ease); }
+.lib a { transition: background-color .18s var(--ease), transform .22s var(--spring), box-shadow .22s var(--ease); }
 .lib a:active { transform: scale(.985); }
 .lib .bar i { transition: width .5s var(--ease); }
 /* Hör-Stand läuft gleichmäßig mit der Player-Leiste mit (Takt von timeupdate) – kein Nachziehen mit Abbremsen (Board 27) */
@@ -1740,3 +1762,34 @@ body.st-on .toast:not(.st-toast) { bottom: 176px; }
 /* Gliederung: Einträge nie zusammenquetschen – bei vielen Kapiteln scrollt die Liste (vorher überlappten die Zeilen,
    news.ORF.at-Startseite mit ~30 Überschriften, 3.0.4) */
 .ed-toc > * { flex-shrink: 0; }
+
+/* ===================== Kurz-Tutorial „eigene Reihenfolge“ (3.1) ===================== */
+/* Bilder spielen einmal ab (Rundgang-Karte ist Glas → nur transform, kein filter). */
+.gt-again { border: 0; background: transparent; color: var(--muted); font: 500 13px var(--ui); display: inline-flex; align-items: center; gap: 6px; padding: 6px 4px; cursor: pointer; white-space: nowrap; transition: color .15s var(--ease); }
+.gt-again:hover { color: var(--ink); }
+.gt-again .i { width: 14px; height: 14px; }
+.so-il { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 22px; }
+.so-big { width: 58px; height: 58px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); display: grid; place-items: center; color: var(--acc-text); }
+.so-big .roll { width: 28px; height: 28px; overflow: hidden; position: relative; }
+.so-big .strip { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: 14px; }
+.so-big .strip .i { width: 28px; height: 28px; flex-shrink: 0; }
+.so-1 .strip { animation: soRoll .6s var(--spring) .7s both; }
+.so-3 .strip { animation: soRoll3 3s .3s both; }
+.so-rows { position: relative; width: 180px; height: 82px; }
+.so-3 .so-rows { width: 140px; }
+.so-r { position: absolute; left: 0; right: 0; top: 0; height: 22px; border-radius: 7px; background: var(--subtle); border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 10px; }
+.so-r b { height: 6px; border-radius: 3px; background: var(--muted); opacity: .55; }
+.so-r i { margin-left: auto; width: 24px; height: 6px; border-radius: 3px; background: var(--line); }
+.so-r.so-c { border-color: color-mix(in srgb, var(--acc-text) 55%, transparent); }
+.so-r.so-c b { background: var(--acc-text); opacity: 1; }
+.so-2 .so-a { animation: soA2 2.2s .3s both; } .so-2 .so-b { animation: soB2 2.2s .3s both; } .so-2 .so-c { animation: soC2 2.2s .3s both; }
+.so-3 .so-a { animation: soA3 3s .3s both; } .so-3 .so-b { animation: soB3 3s .3s both; } .so-3 .so-c { animation: soC3 3s .3s both; }
+@keyframes soRoll { from { transform: none; } to { transform: translateY(-42px); } }
+@keyframes soRoll3 { 0%, 16% { transform: translateY(-42px); } 30%, 56% { transform: none; } 70%, 100% { transform: translateY(-42px); } }
+@keyframes soA2 { 0%, 35% { transform: none; } 60%, 100% { transform: translateY(30px); } }
+@keyframes soB2 { 0%, 45% { transform: translateY(30px); } 70%, 100% { transform: translateY(60px); } }
+@keyframes soC2 { 0%, 12% { transform: translateY(60px); } 22% { transform: translateY(60px) scale(1.06); }
+  72% { transform: translateY(0) scale(1.06); animation-timing-function: cubic-bezier(.34, 1.5, .64, 1); } 88%, 100% { transform: none; } }
+@keyframes soA3 { 0%, 20% { transform: translateY(30px); } 38%, 60% { transform: none; } 78%, 100% { transform: translateY(30px); } }
+@keyframes soB3 { 0%, 20% { transform: translateY(60px); } 38%, 60% { transform: translateY(30px); } 78%, 100% { transform: translateY(60px); } }
+@keyframes soC3 { 0%, 20% { transform: none; } 38%, 60% { transform: translateY(60px); } 78%, 100% { transform: none; } }

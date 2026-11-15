@@ -4,6 +4,16 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.1.0
+Sort your library your way: drag texts into the order you like.
+
+- **Your own order:** the new icon next to "Library" switches between "Recently played" (as before) and your own
+  order. Your order is kept when you switch back and forth, and listening no longer moves anything to the top.
+- **Drag and drop:** hold a text and drag it up or down – the others make room and it clicks softly into place.
+  Without dragging, use "…" › Move up / Move down. New texts appear at the top.
+- **Short tour:** after the update, a three-step tour shows how it works (only once).
+- **Smoother library:** when the order changes, entries now glide to their new place instead of jumping.
+
 ## 3.0.8
 German voices Conrad, Katja, Seraphina and others are back in the voice list.
 

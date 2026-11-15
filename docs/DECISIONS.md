@@ -5,6 +5,23 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-15 · Bibliothek: eigene Reihenfolge (3.1)
+**Kontext:** Wunsch eines Nutzers per Mail: Texte umsortieren. Bisher sortierte der Server fest nach „zuletzt gehört“ –
+jedes Anhören schob den Text nach oben, eine eigene Ordnung war nicht möglich. Entwurf im Design-Canvas (Vorschlag 02/03)
+von Simon freigegeben, Ton „Einrasten“ gewählt (nicht „Aus“, nicht zusätzliches Ticken).
+**Entscheidung:** Einstellungen `libSort` (`recent` | `own`) und `libOrder` (Text-IDs). Server liefert weiter „zuletzt
+gehört“; die Oberfläche ordnet um (`libOrdered`). Texte, die in `libOrder` fehlen (neu angelegt), stehen oben. Umschalten
+über ein Symbol neben „Bibliothek“ (Uhr ↔ Punkte, rollt); `libOrder` bleibt beim Wechsel auf „recent“ erhalten. Ziehen
+(ab 5 px) schaltet selbst auf „own“; „…“ › Nach oben/unten als Weg ohne Ziehen. Beim Loslassen leises Einrasten
+(`snapSound`, selbst erzeugt wie `chime`). Reihenfolgewechsel gleiten per FLIP in `renderLibrary` – das gilt jetzt auch
+für „zuletzt gehört“ (früher sprang ein gerade gehörter Text nach oben bzw. die Liste blendete gestaffelt neu ein).
+Nach dem Update einmal ein Kurz-Tutorial (3 Schritte, Rundgang-Technik) vor „Was ist neu“, nur mit ≥ 2 Texten und
+sichtbarer Bibliothek; vorgeführt über `st.libPreview`, nichts wird gespeichert. Zum Ausprobieren: `#reihenfolge`.
+**Stolperfalle:** Die Einblend-Animationen der Einträge (`enter`/`landed`, fill „both“) halten `transform` fest und
+überdecken das Verschieben beim Ziehen → beim Ziehbeginn entfernen.
+**Folgen:** Start öffnet weiter den zuletzt gehörten Text (nicht den obersten der eigenen Reihenfolge). Während der
+Suche ist Ziehen aus, Nach oben/unten deaktiviert. Kein Ziehen per Touch.
+
 ## 2026-11-14 · Online-Stimmen: einmal bekannt, bleibt in der Liste
 **Kontext:** Meldung übers Formular: Conrad sei verschwunden (auch nach Neuinstallation). Microsoft listet seit ca. 13.11.
 Conrad, Katja, Seraphina, Florian, Amala, Killian nicht mehr (neu: Tanja, Christoph) – sie sprechen aber weiter

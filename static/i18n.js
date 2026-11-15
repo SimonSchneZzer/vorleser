@@ -526,6 +526,23 @@ const I18N_EN = {
   "Sie ist bei Simon angekommen.": "Simon has received it.",
   "Fertig!": "All set!", "Das war's. Den Rundgang findest du jederzeit unter Einstellungen › App.": "That's it. You can find the tour anytime under Settings › App.",
 
+  // Eigene Reihenfolge der Bibliothek (3.1)
+  "Nach oben": "Move up", "Nach unten": "Move down", "Sortierung umschalten": "Change sort order", "Nochmal zeigen": "Show again", "Nochmal": "Again",
+  "Deine Reihenfolge · klicken für zuletzt gehört oben": "Your order · click for recently played first",
+  "Zuletzt gehört oben · klicken für deine eigene Reihenfolge": "Recently played first · click for your own order",
+  "Sortiert nach deiner Reihenfolge – umschalten auf zuletzt gehört": "Sorted in your order – switch to recently played",
+  "Sortiert nach zuletzt gehört – umschalten auf deine Reihenfolge": "Sorted by recently played – switch to your order",
+  "Neu: Deine eigene Reihenfolge": "New: your own order",
+  "Mit diesem Symbol neben „Bibliothek“ wechselst du zwischen „Zuletzt gehört“ und deiner eigenen Reihenfolge.":
+    "Use this icon next to “Library” to switch between “Recently played” and your own order.",
+  "Zieh Texte an ihren Platz": "Drag texts into place",
+  "Halte einen Text fest und zieh ihn nach oben oder unten – er rastet hörbar ein. Ohne Ziehen geht es über „…“ › Nach oben / Nach unten.":
+    "Hold a text and drag it up or down – it clicks into place. Without dragging, use “…” › Move up / Move down.",
+  "Deine Reihenfolge bleibt": "Your order stays",
+  "Wechselst du zurück zu „Zuletzt gehört“ und später wieder hierher, ist deine Reihenfolge noch da. Beim Anhören springt dann nichts mehr nach oben.":
+    "If you switch back to “Recently played” and later return, your order is still there. Listening no longer moves anything to the top.",
+  "Das war nur eine Vorführung – deine Bibliothek bleibt, wie sie war.": "That was just a demo – your library stays as it was.",
+
   // Server-Meldungen
   "Kein Text": "No text", "Der Text ist leer": "The text is empty", "Kein vorlesbarer Text gefunden": "No readable text found",
   "Im EPUB wurde kein Text gefunden": "No text found in the EPUB", "Datei zu groß (max. 300 MB)": "File too large (max. 300 MB)",

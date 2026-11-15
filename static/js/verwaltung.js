@@ -138,6 +138,13 @@ function updRenderCard() {
     return updShow(true);
   }
   if (newsPending()) {                                  // gerade aktualisiert → einmal zeigen, was neu ist
+    if (gt.kind === "sort") return updShow(false);      // Tutorial läuft – danach ruft sortTourEnd updRender auf
+    const sd = sortTourDue();                            // 3.1: erst das Kurz-Tutorial „eigene Reihenfolge“, dann die Karte
+    if (sd) {
+      updShow(false);
+      if (!upd.sortT) upd.sortT = setTimeout(() => { upd.sortT = 0; sortTourDue() === true ? sortTourStart() : updRender(); }, sd === "wait" ? 700 : 900);
+      return;
+    }
     card.classList.add("news"); updIcon("i-check");
     $("updTitle").textContent = `Auf Version ${s.current} aktualisiert`;
     $("updText").textContent = news.data?.releases.find((r) => r.version === s.current)?.lead || "";

@@ -174,6 +174,7 @@ let TOUR = TOUR_ALL;
 const gt = { i: 0, prev: null, wordsTimer: null, token: 0 };
 function gtStart(fromOnboarding, startAt = 0) {
   hideTip(); closePops(true);
+  gt.kind = "full";
   if (st.wantPlay) pause();
   gt.prev = { id: st.doc && !st.doc.demo ? st.doc.id : null, onboarding: fromOnboarding };
   gt.cardPos = null; gtSpotCur.to = null;                  // erstes Ziel ohne Gleiten
@@ -189,6 +190,7 @@ function gtStart(fromOnboarding, startAt = 0) {
   gtShow(Math.max(0, Math.min(TOUR.length - 1, startAt)));
 }
 function gtEnd() {
+  if (gt.kind === "sort") return sortTourEnd();
   gt.token++;
   clearInterval(gt.wordsTimer);
   $("gtCursor").classList.remove("show");
@@ -257,7 +259,8 @@ function gtCardHTML(i) {
     <div class="gt-step">
       ${step.il ? `<div class="gt-stage"><div class="il" data-noi18n>${ILL[step.il]()}</div></div>` : ""}
       <div class="gt-body"><div class="num">${i + 1} / ${TOUR.length}</div><h3>${esc(step.t)}</h3><p>${esc(typeof step.p === "function" ? step.p() : step.p)}</p>${step.by ? `<p class="gt-by">Gebaut von ${BYNAME}</p>` : ""}
-        <div class="gt-foot"><span class="gt-keys">${i === TOUR.length - 1 ? "" : `<kbd>↵</kbd> weiter`}</span><span class="spacer"></span>
+        ${step.note ? `<p class="gt-by">${esc(step.note)}</p>` : ""}
+        <div class="gt-foot">${step.demo ? `<button class="gt-again" id="gtAgain" data-tip="Nochmal zeigen">${icon("i-retry")}Nochmal</button>` : `<span class="gt-keys">${i === TOUR.length - 1 ? "" : `<kbd>↵</kbd> weiter`}</span>`}<span class="spacer"></span>
           ${i > 0 ? `<button class="btn" id="gtBack">Zurück</button>` : ""}
           <button class="btn primary" id="gtNext">${i === TOUR.length - 1 ? "Los geht's" : "Weiter"}</button></div></div></div>` };
 }
@@ -292,6 +295,7 @@ async function gtShow(i) {
   card.innerHTML = html;
   requestAnimationFrame(() => requestAnimationFrame(() => { if ($("gtProg")) $("gtProg").style.width = `${pct}%`; }));
   $("gtX").onclick = gtEnd;
+  if ($("gtAgain")) $("gtAgain").onclick = () => gtShow(i);
   if ($("gtBack")) $("gtBack").onclick = () => gtShow(i - 1);
   $("gtNext").onclick = () => (i < TOUR.length - 1 ? gtShow(i + 1) : gtEnd());
   $("gtNext").focus({ preventScroll: true, focusVisible: false });
@@ -340,6 +344,7 @@ async function gtShow(i) {
   }
   setTimeout(() => { if (my === gt.token) gtPlace(); }, 450);   // nach Ende der Seitenanimation nachjustieren
   if (step.words) gtWords();
+  if (step.demo) step.demo(my);
 }
 function gtPlace(override) {
   const step = TOUR[gt.i];
@@ -426,3 +431,115 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowLeft") { e.preventDefault(); $("gtBack")?.click(); }
 }, true);
 
+
+/* ===================================================================== */
+/* Kurz-Tutorial nach dem Update auf 3.1: eigene Reihenfolge              */
+/* ===================================================================== */
+/* Läuft einmal nach dem Neustart in die neue Version, vor der Karte „Was ist neu“ – nur mit mindestens zwei Texten
+   und sichtbarer Bibliothek. Nutzt den Rundgang (Spotlight, Karte, Mauszeiger). Vorgeführt wird mit den echten Texten
+   über st.libPreview; gespeichert wird nichts, am Ende gleitet alles zurück. */
+const SORT_SEEN = "vorleser.tourSort";
+const soRows = (w) => `<div class="so-rows">${w.map((x, k) => `<span class="so-r so-${"abc"[k]}"><b style="width:${x}px"></b><i></i></span>`).join("")}</div>`;
+const soBig = () => `<span class="so-big"><span class="roll"><span class="strip">${icon("i-clock")}${icon("i-grip", "i fill")}</span></span></span>`;
+ILL.sort1 = () => `<div class="so-il so-1">${soBig()}</div>`;
+ILL.sort2 = () => `<div class="so-il so-2">${soRows([70, 96, 54])}</div>`;
+ILL.sort3 = () => `<div class="so-il so-3">${soBig()}${soRows([60, 80, 46])}</div>`;
+const soItems = () => [...$("library").querySelectorAll(":scope > li")].filter((li) => li.querySelector("a[data-id]")).slice(0, 6);
+/** Mauszeiger zur Stelle fahren (ohne Klick). */
+async function soPoint(x, y, my) {
+  const cur = $("gtCursor"), card = $("gtCard").getBoundingClientRect();
+  cur.style.transition = "none";
+  cur.style.left = `${card.left + card.width / 2}px`; cur.style.top = `${card.top + 40}px`;
+  void cur.offsetWidth; cur.style.transition = "";
+  cur.classList.add("show");
+  await sleep(30); if (my !== gt.token) return false;
+  cur.style.left = `${x}px`; cur.style.top = `${y}px`;
+  await sleep(800);
+  return my === gt.token;
+}
+function soSet(sort, order) { st.libPreview = { libSort: sort, libOrder: order }; libResort(); }
+const soRecent = () => (st.docsRecent || st.docs).map((d) => d.id);
+const soPick = () => Math.min(3, soItems().length - 1);           // dieser Eintrag wird nach oben gezogen
+const soMoved = () => { const ids = soRecent(), k = soPick(), [x] = ids.splice(k, 1); return [x, ...ids]; };
+const SORT_TOUR = [
+  { target: "#libSortBtn", il: "sort1", t: "Neu: Deine eigene Reihenfolge",
+    p: "Mit diesem Symbol neben „Bibliothek“ wechselst du zwischen „Zuletzt gehört“ und deiner eigenen Reihenfolge.",
+    async demo(my) {
+      soSet("recent", []);
+      await sleep(500); if (my !== gt.token) return;
+      if (await gtClick($("libSortBtn"), my)) soSet("own", soRecent());
+    } },
+  { target: soItems, il: "sort2", t: "Zieh Texte an ihren Platz",
+    p: "Halte einen Text fest und zieh ihn nach oben oder unten – er rastet hörbar ein. Ohne Ziehen geht es über „…“ › Nach oben / Nach unten.",
+    async demo(my) {
+      soSet("own", soRecent());
+      await sleep(500); if (my !== gt.token) return;
+      const li = soItems()[soPick()]; if (!li) return;
+      const r = li.getBoundingClientRect(), x = r.left + Math.min(90, r.width / 3), y0 = r.top + r.height / 2;
+      if (!(await soPoint(x, y0, my))) return;
+      const cur = $("gtCursor"); cur.classList.add("click");
+      const g = { li, id: li.querySelector("a[data-id]").dataset.id, y0, y: y0, moved: false };
+      libDragStart(g);
+      await sleep(220);
+      cur.style.transition = "opacity .2s";
+      const dist = soPick() * g.step, t0 = performance.now(), dur = 1100;
+      await new Promise((ok) => {
+        const f = (now) => {
+          if (my !== gt.token) return ok();
+          const k = Math.min(1, (now - t0) / dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+          g.y = y0 - dist * e; libDragMove(g); cur.style.top = `${g.y}px`;
+          k < 1 ? requestAnimationFrame(f) : ok();
+        };
+        requestAnimationFrame(f);
+      });
+      cur.style.transition = ""; cur.classList.remove("click");
+      libDragEnd(g);                                         // im Tutorial: nur Vorschau, nichts gespeichert
+      await sleep(900); if (my === gt.token) cur.classList.remove("show");
+    } },
+  { target: () => [$("libSortBtn"), ...soItems()], il: "sort3", t: "Deine Reihenfolge bleibt",
+    p: "Wechselst du zurück zu „Zuletzt gehört“ und später wieder hierher, ist deine Reihenfolge noch da. Beim Anhören springt dann nichts mehr nach oben.",
+    note: "Das war nur eine Vorführung – deine Bibliothek bleibt, wie sie war.",
+    async demo(my) {
+      soSet("own", soMoved());
+      await sleep(500); if (my !== gt.token) return;
+      if (!(await gtClick($("libSortBtn"), my))) return;
+      soSet("recent", soMoved());
+      await sleep(1400); if (my !== gt.token) return;
+      if (await gtClick($("libSortBtn"), my)) soSet("own", soMoved());
+    } },
+];
+/** Bibliothek sichtbar (nicht als Schublade im schmalen Fenster / Mini-Player)? */
+function libVisible() {
+  const r = $("libSortBtn").getBoundingClientRect();
+  return r.width > 0 && r.left >= 0 && r.right <= innerWidth && !document.body.classList.contains("compact");
+}
+/** true = jetzt zeigen, "wait" = App startet noch, false = nicht (schon gesehen, < 2 Texte, etwas anderes offen). */
+function sortTourDue() {
+  try { if (localStorage.getItem(SORT_SEEN)) return false; } catch { return false; }
+  if (!st.started) return "wait";
+  return !!st.settings?.onboarded && st.docs.length >= 2 && $("gt").classList.contains("hidden") && onbEl.classList.contains("hidden")
+    && view !== "edit" && !document.querySelector("dialog[open]") && libVisible();
+}
+function sortTourStart() {
+  hideTip(); closePops(true);
+  gt.kind = "sort"; TOUR = SORT_TOUR;
+  gt.cardPos = null; gtSpotCur.to = null; gt.pct = 0;
+  $("gt").classList.remove("hidden", "leaving");
+  $("gtSpot").classList.add("enter");
+  setTimeout(() => $("gtSpot").classList.remove("enter"), 700);
+  $("gtCard").classList.add("first");
+  gtShow(0);
+}
+function sortTourEnd() {
+  gt.token++;
+  try { localStorage.setItem(SORT_SEEN, "1"); } catch {}
+  const cur = $("gtCursor"); cur.classList.remove("show", "click"); cur.style.transition = "";
+  closePops(true);
+  $("gt").classList.add("leaving");
+  setTimeout(() => {
+    $("gt").classList.add("hidden"); $("gt").classList.remove("leaving");
+    gt.kind = null; TOUR = TOUR_ALL;
+    st.libPreview = null; libResort();                    // gleitet zurück in die echte Reihenfolge
+    updRender();                                          // jetzt die Karte „Was ist neu“
+  }, 500);
+}
