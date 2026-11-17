@@ -8,7 +8,7 @@ Ein Projekt von **[Simon Schnetzer](https://github.com/SimonSchneZzer)**.
 Text einfügen oder EPUB, PDF, TXT, Markdown oder HTML hineinziehen – der Vorleser liest vor, markiert dabei
 Wort für Wort, merkt sich die Stelle und exportiert auf Wunsch als Hörbuch mit Kapiteln.
 
-**➜ [Download & Anleitung](https://simonschnezzer.github.io/vorleser-download/)**
+**➜ [Download & Anleitung](https://simon.schnetzer.at/vorleser/)**
 
 ## Was er kann
 - **Natürliche Stimmen** (Microsoft Edge, online, Deutsch + Englisch) – offline springt automatisch Piper ein
@@ -24,7 +24,10 @@ Texte, Lesezeichen und eigene Stimmen bleiben auf deinem Rechner
 (Mac: `~/Library/Application Support/Vorleser`, Windows: `%APPDATA%\Vorleser`).
 Ins Internet gehen nur: der Text des gerade vorgelesenen Abschnitts an Microsofts Vorlese-Dienst (nur bei
 Online-Stimmen), die Update-Prüfung bei GitHub, Schriften von Google Fonts, einmalige Modell-Downloads – und eine Fehlermeldung, wenn
-du selbst eine abschickst. Kein Tracking, keine Analyse.
+du selbst eine abschickst. Dazu kommt ein **anonymer Zähler** (ab 3.3): höchstens einmal pro Woche meldet die App
+„aktiv“ mit System und Version (z. B. `/app/aktiv/mac/3.3.0`), einmal pro Installation „neu“ – an Simons eigenen
+GoatCounter auf simon.schnetzer.at. Keine Kennung, keine Texte, keine IP-Adresse gespeichert. Abschalten:
+Einstellungen › App › „Anonym mitzählen“ (Code: `zaehler.py`).
 
 > Die Online-Stimmen nutzen über [`edge-tts`](https://github.com/rany2/edge-tts) die Vorlese-Funktion des
 > Edge-Browsers. Das ist kein offizielles Produkt von Microsoft und kann sich ändern – dann liest Piper weiter.

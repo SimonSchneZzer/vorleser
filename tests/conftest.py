@@ -26,6 +26,7 @@ _HOME = Path(tempfile.mkdtemp(prefix="vorleser-test-"))
 os.environ["VORLESER_HOME"] = str(_HOME)
 os.environ.pop("VORLESER_VERSION", None)
 os.environ.pop("VORLESER_UPDATE_URL", None)
+os.environ.pop("VORLESER_ZAEHLER_URL", None)            # Zähler: nie an den echten GoatCounter
 os.environ["VORLESER_UPDATE_JSON"] = "http://127.0.0.1:9/latest.json"   # Updater: nie die echte latest.json
 sys.path.insert(0, str(ROOT))
 

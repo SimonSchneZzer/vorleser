@@ -5,6 +5,27 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-17 · Download-Seite auf simon.schnetzer.at, anonymes Mitzählen (3.3)
+**Kontext:** Simon zieht die Download-Seite auf seinen Homeserver um (simon.schnetzer.at/vorleser/) und möchte wissen,
+wie viele Leute die App nutzen.
+**Entscheidung Seite:** `site/` im Repo `vorleser-download` wird per `~/vorleser/deploy.sh` (nginx `vorleser-web`, Caddy
+`handle_path /vorleser/*`) veröffentlicht. **latest.json bleibt auf GitHub Pages** (`updater.PAGES_URL`): alle
+installierten Versionen fragen nur dort, und ein Ausfall des Homeservers darf Updates nie blockieren. Die Pages-Wurzel
+`index.html` leitet auf die neue Adresse weiter. `PAGE_URL` (Link „Download-Seite“, Feld `page`) zeigt auf die neue Seite.
+**Entscheidung Zähler:** `zaehler.py` meldet an den eigenen GoatCounter (`/c/count`, Kennung im User-Agent
+`Vorleser/<ver> (<sys>)`, wird nicht als Bot gefiltert): höchstens 1× pro ISO-Kalenderwoche (UTC) `/app/aktiv/<sys>/<ver>`
+→ Summe einer Woche = wöchentlich aktive Installationen; 1× pro Installation `/app/neu/<sys>`. Keine ID, keine Texte.
+Standard an, abschaltbar (Einstellung `count`, Schalter „Anonym mitzählen“ in Einstellungen › App) – Simons Wahl
+(Opt-in hätte kaum brauchbare Zahlen). Installationen von vor 3.3 (es gibt `last-version`, aber noch keine
+`zaehler.json`) zählen nicht als „neu“; die Statusdatei entsteht sofort beim Start, damit ein frischer Rechner, der
+beim ersten Start offline ist, später trotzdem als „neu“ zählt. Nur in der gebauten App und nie mit `CI` (die CI startet
+die gebaute App für Tests). Erster Ping 30 s nach dem Start, danach alle 6 h geprüft (App läuft oft tagelang in der Menüleiste).
+**Folgen:** GoatCounter fasst gleiche IP + User-Agent kurz zu einer Sitzung zusammen → zwei Rechner mit gleicher Version
+hinter demselben Router können in derselben Stunde als einer zählen (leichtes Unterzählen, akzeptiert). Datenschutzseite
+(simon.schnetzer.at/legal) und README nennen den Zähler. Kein Kurz-Tutorial: nichts zu bedienen.
+**Verworfen:** zufällige Installations-ID (genauer, aber personenbeziehbar); Zählen über Abrufe von latest.json (GitHub
+Pages hat keine Logs; latest.json auf den Homeserver zu legen würde Updates von ihm abhängig machen).
+
 ## 2026-11-15 · Klick neben einen Dialog schließt ihn (3.2.1)
 **Kontext:** Simon: Dialoge sollen auch beim Klick daneben schließen, nicht nur über „Abbrechen“ – bei jedem Dialog.
 **Entscheidung:** Ein Handler in `js/basis.js` (neben dem weichen Schließen) für alle `<dialog>`: Klick auf den Hintergrund

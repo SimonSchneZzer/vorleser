@@ -33,6 +33,7 @@ import stt
 import tts
 import uninstaller
 import updater
+import zaehler
 from importers import ImportFailed, import_file
 from textproc import DEFAULT_LANG, LANGS, chunk_text, detect_language
 
@@ -1043,7 +1044,7 @@ def startup() -> None:
     # Jeder Schritt für sich: scheitert einer (z. B. Platte voll), laufen die übrigen – vor allem der Updater,
     # sonst käme nicht einmal der Fix für das Problem an.
     for name, step in (("Edge-Stimmenliste", tts.refresh_edge_voices), ("Offline-Stimme", tts.warm_up),
-                       ("Updater", updater.start_background)):
+                       ("Zähler", zaehler.start_background), ("Updater", updater.start_background)):
         try:
             step()
         except Exception as e:

@@ -243,7 +243,7 @@ $("updGo").onclick = async () => {
   updRender();
   upd.timer = setTimeout(updRefresh, 400);
 };
-$("updPage").onclick = (e) => { e.preventDefault(); openExternal(upd.s?.page || "https://simonschnezzer.github.io/vorleser-download/"); };
+$("updPage").onclick = (e) => { e.preventDefault(); openExternal(upd.s?.page || "https://simon.schnetzer.at/vorleser/"); };
 /* ---------- Vorab erzeugen unterbrochen (Board 20): nach dem Start fragen ---------- */
 const prepResume = { items: [] };
 async function prepPendingCheck() {

@@ -4,6 +4,13 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.3.0
+Vorleser has a new home: simon.schnetzer.at/vorleser
+
+- **New download page address:** simon.schnetzer.at/vorleser – the old address forwards there.
+- **Anonymous count:** once a week Vorleser reports only that it is in use, with system and version – no ID, no texts.
+  This shows how many people use Vorleser. You can turn it off under Settings › App › Count anonymously.
+
 ## 3.2.1
 Dialogs now close when you click next to them.
 

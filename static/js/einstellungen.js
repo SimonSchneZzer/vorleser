@@ -261,10 +261,13 @@ const MARK_HINT = {
   sentence: "Der gerade gesprochene Satz wird hinterlegt.",
   word: "Satz hinterlegt, das gesprochene Wort hervorgehoben. Mit Online-Stimmen exakt, bei Offline- und eigener Stimme aus dem Audio bestimmt.",
 };
+/** Anonym mitzählen (3.3, zaehler.py): 1×/Woche System + Version, ohne Kennung. */
+$("countSw").onclick = () => saveSettings({ count: st.settings?.count === false });
 function renderSettings() {
   const s = st.settings; if (!s) return;
   window.atmoRender?.();
   $("recapSw").classList.toggle("on", s.recap !== false); $("recapSw").setAttribute("aria-checked", String(s.recap !== false));
+  $("countSw").classList.toggle("on", s.count !== false); $("countSw").setAttribute("aria-checked", String(s.count !== false));
   const dark = isDark(s);
   // Darstellung
   document.querySelectorAll("#modeSeg [data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === s.theme));

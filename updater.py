@@ -29,12 +29,13 @@ import paths
 
 REPO = "SimonSchneZzer/vorleser-download"
 API_URL = os.environ.get("VORLESER_UPDATE_URL", f"https://api.github.com/repos/{REPO}/releases/latest")
-PAGE_URL = "https://simonschnezzer.github.io/vorleser-download/"
+PAGE_URL = "https://simon.schnetzer.at/vorleser/"    # Download-Seite (seit 17.11.2026 auf dem Homeserver)
+PAGES_URL = "https://simonschnezzer.github.io/vorleser-download/"   # GitHub Pages: nur noch latest.json – nie ändern
 # Ausweichweg ohne API (kein Ratenlimit von 60/h pro IP): die Release-Seite leitet auf /tag/vX.Y.Z weiter
 LATEST_PAGE = os.environ.get("VORLESER_UPDATE_PAGE", f"https://github.com/{REPO}/releases/latest")
 # Hauptweg: kleine Datei auf der Download-Seite (GitHub Pages, kein Ratenlimit). Der Release-Workflow schreibt sie
 # erst, wenn die Installer hochgeladen sind. Die API (60 Anfragen/h pro IP) ist nur noch Ausweichweg.
-JSON_URL = os.environ.get("VORLESER_UPDATE_JSON", PAGE_URL + "latest.json")
+JSON_URL = os.environ.get("VORLESER_UPDATE_JSON", PAGES_URL + "latest.json")
 ASSET = "Vorleser-mac.dmg" if paths.IS_MAC else "Vorleser-windows-setup.exe" if paths.IS_WIN else None
 CHECK_EVERY = 60                       # Sekunden – latest.json kostet nichts
 API_EVERY = 3600                       # Ausweichweg über die API höchstens stündlich (außer „Jetzt suchen“)
