@@ -1831,3 +1831,30 @@ body.st-on .toast:not(.st-toast) { bottom: 176px; }
 @keyframes updShine { 0% { opacity: 1; } 100% { left: 110%; opacity: 1; } }
 @keyframes updOdo { to { transform: translateY(-1.25em); } }
 .auto-bar { display: block; width: min(240px, 100%); height: 4px; margin-top: 7px; }
+
+/* ===================== Rahmen (3.3, Vorschlag 02 freigegeben 17.11.2026) =====================
+   Seitenleiste, ihre Fußleiste, Kopfleiste und Player sind EINE Fläche (keine Trennlinien dazwischen); nur der Inhalt
+   liegt als Karte darin. Kopf und Player sind damit kein Glas mehr über dem Text – der Text scrollt in der Karte.
+   isolation: Wort-Box (#wbox, z-index −1) bleibt über dem Kartenhintergrund statt dahinter zu verschwinden. */
+.app { background: var(--surface); }
+.side { background: transparent; border-right: 0; }
+.side-foot { border-top: 0; }
+.main { padding: 0 12px 12px 0; }
+.has-player .main { padding-bottom: 0; }
+.view > .scroll { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; isolation: isolate; }
+#viewRead .topbar, #viewEdit .topbar, #viewSettings .set-head {
+  position: relative; background: transparent; background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: none; border: 0; }
+#viewRead .topbar { padding-left: 12px; padding-right: 12px; }
+#readScroll, #viewSettings > .scroll { padding-top: 0; }
+#viewSettings .set-head { padding-left: 12px; padding-right: 12px; }
+.player { position: relative; left: auto; right: auto; bottom: auto; background: transparent; background-image: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; border: 0; }
+.has-player .scroll { padding-bottom: 0; }
+body:not(.compact) .player .pill { background: var(--chip); border-color: transparent; }
+@media (max-width: 1000px) {
+  .main { padding-left: 12px; }
+  .side { background: var(--surface); }
+}
+#viewNew > .scroll { margin-top: 12px; }                       /* ohne Kopfleiste: oben derselbe Rand wie rechts/unten */
+@media (max-width: 1000px) { #viewNew > .scroll { margin-top: 0; } }   /* dort steht die Menü-Leiste darüber */

@@ -5,10 +5,11 @@ erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die e
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
 ## 3.3.0
-Vorleser has a new home: simon.schnetzer.at/vorleser
+A calmer look: your text now sits in its own card.
 
+- **New frame:** the sidebar, the bar at the top and the player now form one surface without dividing lines – only
+  your text (and the settings) sit in a rounded card inside it.
 - **New download page address:** simon.schnetzer.at/vorleser – the old address forwards there.
-- Anonymous statistics (version and system only) can be turned off under Settings › App.
 
 ## 3.2.1
 Dialogs now close when you click next to them.

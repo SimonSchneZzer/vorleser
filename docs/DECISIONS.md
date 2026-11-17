@@ -5,6 +5,17 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-17 · Rahmen: eine Fläche um den Inhalt (3.3)
+**Kontext:** Simon: Seitenleiste, ihr Fuß, Kopfleiste und Player sollen zusammenwachsen, nur der Inhalt bleibt abgegrenzt.
+Vorschlag 02 im Design-Canvas freigegeben.
+**Entscheidung:** `.app` hat die Farbe `--surface`; Seitenleiste, Kopfleiste (`#viewRead/#viewEdit .topbar`, `#viewSettings
+.set-head`) und Player sind transparent, ohne Trennlinien. Der Inhalt jeder Ansicht (`.view > .scroll`) ist eine Karte
+(`--bg`, Rand `--line`, Radius 14 px, `isolation: isolate`, damit die Wort-Box mit z-index −1 über dem Kartenhintergrund
+bleibt). Kopf und Player liegen dadurch im Fluss statt als Glas über dem Text (Block „Rahmen“ am Ende von `app.css`
+überschreibt die Glas-Regeln). `slideBar` animiert `margin-bottom` → die Karte schrumpft/wächst Bild für Bild mit dem Player
+und der Mitlesezeile (in WebKit pro Frame gemessen, max. 9 px/Frame). Mini-Player (`body.compact`) unverändert.
+**Folgen:** Kein Glas-Effekt mehr an Kopf und Player (Menüs, Dialoge, Karten bleiben Glas). `--sethead-h` wird nicht mehr gebraucht.
+
 ## 2026-11-17 · Download-Seite auf simon.schnetzer.at, anonymes Mitzählen (3.3)
 **Kontext:** Simon zieht die Download-Seite auf seinen Homeserver um (simon.schnetzer.at/vorleser/) und möchte wissen,
 wie viele Leute die App nutzen.
@@ -26,7 +37,7 @@ hinter demselben Router können in derselben Stunde als einer zählen (leichtes 
 **Verworfen:** zufällige Installations-ID (genauer, aber personenbeziehbar); Zählen über Abrufe von latest.json (GitHub
 Pages hat keine Logs; latest.json auf den Homeserver zu legen würde Updates von ihm abhängig machen).
 **Zurückhaltend zeigen (Simon):** Schalter „Anonyme Statistik“ unten in Einstellungen › App (vor „Beenden“), kurzer
-sachlicher Text; in „Was ist neu“ nur eine Nebenzeile. Offengelegt bleibt es in README und auf simon.schnetzer.at/legal.
+sachlicher Text; in „Was ist neu“ und auf der Update-Karte gar nicht erwähnt. Offengelegt bleibt es in README und auf simon.schnetzer.at/legal.
 
 ## 2026-11-15 · Klick neben einen Dialog schließt ihn (3.2.1)
 **Kontext:** Simon: Dialoge sollen auch beim Klick daneben schließen, nicht nur über „Abbrechen“ – bei jedem Dialog.
