@@ -25,7 +25,7 @@ ergänzen** (Datum, Kontext, Entscheidung, Folgen) – auch bei Bugfixes, deren 
 | `updater.py` | Updates: Release im Repo `vorleser-download` erkennen, laden + vorbereiten; Tausch nach „Jetzt neu starten“ oder beim Beenden |
 | `storage.py` | Speicher-Aufschlüsselung (Audio pro Text über Cache-Hash), gezieltes Löschen |
 | `uninstaller.py` | Deinstallieren aus der App (Helfer nach dem Beenden, optional Daten behalten) |
-| `zaehler.py` | Anonym mitzählen (3.3): 1×/Woche `/app/aktiv/<sys>/<ver>`, 1× `/app/neu/<sys>` an GoatCounter (simon.schnetzer.at/c/); nur gebaute App, nie mit `CI`; Einstellung `count` |
+| `zaehler.py` | Anonyme Statistik (3.3): 1×/Woche `/app/aktiv/<sys>/<ver>`, 1× `/app/neu/<sys>` an GoatCounter (simon.schnetzer.at/c/); nur gebaute App, nie mit `CI`; Einstellung `count` |
 | `bugreport.py` | „Fehler melden“: technische Infos; Versand vom Formular an Web3Forms (Key, keine Adresse) |
 | `settings.py` | `data/settings.json` mit Validierung |
 | `static/` | `index.html`, `js/*.js` (Oberfläche in normalen Skripten, kein Build; Reihenfolge in `index.html`; Bauteile: `editor.js` Editor, `diktat.js` schwebender Diktier-Knopf), `app.css`, `i18n.js` |

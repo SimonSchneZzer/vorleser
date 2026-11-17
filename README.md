@@ -27,7 +27,7 @@ Online-Stimmen), die Update-Prüfung bei GitHub, Schriften von Google Fonts, ein
 du selbst eine abschickst. Dazu kommt ein **anonymer Zähler** (ab 3.3): höchstens einmal pro Woche meldet die App
 „aktiv“ mit System und Version (z. B. `/app/aktiv/mac/3.3.0`), einmal pro Installation „neu“ – an Simons eigenen
 GoatCounter auf simon.schnetzer.at. Keine Kennung, keine Texte, keine IP-Adresse gespeichert. Abschalten:
-Einstellungen › App › „Anonym mitzählen“ (Code: `zaehler.py`).
+Einstellungen › App › „Anonyme Statistik“ (Code: `zaehler.py`).
 
 > Die Online-Stimmen nutzen über [`edge-tts`](https://github.com/rany2/edge-tts) die Vorlese-Funktion des
 > Edge-Browsers. Das ist kein offizielles Produkt von Microsoft und kann sich ändern – dann liest Piper weiter.

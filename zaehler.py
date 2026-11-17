@@ -2,7 +2,7 @@
 
 Die App meldet höchstens **einmal pro Kalenderwoche** „aktiv“ (mit System und Version) und **einmal pro Installation**
 „neu“ an den GoatCounter auf simon.schnetzer.at (`/c/count`). Keine Kennung, kein Konto, keine Texte, keine Stimmen –
-nur der Pfad, z. B. `/app/aktiv/mac/3.3.0`. Abschaltbar in Einstellungen › App („Anonym mitzählen“, Einstellung `count`).
+nur der Pfad, z. B. `/app/aktiv/mac/3.3.0`. Abschaltbar in Einstellungen › App („Anonyme Statistik“, Einstellung `count`).
 
 Wöchentlich aktive Nutzer = Summe der `/app/aktiv/…`-Aufrufe einer Kalenderwoche (UTC); Neuinstallationen = `/app/neu/…`.
 Nur in der gebauten App (Entwicklung und Tests zählen nie; zum Ausprobieren `VORLESER_ZAEHLER_URL` setzen).

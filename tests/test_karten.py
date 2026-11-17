@@ -488,7 +488,8 @@ def test_atmosphaere_im_browser(api):
         assert await c.js("$('xAtmoHint').textContent") == "Aus – nur die Stimme"     # im Export standardmäßig aus
         await c.js("$('xAtmoSw').click(); 1")
         assert await c.js("$('xAtmoHint').textContent") == "Regen, leise unter der Stimme"
-        await c.js("$('exportDlg').close(); saveSettings({ ambient: 'aus' }); 1"); await asyncio.sleep(0.2)
+        # Auf das Speichern warten (fester Schlaf von 0,2 s war auf dem Windows-Runner zu knapp, Tag v3.3.0)
+        await c.js("$('exportDlg').close(); saveSettings({ ambient: 'aus' }).then(() => 1)")
     try:
         _im_browser(api, sz)
         assert api.json("GET", "/api/settings")[1]["ambient"] == "aus"

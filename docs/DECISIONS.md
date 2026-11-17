@@ -15,7 +15,7 @@ installierten Versionen fragen nur dort, und ein Ausfall des Homeservers darf Up
 **Entscheidung Zähler:** `zaehler.py` meldet an den eigenen GoatCounter (`/c/count`, Kennung im User-Agent
 `Vorleser/<ver> (<sys>)`, wird nicht als Bot gefiltert): höchstens 1× pro ISO-Kalenderwoche (UTC) `/app/aktiv/<sys>/<ver>`
 → Summe einer Woche = wöchentlich aktive Installationen; 1× pro Installation `/app/neu/<sys>`. Keine ID, keine Texte.
-Standard an, abschaltbar (Einstellung `count`, Schalter „Anonym mitzählen“ in Einstellungen › App) – Simons Wahl
+Standard an, abschaltbar (Einstellung `count`, Schalter „Anonyme Statistik“ in Einstellungen › App) – Simons Wahl
 (Opt-in hätte kaum brauchbare Zahlen). Installationen von vor 3.3 (es gibt `last-version`, aber noch keine
 `zaehler.json`) zählen nicht als „neu“; die Statusdatei entsteht sofort beim Start, damit ein frischer Rechner, der
 beim ersten Start offline ist, später trotzdem als „neu“ zählt. Nur in der gebauten App und nie mit `CI` (die CI startet
@@ -25,6 +25,8 @@ hinter demselben Router können in derselben Stunde als einer zählen (leichtes 
 (simon.schnetzer.at/legal) und README nennen den Zähler. Kein Kurz-Tutorial: nichts zu bedienen.
 **Verworfen:** zufällige Installations-ID (genauer, aber personenbeziehbar); Zählen über Abrufe von latest.json (GitHub
 Pages hat keine Logs; latest.json auf den Homeserver zu legen würde Updates von ihm abhängig machen).
+**Zurückhaltend zeigen (Simon):** Schalter „Anonyme Statistik“ unten in Einstellungen › App (vor „Beenden“), kurzer
+sachlicher Text; in „Was ist neu“ nur eine Nebenzeile. Offengelegt bleibt es in README und auf simon.schnetzer.at/legal.
 
 ## 2026-11-15 · Klick neben einen Dialog schließt ihn (3.2.1)
 **Kontext:** Simon: Dialoge sollen auch beim Klick daneben schließen, nicht nur über „Abbrechen“ – bei jedem Dialog.

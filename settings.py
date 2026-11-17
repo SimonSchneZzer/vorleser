@@ -30,7 +30,7 @@ DEFAULTS = {
     "libSort": "recent",       # Bibliothek: recent (zuletzt gehört oben) | own (eigene Reihenfolge), Version 3.1
     "libOrder": [],            # eigene Reihenfolge (Text-IDs, oben zuerst) – bleibt beim Umschalten auf „recent“ erhalten
     "autoUpdate": True,        # neue Versionen still im Hintergrund laden; Karte erst, wenn bereit (Version 3.2)
-    "count": True,             # anonym mitzählen: 1×/Woche „aktiv“ + 1× „neu“ an simon.schnetzer.at (zaehler.py, Version 3.3)
+    "count": True,             # anonyme Statistik: 1×/Woche „aktiv“ + 1× „neu“ an simon.schnetzer.at (zaehler.py, Version 3.3)
 }
 CHOICES = {"theme": ("light", "dark", "system"), "mark": ("section", "sentence", "word"), "uiLang": ("de", "en"),
            "ahead": ("low", "normal", "high", "all"), "ambient": ("aus", "regen", "kamin", "cafe", "wald", "rauschen"),

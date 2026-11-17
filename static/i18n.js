@@ -539,10 +539,8 @@ const I18N_EN = {
   "Halte einen Text fest und zieh ihn nach oben oder unten – er rastet hörbar ein. Ohne Ziehen geht es über „…“ › Nach oben / Nach unten.":
     "Hold a text and drag it up or down – it clicks into place. Without dragging, use “…” › Move up / Move down.",
   "Deine Reihenfolge bleibt": "Your order stays",
-  // Anonym mitzählen (3.3)
-  "Anonym mitzählen": "Count anonymously",
-  "Einmal pro Woche nur System und Version, ohne Kennung – damit Simon sieht, wie viele den Vorleser nutzen":
-    "Once a week, only system and version, no ID – so Simon can see how many people use Vorleser",
+  // Anonyme Statistik (3.3)
+  "Anonyme Statistik": "Anonymous statistics", "Nur Version und System, ohne Kennung": "Only version and system, no ID",
   // Updates automatisch laden (3.2)
   "Updates automatisch laden": "Download updates automatically", "Startet beim nächsten Öffnen – oder gleich jetzt.": "Starts the next time you open Vorleser – or right now.",
   "Lädt neue Versionen im Hintergrund. Neu gestartet wird erst, wenn du willst.": "Downloads new versions in the background. Vorleser only restarts when you want.",
