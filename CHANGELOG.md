@@ -4,6 +4,13 @@ Neueste Version oben. Der Abschnitt einer Version wird beim Veröffentlichen als
 erscheint in der App unter „What's new“. **Einträge auf Englisch.** **Die erste Zeile erscheint in der
 Update-Karte der App** – kurz und für Nutzer formulieren.
 
+## 3.3.1
+Safer updates: Vorleser now only installs updates that are signed by us.
+
+- **Signed updates:** every update is signed, and Vorleser checks the signature before downloading anything. An update
+  that was tampered with, or comes from anywhere else, is never installed.
+- **Stricter checks for small updates:** a partial update can only change files inside the app itself.
+
 ## 3.3.0
 A calmer look: your text now sits in its own card.
 
