@@ -20,7 +20,7 @@ import os
 import sys
 
 # Öffentlicher Schlüssel für Updates (hex). Gegenstück liegt nur als GitHub-Secret + Sicherung auf dem Homeserver.
-PUBLIC_KEY = "__PUBLIC_KEY__"
+PUBLIC_KEY = "1d4dbbc73c7a129543a7c7e41c402b48d840ec95b8a21dd2601b2b0b5bae5319"
 
 _p = 2 ** 255 - 19
 _L = 2 ** 252 + 27742317777372353535851937790883648493
