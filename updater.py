@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -26,6 +27,7 @@ import zipfile
 from pathlib import Path
 
 import paths
+import update_sig
 
 REPO = "SimonSchneZzer/vorleser-download"
 API_URL = os.environ.get("VORLESER_UPDATE_URL", f"https://api.github.com/repos/{REPO}/releases/latest")
@@ -36,6 +38,12 @@ LATEST_PAGE = os.environ.get("VORLESER_UPDATE_PAGE", f"https://github.com/{REPO}
 # Hauptweg: kleine Datei auf der Download-Seite (GitHub Pages, kein Ratenlimit). Der Release-Workflow schreibt sie
 # erst, wenn die Installer hochgeladen sind. Die API (60 Anfragen/h pro IP) ist nur noch Ausweichweg.
 JSON_URL = os.environ.get("VORLESER_UPDATE_JSON", PAGES_URL + "latest.json")
+# Signierte Update-Infos (update_sig.py): latest.json und – für die Ausweichwege – dieselbe Datei als Release-Datei.
+# Eingespielt wird nur, was signiert ist; Adressen nur aus dem eigenen Release-Ordner (Tests: per Umgebung umstellbar).
+UPDATE_INFO = "Vorleser-update.json"
+DL_BASE = os.environ.get("VORLESER_UPDATE_DL", f"https://github.com/{REPO}/releases/download/")
+_VERSION_RE = re.compile(r"^\d{1,4}\.\d{1,4}\.\d{1,4}$")
+_SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 ASSET = "Vorleser-mac.dmg" if paths.IS_MAC else "Vorleser-windows-setup.exe" if paths.IS_WIN else None
 CHECK_EVERY = 60                       # Sekunden – latest.json kostet nichts
 API_EVERY = 3600                       # Ausweichweg über die API höchstens stündlich (außer „Jetzt suchen“)
@@ -92,8 +100,44 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _from_signed(data: dict) -> dict | None:
+    """Signierte Update-Infos prüfen und in die interne Form bringen. Unsigniert, falsch signiert oder unplausibel
+    → None (dann gibt es eben kein Update – nie etwas Ungeprüftes einspielen)."""
+    payload = update_sig.verify_b64(str(data.get("signed") or ""), str(data.get("sig") or ""))
+    if payload is None:
+        print("[update] Update-Infos ohne gültige Signatur – ignoriert", flush=True)
+        return None
+    try:
+        info = json.loads(payload)
+        ver = str(info["version"])
+        if not _VERSION_RE.match(ver):
+            raise ValueError("Versionsnummer")
+        asset = (info.get("assets") or {}).get(ASSET)
+        if not asset:
+            return None
+        base = f"{DL_BASE}v{ver}/"
+        if not str(asset["url"]).startswith(base) or not _SHA_RE.match(str(asset["sha256"])) or int(asset["size"]) <= 0:
+            raise ValueError("Paket")
+        patch = asset.get("patch")
+        if patch:
+            if (not str(patch["url"]).startswith(base) or not _SHA_RE.match(str(patch["sha256"]))
+                    or not all(_VERSION_RE.match(str(v)) for v in patch.get("from") or [])):
+                raise ValueError("Teil-Update")
+        return {"version": ver, "url": asset["url"], "size": int(asset["size"]), "sha256": asset["sha256"],
+                "notes": str(info.get("notes") or "").strip()[:600], "page": PAGE_URL, "patch": patch or None}
+    except (KeyError, TypeError, ValueError) as e:
+        print(f"[update] signierte Update-Infos unplausibel ({e}) – ignoriert", flush=True)
+        return None
+
+
+def _fetch_json(url: str) -> dict:
+    req = urllib.request.Request(url, headers={"User-Agent": "Vorleser-Updater", "Cache-Control": "no-cache"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read(1 << 20))
+
+
 def _check_via_redirect() -> dict | None:
-    """Neueste Version aus der Weiterleitung der Release-Seite (ohne API, ohne Release-Notizen)."""
+    """Neueste Version aus der Weiterleitung der Release-Seite (ohne API) – die signierte Info-Datei des Releases."""
     opener = urllib.request.build_opener(_NoRedirect)
     req = urllib.request.Request(LATEST_PAGE, method="HEAD", headers={"User-Agent": "Vorleser-Updater"})
     try:
@@ -104,26 +148,15 @@ def _check_via_redirect() -> dict | None:
         if e.code not in (301, 302, 303, 307, 308) or "/tag/" not in loc:
             return None
     tag = loc.rstrip("/").rsplit("/tag/", 1)[1]
-    url = LATEST_PAGE.replace("/releases/latest", f"/releases/download/{tag}/{ASSET}")
-    head = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Vorleser-Updater"})
-    with urllib.request.urlopen(head, timeout=15) as r:      # existiert die Datei für dieses System?
-        size = int(r.headers.get("Content-Length") or 0)
-    return {"version": tag.lstrip("v"), "url": url, "size": size, "notes": "", "page": PAGE_URL}
+    if not _VERSION_RE.match(tag.lstrip("v")):
+        return None
+    return _from_signed(_fetch_json(LATEST_PAGE.replace("/releases/latest", f"/releases/download/{tag}/{UPDATE_INFO}")))
 
 
 def _check_via_json() -> dict | None:
     """Neueste Version aus latest.json. Pages leert seinen CDN-Zwischenspeicher bei jeder Veröffentlichung;
     ?t= (je Minute) schützt zusätzlich vor Zwischenspeichern unterwegs (Proxys)."""
-    url = f"{JSON_URL}?t={int(time.time() // 60)}"
-    req = urllib.request.Request(url, headers={"User-Agent": "Vorleser-Updater", "Cache-Control": "no-cache"})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        data = json.loads(r.read())
-    asset = (data.get("assets") or {}).get(ASSET)
-    if not asset or not data.get("version"):
-        return None
-    return {"version": str(data["version"]).lstrip("v"), "url": asset["url"], "size": asset.get("size") or 0,
-            "notes": (data.get("notes") or "").strip()[:600], "page": data.get("page") or PAGE_URL,
-            "patch": asset.get("patch"), "sha256": asset.get("sha256")}
+    return _from_signed(_fetch_json(f"{JSON_URL}?t={int(time.time() // 60)}"))
 
 
 def check(force: bool = False) -> dict | None:
@@ -158,13 +191,13 @@ def _check(force: bool = False) -> dict | None:
                                                        "User-Agent": "Vorleser-Updater"})
         with urllib.request.urlopen(req, timeout=15) as r:
             rel = json.loads(r.read())
-        asset = next((a for a in rel.get("assets", []) if a.get("name") == ASSET), None)
-        if rel.get("draft") or rel.get("prerelease") or not asset:
+        info = next((a for a in rel.get("assets", []) if a.get("name") == UPDATE_INFO), None)
+        if rel.get("draft") or rel.get("prerelease") or not info:
             return _latest
-        notes = (rel.get("body") or "").strip()
-        _latest = {"version": rel["tag_name"].lstrip("v"), "url": asset["browser_download_url"],
-                   "size": asset.get("size") or 0, "notes": notes[:600], "page": rel.get("html_url") or PAGE_URL}
-        print(f"[update] neueste Version {_latest['version']} (installiert {paths.APP_VERSION})", flush=True)
+        found = _from_signed(_fetch_json(info["browser_download_url"]))     # dieselbe signierte Datei wie latest.json
+        if found:
+            _latest = found
+            print(f"[update] neueste Version {_latest['version']} (installiert {paths.APP_VERSION})", flush=True)
     except Exception as e:
         print(f"[update] API nicht nutzbar ({type(e).__name__}) – versuche Release-Seite", flush=True)
         try:
@@ -316,6 +349,23 @@ def _keep_on_windows(rel: str) -> bool:
     return "/" not in rel and rel.lower().startswith("unins")       # Deinstallationsprogramm von Inno Setup
 
 
+def _inside(base: Path, rel: str) -> Path:
+    """Pfad aus der Dateiliste nur innerhalb von base (kein „..“, kein absoluter Pfad, kein Laufwerk)."""
+    parts = rel.split("/")
+    if not rel or rel.startswith("/") or "\\" in rel or ":" in rel or any(p in ("", ".", "..") for p in parts):
+        raise RuntimeError(f"Ungültiger Pfad im Teil-Update: {rel!r}")
+    return base.joinpath(*parts)
+
+
+def _link_inside(base: Path, rel: str, link: str) -> None:
+    """Verknüpfungen nur relativ und mit Ziel innerhalb des Pakets."""
+    if not link or link.startswith("/") or "\\" in link:
+        raise RuntimeError(f"Ungültige Verknüpfung im Teil-Update: {rel!r}")
+    resolved = os.path.normpath(os.path.join(os.path.dirname(rel), link))
+    if resolved == ".." or resolved.startswith("../") or os.path.isabs(resolved):
+        raise RuntimeError(f"Verknüpfung zeigt aus dem Paket: {rel!r}")
+
+
 def _apply_patch(zpath: Path, root: Path, target: Path, version: str) -> list[str]:
     """Neue Version in target zusammensetzen: geänderte Dateien aus dem Paket, alle anderen müssen in root
     (bzw. der Kopie target) schon mit der richtigen Prüfsumme liegen. Gibt die zu löschenden Pfade zurück.
@@ -328,8 +378,9 @@ def _apply_patch(zpath: Path, root: Path, target: Path, version: str) -> list[st
         files: dict = man["files"]
         names = set(z.namelist())
         for rel, f in files.items():
-            dst = target / rel
+            dst = _inside(target, rel)
             if "l" in f:                                          # Verknüpfung (nur macOS)
+                _link_inside(target, rel, f["l"])
                 if not (dst.is_symlink() and os.readlink(dst) == f["l"]):
                     if dst.is_symlink() or dst.exists():
                         dst.unlink() if not dst.is_dir() or dst.is_symlink() else shutil.rmtree(dst)
@@ -345,7 +396,7 @@ def _apply_patch(zpath: Path, root: Path, target: Path, version: str) -> list[st
                 dst.with_name(dst.name + ".tmp").replace(dst)
                 check = dst
             else:
-                check = root / rel                                # unverändert → muss schon so daliegen
+                check = _inside(root, rel)                        # unverändert → muss schon so daliegen
                 if paths.IS_MAC:
                     check = dst
                 if check.is_symlink() or not check.is_file() or check.stat().st_size != f["s"]:
@@ -376,6 +427,9 @@ def _apply_patch(zpath: Path, root: Path, target: Path, version: str) -> list[st
 def _prepare_patch(latest: dict, patch: dict) -> dict:
     """Teil-Update laden und vollständig vorbereiten – schlägt etwas fehl, nimmt _prepare das komplette Paket."""
     zpath = _download(latest, patch["url"], patch.get("size") or 0, f"patch-{'mac' if paths.IS_MAC else 'windows'}.zip")
+    if not patch.get("sha256") or _sha256(zpath) != patch["sha256"]:      # signiert – sonst nie auspacken
+        zpath.unlink(missing_ok=True)
+        raise RuntimeError("Prüfsumme des Teil-Updates stimmt nicht")
     with _lock:
         _state.update(state="preparing")
     root = _install_root()
@@ -432,23 +486,25 @@ def _launch_helper(relaunch: bool) -> None:
     if paths.IS_MAC:
         staged = Path(_ready["staged"])
         script = UPDATES_DIR / "install.sh"
+        q = shlex.quote                                   # Werte nie roh ins Skript (Pfade, Version)
         script.write_text(f"""#!/bin/bash
-exec >>"{log}" 2>&1
-echo "== $(date) Update auf {_ready['version']} (Neustart: {'ja' if relaunch else 'nein'})"
-while kill -0 {pid} 2>/dev/null; do sleep 0.1; done
-if [ -d "{staged}" ]; then
-  rm -rf "{app}.old"
-  if mv "{app}" "{app}.old"; then
-    if mv "{staged}" "{app}"; then
+LOG={q(str(log))}; APP={q(str(app))}; STAGED={q(str(staged))}; VER={q(_ready['version'])}
+exec >>"$LOG" 2>&1
+echo "== $(date) Update auf $VER (Neustart: {'ja' if relaunch else 'nein'})"
+while kill -0 {int(pid)} 2>/dev/null; do sleep 0.1; done
+if [ -d "$STAGED" ]; then
+  rm -rf "$APP.old"
+  if mv "$APP" "$APP.old"; then
+    if mv "$STAGED" "$APP"; then
       echo "installiert"
-      rm -rf "{app}.old" &
+      rm -rf "$APP.old" &
     else
-      rm -rf "{app}"                       # evtl. halb kopiert – dann die bisherige Version zurück
-      mv "{app}.old" "{app}" && echo "Tausch fehlgeschlagen – bisherige Version wiederhergestellt"
+      rm -rf "$APP"                       # evtl. halb kopiert – dann die bisherige Version zurück
+      mv "$APP.old" "$APP" && echo "Tausch fehlgeschlagen – bisherige Version wiederhergestellt"
     fi
   fi
 fi
-{f'open "{app}"' if relaunch else ''}
+{'open "$APP"' if relaunch else ''}
 """, "utf-8")
         script.chmod(0o755)
         subprocess.Popen(["/bin/bash", str(script)], start_new_session=True,
@@ -594,8 +650,8 @@ def _prepare() -> None:
         installer = _download(latest)
         with _lock:
             _state.update(state="preparing")
-        if latest.get("sha256") and _sha256(installer) != latest["sha256"]:   # ab 3.0.2 in latest.json; ältere ohne
-            installer.unlink(missing_ok=True)         # beschädigt → beim nächsten Versuch neu laden, nie einspielen
+        if not latest.get("sha256") or _sha256(installer) != latest["sha256"]:   # Prüfsumme ist signiert (update_sig)
+            installer.unlink(missing_ok=True)         # beschädigt/fremd → beim nächsten Versuch neu laden, nie einspielen
             raise RuntimeError("Prüfsumme des Updates stimmt nicht")
         staged = str(_stage_mac(installer, _app_path())) if paths.IS_MAC else None
         _ready = {"version": latest["version"], "installer": str(installer), "staged": staged}

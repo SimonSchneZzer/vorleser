@@ -10,6 +10,7 @@ import pytest
 import clone_setup
 import paths
 import updater
+from signing_helper import signed_info
 
 
 # --------------------------------------------------------------------------- #
@@ -94,9 +95,10 @@ def test_entwicklung_installiert_nicht():
 
 class _Release(BaseHTTPRequestHandler):
     body = {}
+    info = {}                                    # signierte Info-Datei des Releases (Ausweichweg über die API)
 
     def do_GET(self):
-        data = json.dumps(self.body).encode()
+        data = json.dumps(self.info if self.path.endswith("/Vorleser-update.json") else self.body).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
@@ -123,9 +125,20 @@ def release_server(monkeypatch):
     srv.shutdown()
 
 
+def _info(version, name="Vorleser-mac.dmg", notes="Neu: Dinge.", patch=None, url=None, sha="ab" * 32):
+    asset = {"url": url or f"http://dl/v{version}/{name}", "size": 123, "sha256": sha}
+    if patch:
+        asset["patch"] = patch
+    return {"version": version, "notes": notes, "assets": {name: asset}}
+
+
 def _rel(tag, name="Vorleser-mac.dmg", **kw):
+    """GitHub-API-Antwort; die Versionsdaten selbst stehen (signiert) in Vorleser-update.json."""
+    _Release.info = signed_info(_info(tag.lstrip("v"), name))
     return {"tag_name": tag, "draft": False, "prerelease": False, "body": "Neu: Dinge.\nhttps://x", "html_url": "https://x",
-            "assets": [{"name": name, "browser_download_url": "http://dl/" + name, "size": 123}], **kw}
+            "assets": [{"name": name, "browser_download_url": "http://dl/" + name, "size": 123},
+                       {"name": "Vorleser-update.json", "size": 900,
+                        "browser_download_url": f"http://127.0.0.1:{_Release.port}/{tag}/Vorleser-update.json"}], **kw}
 
 
 def test_neue_version_erkannt(release_server, monkeypatch):
@@ -162,11 +175,93 @@ def test_latest_json_ist_hauptweg(release_server, monkeypatch):
     monkeypatch.setattr(paths, "APP_VERSION", "1.0.0")
     monkeypatch.setattr(updater, "JSON_URL", f"http://127.0.0.1:{release_server.port}/latest.json")
     monkeypatch.setattr(updater, "API_URL", "http://127.0.0.1:9/nix")
-    release_server.body = {"version": "1.3.0", "notes": "Neu: Export.", "page": "https://x",
-                           "assets": {"Vorleser-mac.dmg": {"url": "http://dl/mac.dmg", "size": 7}}}
+    release_server.body = signed_info(_info("1.3.0", notes="Neu: Export."))
     latest = updater.check(force=True)
-    assert latest == {"version": "1.3.0", "url": "http://dl/mac.dmg", "size": 7, "notes": "Neu: Export.", "page": "https://x", "patch": None, "sha256": None}
+    assert latest == {"version": "1.3.0", "url": "http://dl/v1.3.0/Vorleser-mac.dmg", "size": 123, "sha256": "ab" * 32,
+                      "notes": "Neu: Export.", "page": updater.PAGE_URL, "patch": None}
     assert updater.status()["available"]
+
+
+# --------------------------------------------------------------------------- #
+# Signierte Update-Infos (Sicherheitsprüfung 18.11.2026): nichts Ungeprüftes einspielen
+def _json_only(release_server, monkeypatch, body):
+    monkeypatch.setattr(paths, "APP_VERSION", "1.0.0")
+    monkeypatch.setattr(updater, "JSON_URL", f"http://127.0.0.1:{release_server.port}/latest.json")
+    monkeypatch.setattr(updater, "API_URL", "http://127.0.0.1:9/nix")
+    release_server.body = body
+    return updater.check(force=True)
+
+
+def test_unsignierte_latest_json_wird_ignoriert(release_server, monkeypatch):
+    plain = _info("9.0.0")
+    assert _json_only(release_server, monkeypatch, {**plain, "assets": plain["assets"]}) is None
+
+
+def test_falscher_schluessel_wird_ignoriert(release_server, monkeypatch):
+    assert _json_only(release_server, monkeypatch, signed_info(_info("9.0.0"), seed=bytes(32))) is None
+
+
+def test_veraenderte_nutzlast_wird_ignoriert(release_server, monkeypatch):
+    import base64
+    body = signed_info(_info("9.0.0"))
+    payload = base64.b64decode(body["signed"]).replace(b"http://dl/v9.0.0/", b"http://dl/v9.0.0/../")
+    body["signed"] = base64.b64encode(payload).decode()
+    assert _json_only(release_server, monkeypatch, body) is None
+
+
+@pytest.mark.parametrize("info", [
+    _info("9.0.0", url="https://evil.example/Vorleser-mac.dmg"),            # fremder Server
+    _info("9.0.0", url="http://dl/v8.0.0/Vorleser-mac.dmg"),                 # anderes Release
+    _info("9.0.0", sha=""),                                                  # Prüfsumme fehlt
+    {**_info("9.0.0"), "version": "9.0.0$(touch /tmp/x)"},                    # Befehl in der Versionsnummer
+    _info("9.0.0", patch={"url": "http://dl/v9.0.0/p.zip", "size": 5, "from": ["1.0.0"]}),          # Teil-Update ohne Prüfsumme
+    _info("9.0.0", patch={"url": "https://evil.example/p.zip", "size": 5, "sha256": "cd" * 32, "from": ["1.0.0"]}),
+])
+def test_unplausible_signierte_infos_werden_ignoriert(release_server, monkeypatch, info):
+    assert _json_only(release_server, monkeypatch, signed_info(info)) is None
+
+
+def test_teilupdate_prueft_zip_pruefsumme(monkeypatch, tmp_path):
+    z = tmp_path / "p.zip"
+    z.write_bytes(b"fremdes zip")
+    monkeypatch.setattr(updater, "_download", lambda *a, **k: z)
+    monkeypatch.setattr(updater, "_apply_patch", lambda *a: pytest.fail("darf nicht ausgepackt werden"))
+    with pytest.raises(RuntimeError, match="Prüfsumme"):
+        updater._prepare_patch({"version": "9.0.0"}, {"url": "http://dl/v9.0.0/p.zip", "size": 11, "sha256": "ab" * 32})
+    assert not z.exists()
+
+
+@pytest.mark.parametrize("rel", ["../x", "a/../../x", "/etc/x", "a\\..\\x", "C:/x", "a//b", "./a"])
+def test_teilupdate_pfade_nur_im_ziel(tmp_path, rel):
+    with pytest.raises(RuntimeError):
+        updater._inside(tmp_path, rel)
+
+
+@pytest.mark.parametrize("rel,link,ok", [
+    ("Contents/Frameworks/Python", "Versions/Current/Python", True),
+    ("Contents/Frameworks/x/lib", "../../Resources/lib", True),
+    ("Contents/x", "../../../etc/passwd", False),
+    ("Contents/x", "/etc/passwd", False),
+])
+def test_teilupdate_verknuepfungen_nur_im_paket(tmp_path, rel, link, ok):
+    if ok:
+        updater._link_inside(tmp_path, rel, link)
+    else:
+        with pytest.raises(RuntimeError):
+            updater._link_inside(tmp_path, rel, link)
+
+
+def test_mac_helfer_setzt_werte_nie_roh_ins_skript(monkeypatch, tmp_path):
+    monkeypatch.setattr(updater, "UPDATES_DIR", tmp_path)
+    monkeypatch.setattr(updater.paths, "IS_MAC", True)
+    monkeypatch.setattr(updater.paths, "IS_WIN", False)
+    monkeypatch.setattr(updater, "_app_path", lambda: tmp_path / 'App "x" $(id).app')
+    monkeypatch.setattr(updater, "_ready", {"version": "9.9.9", "staged": str(tmp_path / "neu$(id).app")})
+    monkeypatch.setattr(updater.subprocess, "Popen", lambda *a, **k: None)
+    updater._launch_helper(False)
+    sh = (tmp_path / "install.sh").read_text("utf-8")
+    assert "'" + str(tmp_path / 'App "x" $(id).app') + "'" in sh            # in einfachen Anführungszeichen
+    assert '"$APP"' in sh and "$(id)" not in sh.split("\n", 2)[2].replace("$(id).app'", "")
 
 
 def test_api_ausweichweg_hoechstens_stuendlich(release_server, monkeypatch):
@@ -206,17 +301,27 @@ def test_gerade_aktualisiert(monkeypatch, tmp_path):
 
 
 class _Redirect(BaseHTTPRequestHandler):
-    """Spielt github.com: /releases/latest → 302 auf /tag/v3.1.0, Datei per HEAD mit Größe."""
+    """Spielt github.com: /releases/latest → 302 auf /tag/v3.1.0; die signierte Info-Datei des Releases per GET."""
     def do_HEAD(self):
         if self.path.endswith("/releases/latest"):
             self.send_response(302)
             self.send_header("Location", "https://example.org/x/releases/tag/v3.1.0")
-        elif self.path.endswith("/releases/download/v3.1.0/Vorleser-mac.dmg"):
-            self.send_response(200)
-            self.send_header("Content-Length", "4242")
         else:
             self.send_response(404)
         self.end_headers()
+
+    def do_GET(self):
+        if self.path.endswith("/releases/download/v3.1.0/Vorleser-update.json"):
+            info = _info("3.1.0")
+            info["assets"]["Vorleser-mac.dmg"]["size"] = 4242
+            data = json.dumps(signed_info(info)).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        else:
+            self.send_response(404)
+            self.end_headers()
 
     def log_message(self, *a):
         pass
@@ -234,7 +339,7 @@ def test_ausweichweg_ohne_api(monkeypatch):
         monkeypatch.setattr(paths, "APP_VERSION", "3.0.0")
         latest = updater.check(force=True)
         assert latest["version"] == "3.1.0" and latest["size"] == 4242
-        assert latest["url"].endswith("/releases/download/v3.1.0/Vorleser-mac.dmg")
+        assert latest["url"] == "http://dl/v3.1.0/Vorleser-mac.dmg" and latest["sha256"] == "ab" * 32
         assert updater.status()["available"]
     finally:
         srv.shutdown()

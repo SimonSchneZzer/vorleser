@@ -141,8 +141,11 @@ jobs:
       - name: Im Download-Repo veröffentlichen
         env:
           GH_TOKEN: ${{ secrets.DOWNLOAD_REPO_TOKEN }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: |
           if [ -z "$GH_TOKEN" ]; then echo "::error::Secret DOWNLOAD_REPO_TOKEN fehlt"; exit 1; fi
+          # Ohne Signatur spielen Apps ab 3.3.1 kein Update ein → lieber gar nicht veröffentlichen
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then echo "::error::Secret UPDATE_SIGNING_KEY fehlt"; exit 1; fi
           VER="${GITHUB_REF_NAME#v}"
           # Notizen aus CHANGELOG.md (Abschnitt „## X.Y.Z“); erste Zeile zeigt die App in der Update-Karte
           awk -v v="## $VER" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md | sed '/./,$!d' > notes.md
@@ -164,12 +167,23 @@ jobs:
           for plat, n in (("mac", "Vorleser-mac.dmg"), ("windows", "Vorleser-windows-setup.exe")):
               z, info = f"Vorleser-{plat}-patch.zip", f"Vorleser-{plat}-patch.json"
               if os.path.exists(z) and os.path.exists(info):
-                  assets[n]["patch"] = {"url": base + z, "size": os.path.getsize(z), "from": json.load(open(info))["from"]}
+                  assets[n]["patch"] = {"url": base + z, "size": os.path.getsize(z), "sha256": sha(z),
+                                        "from": json.load(open(info))["from"]}
+          # Signierte Nutzlast (update_sig.py): Apps ab 3.3.1 verwenden NUR diese; die Felder daneben bleiben für ältere Apps
+          payload = json.dumps({"version": ver, "notes": notes, "assets": assets}, sort_keys=True, separators=(",", ":")).encode()
+          open("update-payload.bin", "wb").write(payload)
+          sig = os.popen("python3 update_sig.py sign update-payload.bin").read().strip()
+          if len(sig) < 80:
+              sys.exit("Signieren fehlgeschlagen")
+          import base64
           with open("latest.json", "w", encoding="utf-8") as f:
               json.dump({"version": ver, "published": time.strftime("%Y-%m-%d"), "notes": notes,
-                         "page": "https://simon.schnetzer.at/vorleser/",
-                         "assets": assets}, f, ensure_ascii=False, indent=2)
+                         "page": "https://simon.schnetzer.at/vorleser/", "assets": assets,
+                         "signed": base64.b64encode(payload).decode(), "sig": sig}, f, ensure_ascii=False, indent=2)
           PY
+          # Dieselbe signierte Datei im Release – für die Ausweichwege der App (API, Weiterleitung der Release-Seite)
+          cp latest.json Vorleser-update.json
+          gh release upload "$GITHUB_REF_NAME" Vorleser-update.json --repo SimonSchneZzer/vorleser-download
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/SimonSchneZzer/vorleser-download.git" dl
           cp latest.json dl/latest.json
           cd dl

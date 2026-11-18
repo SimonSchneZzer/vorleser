@@ -23,6 +23,7 @@ ergänzen** (Datum, Kontext, Entscheidung, Folgen) – auch bei Bugfixes, deren 
 | `clone_setup.py` / `clone_worker.py` | Eigene Stimme nachinstallieren (mitgeliefertes `uv`) / Worker im eigenen venv |
 | `meldungen.py` | Fehler → fester deutscher Satz für die Oberfläche (`fuer_nutzer`), Traceback ins Log (`loggen`), `Meldung` für eigene Texte |
 | `updater.py` | Updates: Release im Repo `vorleser-download` erkennen, laden + vorbereiten; Tausch nach „Jetzt neu starten“ oder beim Beenden |
+| `update_sig.py` | Ed25519 (RFC 8032, reines Python): Update-Infos sind signiert, die App spielt nur Signiertes ein (`PUBLIC_KEY`) |
 | `storage.py` | Speicher-Aufschlüsselung (Audio pro Text über Cache-Hash), gezieltes Löschen |
 | `uninstaller.py` | Deinstallieren aus der App (Helfer nach dem Beenden, optional Daten behalten) |
 | `zaehler.py` | Anonyme Statistik (3.3): 1×/Woche `/app/aktiv/<sys>/<ver>`, 1× `/app/neu/<sys>` an GoatCounter (simon.schnetzer.at/c/); nur gebaute App, nie mit `CI`; Einstellung `count` |
@@ -92,7 +93,8 @@ Weitere Variablen: `VORLESER_DEBUG=1` (DevTools), `VORLESER_VERSION`, `VORLESER_
 `VERSION` erhöhen, Abschnitt `## X.Y.Z` oben in `CHANGELOG.md` (**auf Englisch**; erste Zeile = Text der Update-Karte
 in der App, kurz und für Nutzer; alles erscheint unter „Was ist neu“) → committen → `git tag vX.Y.Z && git push origin main vX.Y.Z`. Der Workflow testet, baut und
 veröffentlicht im Download-Repo (braucht Secret `DOWNLOAD_REPO_TOKEN`: Fine-grained Token, nur
-`vorleser-download`, „Contents: Read and write“). Danach schreibt er `latest.json` ins Download-Repo; laufende
+`vorleser-download`, „Contents: Read and write“, **und** Secret `UPDATE_SIGNING_KEY`: signiert die Update-Infos – ohne
+bricht der Workflow ab; Schlüssel neu erzeugen nur mit `packaging/neuer_update_schluessel.sh`, siehe DECISIONS 18.11.2026). Danach schreibt er `latest.json` ins Download-Repo; laufende
 Apps prüfen diese Datei minütlich und melden das Update nach wenigen Minuten (GitHub-API nur Ausweichweg, max. 1×/h).
 Teil-Updates: der Build legt je System `Vorleser-<plat>-manifest.json` (+ `-patch.zip`, wenn es Vorversionen mit
 Dateiliste gibt) ins Release; die App lädt dann nur geänderte Dateien und prüft alle übrigen per Prüfsumme

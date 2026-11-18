@@ -5,6 +5,31 @@ Folgen** (+ verworfene Alternativen). Bei neuen Entscheidungen einen Eintrag obe
 
 ---
 
+## 2026-11-18 · Signierte Updates (Sicherheitsprüfung)
+**Kontext:** Sicherheitsprüfung aller Projekte. Der Updater vertraute latest.json allein: Adresse frei wählbar, die
+Prüfsumme stand in derselben Datei, macOS ohne Gatekeeper (Quarantäne entfernt), Windows ohne Authenticode. Wer
+latest.json, das Download-Repo, den `DOWNLOAD_REPO_TOKEN` oder das GitHub-Konto kontrolliert, hätte allen Installationen
+innerhalb einer Minute eigene Software untergeschoben. Dazu: Versionsnummer ungefiltert im Mac-Helfer-Skript und in
+Pfaden; Teil-Update konnte per `../` oder Verknüpfung außerhalb des App-Ordners schreiben.
+**Entscheidung:**
+- Update-Infos werden im Release-Workflow mit **Ed25519** signiert (`update_sig.py`, reine Python-Umsetzung nach RFC 8032,
+  keine neue Abhängigkeit, Prüfung ~3 ms). Privater Schlüssel nur als GitHub-Secret `UPDATE_SIGNING_KEY` + Sicherung
+  `~/vorleser-signing/` auf dem Homeserver (Backup); öffentlicher in `update_sig.PUBLIC_KEY`. Erzeugt mit
+  `packaging/neuer_update_schluessel.sh` (Simon führt es selbst aus – der Schlüssel landet nie im Verlauf).
+- Signiert wird `{version, notes, assets}` inkl. Größen, sha256 des Pakets **und** des Teil-Update-Zips. Die App nimmt
+  nur die signierte Nutzlast; Adressen nur unter `…/releases/download/v<version>/`, Version nur `\d+.\d+.\d+`,
+  sha256 Pflicht. Unsigniert/falsch → kein Update (lieber keins als ein fremdes).
+- Ausweichwege (API, Weiterleitung) lesen dieselbe signierte Datei als Release-Datei `Vorleser-update.json`.
+- Teil-Update: Pfade nur innerhalb des Ziels, Verknüpfungen nur relativ und innerhalb des Pakets. Mac-Helfer setzt
+  Werte nur über `shlex.quote` ins Skript.
+- Für Tests (auch die gebaute App im Windows-Updatetest) lassen sich Schlüssel und erlaubte Adresse per Umgebung
+  (`VORLESER_UPDATE_PUBKEY`, `VORLESER_UPDATE_DL`) umstellen – kein Risiko: wer die Umgebung setzen kann, hat den Rechner.
+**Folgen:** Apps bis 3.3.0 prüfen nicht und bekommen das nächste Update wie bisher (latest.json behält die alten
+Felder). Ab der ersten signierten Version ist jedes Update geprüft. Geht der private Schlüssel verloren, braucht es
+einen neuen + Release; Apps mit dem alten Schlüssel updaten dann nicht mehr automatisch (Download-Seite).
+**Verworfen:** Code-Signing (Apple Developer / Authenticode) – kostet, bleibt Entscheidung „unsigniert“; `cryptography`
+als Abhängigkeit (groß, für eine Prüfung nicht nötig).
+
 ## 2026-11-17 · Rahmen: eine Fläche um den Inhalt (3.3)
 **Kontext:** Simon: Seitenleiste, ihr Fuß, Kopfleiste und Player sollen zusammenwachsen, nur der Inhalt bleibt abgegrenzt.
 Vorschlag 02 im Design-Canvas freigegeben.

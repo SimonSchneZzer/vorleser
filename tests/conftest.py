@@ -29,6 +29,11 @@ os.environ.pop("VORLESER_UPDATE_URL", None)
 os.environ.pop("VORLESER_ZAEHLER_URL", None)            # Zähler: nie an den echten GoatCounter
 os.environ["VORLESER_UPDATE_JSON"] = "http://127.0.0.1:9/latest.json"   # Updater: nie die echte latest.json
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
+# Updater: Test-Schlüssel + Test-Adresse statt des echten Signaturschlüssels (tests/signing_helper.py)
+from signing_helper import TEST_DL, TEST_PUB  # noqa: E402
+os.environ["VORLESER_UPDATE_PUBKEY"] = TEST_PUB
+os.environ["VORLESER_UPDATE_DL"] = TEST_DL
 
 # Leere Edge-Liste: keine Netzabfrage, kein 8-s-Warten auf die Online-Stimmen beim „ersten Start“
 (_HOME / "data").mkdir(parents=True, exist_ok=True)

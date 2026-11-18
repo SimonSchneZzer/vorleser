@@ -28,6 +28,14 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import base64  # noqa: E402
+import hashlib  # noqa: E402
+
+import update_sig  # noqa: E402
+
+# Eigener Test-Schlüssel je Lauf: die App prüft die Signatur auch hier (Schlüssel + Adresse per Umgebung, s. UPDATE_ENV)
+TEST_SEED = os.urandom(32)
 TMP = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()) / "vorleser-update-test"
 INSTALL = TMP / "install" / "Vorleser"
 HOME = TMP / "home"
@@ -142,6 +150,10 @@ def serve() -> None:
     threading.Thread(target=srv.serve_forever, daemon=True).start()
 
 
+def _sha(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
 def publish(new_version: str, setup: Path | None = None, patch: bool = True) -> None:
     """Neue Version aus der installierten bauen (andere VERSION + neue Datei) und als latest.json anbieten."""
     old = installed_version()
@@ -156,22 +168,31 @@ def publish(new_version: str, setup: Path | None = None, patch: bool = True) -> 
         mp = [sys.executable, str(ROOT / "packaging" / "make_patch.py"), "windows"]
         subprocess.run(mp + [str(INSTALL), old, str(work / "old")], check=True)
         subprocess.run(mp + [str(new_root), new_version, str(work / "new"), str(work / "old" / "Vorleser-windows-manifest.json")], check=True)
-        for f in ("Vorleser-windows-patch.zip",):
-            shutil.copy(work / "new" / f, SERVE / f"{new_version}-{f}")
-        z = SERVE / f"{new_version}-Vorleser-windows-patch.zip"
-        asset["patch"] = {"url": f"http://127.0.0.1:{SRV_PORT}/{z.name}", "size": z.stat().st_size, "from": [old]}
+        rel = SERVE / f"v{new_version}"                      # wie im echten Release-Ordner (App prüft die Adresse)
+        rel.mkdir(parents=True, exist_ok=True)
+        z = rel / "Vorleser-windows-patch.zip"
+        shutil.copy(work / "new" / "Vorleser-windows-patch.zip", z)
+        asset["patch"] = {"url": f"http://127.0.0.1:{SRV_PORT}/v{new_version}/{z.name}", "size": z.stat().st_size,
+                          "sha256": _sha(z), "from": [old]}
     if setup is None:                                   # Teil-Update: das komplette Paket darf nie geladen werden
-        asset.update(url=f"http://127.0.0.1:{SRV_PORT}/fehlt.exe", size=1)
+        asset.update(url=f"http://127.0.0.1:{SRV_PORT}/v{new_version}/fehlt.exe", size=1, sha256="0" * 64)
     else:
-        dst = SERVE / f"{new_version}-setup.exe"
+        rel = SERVE / f"v{new_version}"
+        rel.mkdir(parents=True, exist_ok=True)
+        dst = rel / "Vorleser-windows-setup.exe"
         shutil.copy(setup, dst)
-        asset.update(url=f"http://127.0.0.1:{SRV_PORT}/{dst.name}", size=dst.stat().st_size)
-    (SERVE / "latest.json").write_text(json.dumps({"version": new_version, "notes": "Test", "page": "http://127.0.0.1/",
-                                                   "assets": {"Vorleser-windows-setup.exe": asset}}), "utf-8")
+        asset.update(url=f"http://127.0.0.1:{SRV_PORT}/v{new_version}/{dst.name}", size=dst.stat().st_size, sha256=_sha(dst))
+    payload = json.dumps({"version": new_version, "notes": "Test", "assets": {"Vorleser-windows-setup.exe": asset}},
+                         sort_keys=True, separators=(",", ":")).encode()
+    (SERVE / "latest.json").write_text(json.dumps({"version": new_version, "signed": base64.b64encode(payload).decode(),
+                                                   "sig": base64.b64encode(update_sig.sign(TEST_SEED, payload)).decode()}),
+                                       "utf-8")
     log(f"angeboten: {new_version} ({'Teil-Update' if patch else 'komplettes Paket'} von {old})")
 
 
 UPDATE_ENV = {"VORLESER_UPDATE_JSON": f"http://127.0.0.1:{SRV_PORT}/latest.json",
+              "VORLESER_UPDATE_PUBKEY": update_sig.public_key(TEST_SEED).hex(),
+              "VORLESER_UPDATE_DL": f"http://127.0.0.1:{SRV_PORT}/",
               "VORLESER_UPDATE_URL": "http://127.0.0.1:9/keine-api", "VORLESER_UPDATE_PAGE": "http://127.0.0.1:9/keine-seite"}
 
 
