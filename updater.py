@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -361,8 +362,9 @@ def _link_inside(base: Path, rel: str, link: str) -> None:
     """Verknüpfungen nur relativ und mit Ziel innerhalb des Pakets."""
     if not link or link.startswith("/") or "\\" in link:
         raise RuntimeError(f"Ungültige Verknüpfung im Teil-Update: {rel!r}")
-    resolved = os.path.normpath(os.path.join(os.path.dirname(rel), link))
-    if resolved == ".." or resolved.startswith("../") or os.path.isabs(resolved):
+    # posixpath: Pfade in der Dateiliste sind immer mit „/“ – unter Windows würde os.path „\\“ liefern
+    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(rel), link))
+    if resolved == ".." or resolved.startswith("../") or posixpath.isabs(resolved):
         raise RuntimeError(f"Verknüpfung zeigt aus dem Paket: {rel!r}")
 
 
